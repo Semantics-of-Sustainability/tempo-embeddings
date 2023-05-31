@@ -6,9 +6,9 @@ authors:
   -
     family-names: Schnober
     given-names: Carsten
-    orcid: "https://orcid.org/0000-0000-0000-0000"
-date-released: 20??-MM-DD
-doi: <insert your DOI here>
+    orcid: "https://orcid.org/0000-0001-9139-1577"
+date-released: 2023-05-31
+doi: 10.0000/FIXME
 version: "0.0.1"
 repository-code: "git@github.com:Semantics-of-Sustainability/tempo-embeddings"
 keywords:
