@@ -1,0 +1,18 @@
+# YAML 1.2
+---
+cff-version: "1.2.0"
+title: "tempo_embeddings"
+authors:
+  -
+    family-names: Schnober
+    given-names: Carsten
+    orcid: "https://orcid.org/0000-0000-0000-0000"
+date-released: 20??-MM-DD
+doi: <insert your DOI here>
+version: "0.0.1"
+repository-code: "git@github.com:Semantics-of-Sustainability/tempo-embeddings"
+keywords:
+  - embeddings
+  - visualization
+message: "If you use this software, please cite it using these metadata."
+license: Apache-2.0
