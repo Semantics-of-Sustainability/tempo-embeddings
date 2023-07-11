@@ -1,97 +1,60 @@
 import abc
-from functools import lru_cache
-from typing import Generator
-from typing import Optional
-from typing import Union
+import numpy as np
 import torch
+from numpy.typing import ArrayLike
 from transformers import AutoTokenizer
 from transformers import RobertaModel
-from transformers.tokenization_utils_base import BatchEncoding
+from transformers import pipeline
 from transformers.tokenization_utils_base import CharSpan
-from transformers.tokenization_utils_base import TokenSpan
 from ..text.passage import Passage
 
 
 class TransformerModelWrapper(abc.ABC):
-    # TODO: handle model casing: can casing be extracted from model or should it be a parameter?
-    def __init__(self, model_name_or_path: str) -> None:
-        self._init_model(model_name_or_path)
-
-    @abc.abstractmethod
-    def _init_model(self, model_name_or_path: str):
-        return NotImplemented
-
-    @lru_cache(maxsize=1024)
-    def _tokenize_text(self, text: str, **kwargs) -> list[int]:
-        """Variant of the tokenize() method with caching.
-
-        This does not work with batch input because a list is not hashable."""
-
-        return self._tokenizer(text, **kwargs)["input_ids"]
-
-    def tokenize(
-        self,
-        passages: list[Passage],
-        *,
-        return_tensors="pt",
-        truncation=True,
-        **kwargs,
-    ) -> list[list[int]]:
-        tokenizer_args = {
-            "return_tensors": return_tensors,
-            "truncation": truncation,
-        } | kwargs
-
-        texts = [passage.text for passage in passages]
-        return [self._tokenize_text(texts, **tokenizer_args)]
-
-    @torch.no_grad()
-    def embeddings(self, texts: Union[str, list[str]], layer: Optional[int] = None):
-        token_ids = self.tokenize(texts, return_tensors="pt")
-
-        outputs = self._model(**token_ids)
-        return (
-            outputs.last_hidden_state if layer is None else outputs.hidden_states[layer]
+    def __init__(self, model, tokenizer):
+        self._model = model
+        self._tokenizer = tokenizer
+        self._pipeline = pipeline(
+            "feature-extraction", model=self._model, tokenizer=self._tokenizer
         )
 
-    def _token_embeddings(self, embeddings, token: str):
-        pass
+    @property
+    def dimensionality(self) -> int:
+        """Returns the dimensionality of the embeddings"""
+        return self._model.embeddings.word_embeddings.embedding_dim
 
-    def token_embeddings(self, text: str, token: str):
-        # TODO
-        match_index = text.find(token)
-        while match_index >= 0:
-            pass
+    @torch.no_grad()
+    def token_embedding(self, passage: Passage, char_span: CharSpan) -> ArrayLike:
+        """Returns the token embedding for the given char span in the given passage."""
 
-    def _find_tokens(
-        self, token_ids: BatchEncoding, token: str
-    ) -> list[list[TokenSpan]]:
-        """
-        Find sequences of (sub-word) tokens that match a (word) token if merged
+        # encoding: Mapping = self.embeddings([passage.text])
+        # outputs = self._model(**(encoding["input_ids"]))
+        outputs = self._pipeline(passage.text)
 
-        Args:
-            - token: a token (word) to find, exact match
+        encodings = self._tokenizer(passage.text, return_tensors="pt")
+        token_index_start = encodings.char_to_token(char_span.start)
+        token_index_end = encodings.char_to_token(char_span.end - 1)
 
-        Yields: TokenSpan objects representing the tokens matching the search token
-        """
-        batch_size = len(token_ids["input_ids"])
-        return [
-            list(self._find_tokens_for_sentence(token_ids, batch_index, token))
-            for batch_index, input_ids in range(batch_size)
-        ]
+        # TODO: implement for other hidden layers but last one
+        if token_index_start == token_index_end:
+            # single token
+            embedding = outputs[0][token_index_start]
+        else:
+            # multiple tokens
+            embeddings = outputs[0][token_index_start : token_index_end + 1]
+            embedding = np.mean(embeddings, axis=0)
+        assert len(embedding) == self.dimensionality
+        return embedding
 
-    def _find_tokens_for_sentence(
-        self, token_ids: BatchEncoding, batch_index: int, token: str
-    ) -> Generator[TokenSpan, None, None]:
-        for word_index, token_index in enumerate(token_ids.words(batch_index)):
-            if word_index is not None:
-                charspan: CharSpan = token_ids.word_to_chars(batch_index, word_index)
-                # TODO: get text
-                if self.text[charspan.start : charspan.end] == token:
-                    yield token_ids.word_to_tokens(token_index)
+    @classmethod
+    @abc.abstractmethod
+    def from_pretrained(cls, model_name_or_path: str):
+        return NotImplemented
 
 
 class RobertaModelWrapper(TransformerModelWrapper):
-    def _init_model(self, model_name_or_path: str):
-        self._model = RobertaModel.from_pretrained(model_name_or_path)
-        self._tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
+    @classmethod
+    def from_pretrained(cls, model_name_or_path: str):
+        return cls(
+            RobertaModel.from_pretrained(model_name_or_path),
+            AutoTokenizer.from_pretrained(model_name_or_path),
+        )
