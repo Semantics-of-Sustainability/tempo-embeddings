@@ -1,20 +1,21 @@
 import numpy as np
 import pytest
 from tempo_embeddings.embeddings.model import RobertaModelWrapper
-
+from tempo_embeddings.text.corpus import Corpus
+from tempo_embeddings.text.corpus import TokenInfo
 from tempo_embeddings.text.passage import Passage
-from transformers.tokenization_utils_base import CharSpan
 
 
 class TestRobertaModelWrapper:
-    # FIXME: this test is expensive, replace with a mock
+    @pytest.mark.integration
+    @pytest.mark.slow
     @pytest.mark.parametrize(
         "model_name, text, char_span, expected",
         [
             (
                 "roberta-base",
                 "This is a test text.",
-                CharSpan(5, 7),
+                TokenInfo(5, 7),
                 [
                     0.254973441362381,
                     0.2825826406478882,
@@ -789,7 +790,7 @@ class TestRobertaModelWrapper:
             (
                 "roberta-base",
                 "This is a test text.",
-                CharSpan(5, 9),
+                TokenInfo(5, 9),
                 np.array(
                     [
                         1.60152849e-01,
@@ -1569,3 +1570,22 @@ class TestRobertaModelWrapper:
         assert RobertaModelWrapper.from_pretrained(model_name).token_embedding(
             Passage(text), char_span
         ) == pytest.approx(expected, abs=1e-3)
+
+    @pytest.mark.parametrize(
+        "model_name, corpus",
+        [
+            ("roberta-base", Corpus()),
+            ("roberta-base", Corpus.from_lines(["This is a test."])),
+            ("roberta-base", Corpus({Passage("This is a test."): {TokenInfo(0, 4)}})),
+            (
+                "roberta-base",
+                Corpus(
+                    {Passage("This is a test."): {TokenInfo(0, 4), TokenInfo(5, 7)}}
+                ),
+            ),
+        ],
+    )
+    def test_add_embeddings(self, model_name, corpus):
+        RobertaModelWrapper.from_pretrained(model_name).add_embeddings(corpus)
+        for token_info in corpus.token_infos:
+            assert token_info.embedding is not None

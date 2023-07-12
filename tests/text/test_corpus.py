@@ -55,3 +55,15 @@ class TestCorpus:
     )
     def test_subcorpus(self, lines, token, expected):
         assert Corpus.from_lines(lines).subcorpus(token) == expected
+
+    @pytest.mark.parametrize(
+        "corpus, expected",
+        [
+            (Corpus(), False),
+            (Corpus({Passage("test"): set()}), False),
+            (Corpus({Passage("test"): {TokenInfo(0, 4)}}), False),
+            (Corpus({Passage("test"): {TokenInfo(0, 4, embedding=[0.1, 0.2])}}), True),
+        ],
+    )
+    def test_has_embeddings(self, corpus, expected):
+        assert corpus.has_embeddings() == expected

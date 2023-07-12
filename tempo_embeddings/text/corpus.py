@@ -1,28 +1,34 @@
 import csv
 from dataclasses import dataclass
+from dataclasses import field
 from pathlib import Path
 from typing import Iterable
 from typing import Optional
 from typing import TextIO
+import numpy as np
 from numpy.typing import ArrayLike
+from umap import UMAP
 from ..settings import DEFAULT_ENCODING
 from .passage import Passage
 
 
-@dataclass(eq=True, frozen=True)
+@dataclass(eq=True, unsafe_hash=True)
 class TokenInfo:
     """Data class to store information about a sub-string of a passage."""
 
     start: int
     end: int
 
-    embedding: Optional[ArrayLike] = None
+    embedding: Optional[ArrayLike] = field(default=None, hash=False)
     """Embedding of the highlighted token in the passage."""
+
+    embedding_2d: Optional[ArrayLike] = field(default=None, hash=False)
 
 
 class Corpus:
     def __init__(self, passages: dict[Passage, set[TokenInfo]] = None):
         self._passages: dict[Passage, set[TokenInfo]] = passages or {}
+        self._umap_reducer: Optional[UMAP] = None
 
     def __add__(self, other: "Corpus") -> "Corpus":
         if self._passages.keys() & other._passages.keys():
@@ -42,6 +48,29 @@ class Corpus:
     def __eq__(self, __value: object) -> bool:
         return __value._passages == self._passages
 
+    @property
+    def passages(self) -> dict[Passage, set[TokenInfo]]:
+        return self._passages
+
+    @property
+    def token_infos(self) -> Iterable[TokenInfo]:
+        """Returns an iterable over all TokenInfo objects, flattened from all passages."""
+        return (
+            token_info
+            for token_infos in self.passages.values()
+            for token_info in token_infos
+        )
+
+    def all_embeddings(self) -> ArrayLike:
+        if not self.has_embeddings():
+            raise ValueError("Corpus does not have embeddings")
+        return np.array([token_info.embedding for token_info in self.token_infos])
+
+    def has_embeddings(self) -> bool:
+        """Returns True if all TokenInfo objects have an embedding."""
+        # Either all or none of the TokenInfo objects have an embedding
+        return any(token_info.embedding is not None for token_info in self.token_infos)
+
     def find(self, token: str) -> Iterable[tuple[Passage, int]]:
         for passage in self._passages:
             for match_index in passage.findall(token):
@@ -60,6 +89,20 @@ class Corpus:
             )
 
         return Corpus(passages)
+
+    def umap(self):
+        if not self.has_embeddings():
+            raise ValueError("Corpus has no embeddings.")
+
+        if self._umap_reducer is None:
+            reducer = UMAP(metric="cosine")
+            reducer.fit(self.all_embeddings())
+            self._umap_reducer = reducer
+
+        return self._umap_reducer
+
+    def umap_embeddings(self):
+        return self.umap().transform(self.all_embeddings())
 
     @classmethod
     def from_lines(cls, f: TextIO, metadata: dict = None):
