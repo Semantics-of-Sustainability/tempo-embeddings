@@ -5,7 +5,7 @@ from numpy.typing import ArrayLike
 from transformers import AutoTokenizer
 from transformers import RobertaModel
 from transformers import pipeline
-from transformers.tokenization_utils_base import CharSpan
+from ..text.corpus import TokenInfo
 from ..text.passage import Passage
 
 
@@ -23,7 +23,7 @@ class TransformerModelWrapper(abc.ABC):
         return self._model.embeddings.word_embeddings.embedding_dim
 
     @torch.no_grad()
-    def token_embedding(self, passage: Passage, char_span: CharSpan) -> ArrayLike:
+    def token_embedding(self, passage: Passage, token_info: TokenInfo) -> ArrayLike:
         """Returns the token embedding for the given char span in the given passage."""
 
         # encoding: Mapping = self.embeddings([passage.text])
@@ -31,18 +31,20 @@ class TransformerModelWrapper(abc.ABC):
         outputs = self._pipeline(passage.text)
 
         encodings = self._tokenizer(passage.text, return_tensors="pt")
-        token_index_start = encodings.char_to_token(char_span.start)
-        token_index_end = encodings.char_to_token(char_span.end - 1)
+        first_token = encodings.char_to_token(token_info.start)
+        last_token = encodings.char_to_token(token_info.end - 1)
 
         # TODO: implement for other hidden layers but last one
-        if token_index_start == token_index_end:
+        if first_token == last_token:
             # single token
-            embedding = outputs[0][token_index_start]
+            embedding = outputs[0][first_token]
         else:
             # multiple tokens
-            embeddings = outputs[0][token_index_start : token_index_end + 1]
+            embeddings = outputs[0][first_token : last_token + 1]
             embedding = np.mean(embeddings, axis=0)
-        assert len(embedding) == self.dimensionality
+        assert (
+            len(embedding) == self.dimensionality
+        ), f"Wrong embedding dimensionality: {len(embedding)} != {self.dimensionality}"
         return embedding
 
     @classmethod

@@ -1,26 +1,47 @@
 import csv
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
+from typing import Optional
 from typing import TextIO
+from numpy.typing import ArrayLike
 from transformers.tokenization_utils_base import CharSpan
 from ..settings import DEFAULT_ENCODING
 from .passage import Passage
 
 
-class Corpus(dict):
-    def __init__(self, passages: dict[Passage, set[CharSpan]] = None):
-        super().__init__()
-        self._passages: dict[Passage, set[CharSpan]] = passages or {}
+@dataclass(eq=True, frozen=True)
+class TokenInfo:
+    """Data class to store information about a sub-string of a passage."""
+
+    start: int
+    end: int
+
+    embedding: Optional[ArrayLike] = None
+    """Embedding of the highlighted token in the passage."""
+
+
+class Corpus:
+    def __init__(self, passages: dict[Passage, set[TokenInfo]] = None):
+        self._passages: dict[Passage, set[TokenInfo]] = passages or {}
 
     def __add__(self, other: "Corpus") -> "Corpus":
-        # FIXME: handle passages with multiple highlightings
+        if self._passages.keys() & other._passages.keys():
+            # TODO: handle passages with multiple highlightings
+            raise NotImplementedError("Passages must be unique")
         return Corpus(passages=self._passages | other._passages)
 
-    def add_highlight(self, passage: Passage, highlight: CharSpan):
-        if passage not in self:
-            raise ValueError("Passage not in corpus.")
+    def __contains__(self, passage: Passage) -> bool:
+        return passage in self._passages
 
-        self._passages.setdefault(passage, set()).add(highlight)
+    def __len__(self) -> int:
+        return len(self._passages)
+
+    def __repr__(self) -> str:
+        return f"Corpus({self._passages!r})"
+
+    def __eq__(self, __value: object) -> bool:
+        return __value._passages == self._passages
 
     def find(self, token: str) -> Iterable[tuple[Passage, int]]:
         for passage in self._passages:
@@ -36,7 +57,7 @@ class Corpus(dict):
         passages = {}
         for passage, match_index in self.find(token):
             passages.setdefault(passage, set()).add(
-                Passage(passage.text[match_index : match_index + len(token)])
+                TokenInfo(start=match_index, end=match_index + len(token))
             )
 
         return Corpus(passages)

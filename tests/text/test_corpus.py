@@ -1,6 +1,6 @@
 import pytest
-from transformers.tokenization_utils_base import CharSpan
 from tempo_embeddings.text.corpus import Corpus
+from tempo_embeddings.text.corpus import TokenInfo
 from tempo_embeddings.text.passage import Passage
 
 
@@ -17,6 +17,11 @@ class TestCorpus:
     )
     def test_from_lines(self, lines, expected):
         assert Corpus.from_lines(lines) == expected
+
+    def test_add(self):
+        assert Corpus.from_lines(["test1"]) + Corpus.from_lines(["test2"]) == Corpus(
+            {Passage("test1"): set(), Passage("test2"): set()}
+        )
 
     @pytest.mark.parametrize(
         "lines,token,expected",
@@ -44,7 +49,7 @@ class TestCorpus:
             (
                 ["test line"],
                 "test",
-                Corpus({Passage("test line"): set([CharSpan(0, 4)])}),
+                Corpus({Passage("test line"): {TokenInfo(start=0, end=4)}}),
             ),
         ],
     )
