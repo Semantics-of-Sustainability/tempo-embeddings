@@ -5,7 +5,6 @@ from typing import Iterable
 from typing import Optional
 from typing import TextIO
 from numpy.typing import ArrayLike
-from transformers.tokenization_utils_base import CharSpan
 from ..settings import DEFAULT_ENCODING
 from .passage import Passage
 
