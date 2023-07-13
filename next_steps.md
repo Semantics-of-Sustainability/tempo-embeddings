@@ -35,7 +35,7 @@ git push --set-upstream origin main
 ## Check automatically generated issues
 
 A short while after you push your commits to GitHub for the first time, a few issues outlining next steps will added
-automatically ([here](git@github.com:Semantics-of-Sustainability/tempo-embeddings/issues?q=author%3Aapp%2Fgithub-actions)). Resolve them to complete the
+automatically ([here](https://github.com/Semantics-of-Sustainability/tempo-embeddings/issues?q=author%3Aapp%2Fgithub-actions)). Resolve them to complete the
 setup of your repository.
 
 ## Project development documentation
