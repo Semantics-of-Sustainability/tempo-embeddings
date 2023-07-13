@@ -47,3 +47,20 @@ class TestPassage:
             )
             == expected
         )
+
+    @pytest.mark.parametrize(
+        "passage,key,strict,expected,expected_exception",
+        [
+            (Passage("test text", metadata={}), "test key", False, None, None),
+            (Passage("test text", metadata={}), "test key", True, None, KeyError),
+            (Passage("text", metadata={"key": 1}), "key", False, 1, None),
+        ],
+    )
+    def test_get_metadata(
+        self, passage, key, strict, expected, expected_exception
+    ):  # pylint: disable=too-many-arguments
+        if expected_exception is None:
+            assert passage.get_metadata(key, strict=strict) == expected
+        else:
+            with pytest.raises(expected_exception):
+                passage.get_metadata(key, strict=strict)

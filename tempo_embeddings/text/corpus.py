@@ -1,5 +1,7 @@
 import csv
+import logging
 from pathlib import Path
+from typing import Any
 from typing import Iterable
 from typing import Optional
 from typing import TextIO
@@ -32,21 +34,57 @@ class Corpus:
     def __repr__(self) -> str:
         return f"Corpus({self._passages!r})"
 
-    def __eq__(self, __value: object) -> bool:
-        return __value._passages == self._passages
+    def __eq__(self, other: object) -> bool:
+        return other._passages == self._passages
 
     @property
     def passages(self) -> dict[Passage, set[TokenInfo]]:
         return self._passages
 
+    def token_passages(self) -> Iterable[Passage]:
+        """Returns an iterable over all passages.
+
+        Yields one instance per token highlighting.
+        If a passage has no highlightings, it is not yielded.
+        If a passage has multiple highlightings, it is yielded multiple times.
+        """
+        for passage, token_infos in self._passages.items():
+            if not token_infos:
+                logging.warning("Passage %s has no highlightings", passage)
+            yield from [passage] * len(token_infos)
+
     @property
     def token_infos(self) -> Iterable[TokenInfo]:
-        """Returns an iterable over all TokenInfo objects, flattened from all passages."""
-        return (
-            token_info
-            for token_infos in self.passages.values()
-            for token_info in token_infos
-        )
+        """Returns an iterable over all TokenInfo objects,
+        flattened from all passages."""
+        for token_infos in self.passages.values():
+            yield from token_infos
+
+    def has_metadata(self, key: str, strict=False) -> bool:
+        """Returns True if the corpus has a metadata key.
+
+        Args:
+            key: The metadata key to check for.
+            strict: If True, returns True only if all passages have the key.
+        """
+        condition = all if strict else any
+        return condition(passage.has_metadata(key) for passage in self.passages)
+
+    def get_metadatas(self, key: str) -> Iterable[Any]:
+        """Returns an iterable over all values for a given metadata key."""
+        for passage in self.token_passages():
+            yield passage.metadata.get(key)
+
+    def set_metadatas(self, key, value):
+        """Sets a metadata key to a value for all passages.
+
+        Args:
+            key: The metadata key to set.
+            value: The value to set the metadata key to.
+        """
+
+        for passage in self.passages:
+            passage.set_metadata(key, value)
 
     def all_embeddings(self) -> ArrayLike:
         if not self.has_embeddings():
@@ -59,6 +97,7 @@ class Corpus:
         return any(token_info.embedding is not None for token_info in self.token_infos)
 
     def find(self, token: str) -> Iterable[tuple[Passage, int]]:
+        # FIXME: skip sub-strings matching within words
         for passage in self._passages:
             for match_index in passage.findall(token):
                 yield (passage, match_index)

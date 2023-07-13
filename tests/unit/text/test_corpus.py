@@ -18,6 +18,32 @@ class TestCorpus:
     def test_from_lines(self, lines, expected):
         assert Corpus.from_lines(lines) == expected
 
+    @pytest.mark.parametrize(
+        "passages,expected",
+        [
+            ([], Corpus()),
+            ([Passage("text")], Corpus({Passage("text"): set()})),
+            (
+                [Passage("text 1"), Passage("text 2")],
+                Corpus(passages={Passage("text 1"): set(), Passage("text 2"): set()}),
+            ),
+            (
+                [
+                    Passage("text", metadata={"key": 1}),
+                    Passage("text", metadata={"key": 2}),
+                ],
+                Corpus(
+                    passages={
+                        Passage("text", metadata={"key": 1}): set(),
+                        Passage("text", metadata={"key": 2}): set(),
+                    }
+                ),
+            ),
+        ],
+    )
+    def test_from_passages(self, passages, expected):
+        assert Corpus.from_passages(passages) == expected
+
     def test_add(self):
         assert Corpus.from_lines(["test1"]) + Corpus.from_lines(["test2"]) == Corpus(
             {Passage("test1"): set(), Passage("test2"): set()}
@@ -67,3 +93,21 @@ class TestCorpus:
     )
     def test_has_embeddings(self, corpus, expected):
         assert corpus.has_embeddings() == expected
+
+    @pytest.mark.parametrize(
+        "passages,key,expected",
+        [
+            ([], "test key", []),
+            ([Passage("text", metadata={"key": 1})], "key", [1]),
+            (
+                [
+                    Passage("text", metadata={"key": 1, "other": 3}),
+                    Passage("text", metadata={"key": 2}),
+                ],
+                "key",
+                [1, 2],
+            ),
+        ],
+    )
+    def test_get_metadatas(self, passages, key, expected):
+        assert list(Corpus.from_passages(passages).get_metadatas(key)) == expected

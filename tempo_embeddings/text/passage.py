@@ -1,3 +1,4 @@
+from typing import Any
 from typing import Iterable
 from typing import Optional
 from .types import TokenInfo
@@ -15,6 +16,35 @@ class Passage:
     @property
     def metadata(self) -> dict:
         return self._metadata
+
+    def has_metadata(self, key: str) -> bool:
+        """Returns True if the metadata key exists."""
+        return key in self.metadata
+
+    def get_metadata(self, key: str, strict: bool = True) -> Any:
+        """Returns the value for a given metadata key.
+
+        Args:
+            key: The metadata key to return the value for.
+            strict: If True, raises KeyError if the key does not exist.
+
+        Raises:
+            KeyError: If the metadata key does not exist and strict is True.
+
+        Returns:
+            The value for the given metadata key or
+            None if the key does not exist strict is False.
+        """
+        return self._metadata[key] if strict else self._metadata.get(key)
+
+    def set_metadata(self, key: str, value: Any) -> None:
+        """Sets a metadata key to a value.
+
+        Args:
+            key: The metadata key to set.
+            value: The value to set the metadata key to.
+        """
+        self._metadata[key] = value
 
     def highlighted_text(self, token_info: TokenInfo) -> str:
         return (

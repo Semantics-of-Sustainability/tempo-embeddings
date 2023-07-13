@@ -50,10 +50,23 @@ class WizmapVisualizer(Visualizer):
         embeddings = self._corpus.umap_embeddings()
         xs = embeddings[:, 0].astype(float).tolist()
         ys = embeddings[:, 1].astype(float).tolist()
-        texts = self._corpus.highlighted_texts()
 
-        data_list = wizmap.generate_data_list(xs, ys, texts)
-        grid_dict = wizmap.generate_grid_dict(xs, ys, texts, self._title)
+        texts = self._corpus.highlighted_texts()
+        assert len(texts) == len(xs)
+
+        data_list_args = {"texts": texts, "xs": xs, "ys": ys}
+        grid_list_args = {"texts": texts, "xs": xs, "ys": ys}
+
+        if self._corpus.has_metadata("year"):
+            years = list(self._corpus.get_metadatas("year"))
+            assert len(years) == len(xs)
+
+            data_list_args["times"] = years
+            grid_list_args["times"] = years
+            grid_list_args["time_format"] = "%Y"
+
+        data_list = wizmap.generate_data_list(**data_list_args)
+        grid_dict = wizmap.generate_grid_dict(**grid_list_args)
 
         wizmap.save_json_files(data_list, grid_dict, output_dir=self._path)
 
@@ -91,10 +104,10 @@ class WizmapRequestHandler(SimpleHTTPRequestHandler):
     """A HTTP handler serving the Wizmap data files."""
 
     def __init__(self, visualizer, *args, **kwargs):
-        if not os.path.exists(visualizer.data_file):
-            raise FileNotFoundError(visualizer.data_file)
-        if not os.path.exists(visualizer.grid_file):
-            raise FileNotFoundError(visualizer.grid_file)
+        for file in (visualizer.data_file, visualizer.grid_file):
+            if not os.path.exists(file):
+                raise FileNotFoundError(file)
+
         self._visualizer = visualizer
 
         super().__init__(*args, **kwargs)
