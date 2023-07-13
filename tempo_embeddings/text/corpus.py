@@ -73,7 +73,10 @@ class Corpus:
     def get_metadatas(self, key: str) -> Iterable[Any]:
         """Returns an iterable over all values for a given metadata key."""
         for passage in self.token_passages():
-            yield passage.metadata.get(key)
+            try:
+                yield passage.get_metadata(key)
+            except KeyError as e:
+                raise ValueError(f"Passage missing metadata key: {passage}") from e
 
     def set_metadatas(self, key, value):
         """Sets a metadata key to a value for all passages.

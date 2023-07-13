@@ -95,19 +95,92 @@ class TestCorpus:
         assert corpus.has_embeddings() == expected
 
     @pytest.mark.parametrize(
-        "passages,key,expected",
+        "corpus, expected",
         [
-            ([], "test key", []),
-            ([Passage("text", metadata={"key": 1})], "key", [1]),
+            (Corpus(), []),
+            (Corpus.from_passages([Passage("text")]), []),
+            (Corpus({Passage("text"): {TokenInfo(0, 4)}}), [Passage("text")]),
             (
-                [
-                    Passage("text", metadata={"key": 1, "other": 3}),
-                    Passage("text", metadata={"key": 2}),
-                ],
-                "key",
-                [1, 2],
+                Corpus(
+                    {Passage("text 1"): {TokenInfo(0, 4)}, Passage("text 2"): set()}
+                ),
+                [Passage("text 1")],
+            ),
+            (
+                Corpus({Passage("text"): {TokenInfo(0, 4), TokenInfo(3, 4)}}),
+                [Passage("text"), Passage("text")],
             ),
         ],
     )
-    def test_get_metadatas(self, passages, key, expected):
-        assert list(Corpus.from_passages(passages).get_metadatas(key)) == expected
+    def test_token_passages(self, corpus, expected):
+        assert list(corpus.token_passages()) == expected
+
+    @pytest.mark.parametrize(
+        "corpus,key,expected,expected_exception",
+        [
+            (Corpus(), "test key", [], None),
+            (
+                Corpus(passages={Passage("text", metadata={"key": 1}): set()}),
+                "key",
+                [],
+                None,
+            ),
+            (
+                Corpus(
+                    {
+                        Passage("text", metadata={"key": 1, "other": 3}): {
+                            TokenInfo(0, 4)
+                        }
+                    }
+                ),
+                "key",
+                [1],
+                None,
+            ),
+            (
+                Corpus(
+                    {
+                        Passage("text 1", metadata={"key": 1, "other": 3}): {
+                            TokenInfo(0, 4)
+                        },
+                        Passage("text 2", metadata={"key": 2}): {TokenInfo(5, 6)},
+                    }
+                ),
+                "key",
+                [1, 2],
+                None,
+            ),
+            (
+                Corpus(
+                    {
+                        Passage("text 1", metadata={"key": 1, "other": 3}): {
+                            TokenInfo(0, 4)
+                        },
+                        Passage("text 2", metadata={"other": 2}): {TokenInfo(5, 6)},
+                    }
+                ),
+                "key",
+                [1],
+                ValueError,
+            ),
+            (
+                Corpus(
+                    {
+                        Passage("text 1", metadata={"key": 1, "other": 3}): {
+                            TokenInfo(0, 4)
+                        },
+                        Passage("text 2", metadata={"key": 2}): set(),
+                    }
+                ),
+                "key",
+                [1],
+                None,
+            ),
+        ],
+    )
+    def test_get_metadatas(self, corpus, key, expected, expected_exception):
+        if expected_exception is None:
+            assert list(corpus.get_metadatas(key)) == expected
+        else:
+            with pytest.raises(expected_exception):
+                list(corpus.get_metadatas(key))
