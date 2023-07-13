@@ -1,6 +1,4 @@
 import csv
-from dataclasses import dataclass
-from dataclasses import field
 from pathlib import Path
 from typing import Iterable
 from typing import Optional
@@ -10,25 +8,14 @@ from numpy.typing import ArrayLike
 from umap import UMAP
 from ..settings import DEFAULT_ENCODING
 from .passage import Passage
-
-
-@dataclass(eq=True, unsafe_hash=True)
-class TokenInfo:
-    """Data class to store information about a sub-string of a passage."""
-
-    start: int
-    end: int
-
-    embedding: Optional[ArrayLike] = field(default=None, hash=False)
-    """Embedding of the highlighted token in the passage."""
-
-    embedding_2d: Optional[ArrayLike] = field(default=None, hash=False)
+from .types import TokenInfo
 
 
 class Corpus:
     def __init__(self, passages: dict[Passage, set[TokenInfo]] = None):
         self._passages: dict[Passage, set[TokenInfo]] = passages or {}
         self._umap_reducer: Optional[UMAP] = None
+        self._umap_embeddings: Optional[np.ndarray] = None
 
     def __add__(self, other: "Corpus") -> "Corpus":
         if self._passages.keys() & other._passages.keys():
@@ -103,6 +90,17 @@ class Corpus:
 
     def umap_embeddings(self):
         return self.umap().transform(self.all_embeddings())
+
+    def highlighted_texts(self):
+        """Returns an iterable over all highlighted texts, flattened from all passages.
+
+        A passage is returned multiple times if it has multiple highlightings.
+        """
+        return [
+            passage.highlighted_text(token_info)
+            for passage, token_infos in self.passages.items()
+            for token_info in token_infos
+        ]
 
     @classmethod
     def from_lines(cls, f: TextIO, metadata: dict = None):

@@ -1,5 +1,6 @@
 from typing import Iterable
 from typing import Optional
+from .types import TokenInfo
 
 
 class Passage:
@@ -14,6 +15,13 @@ class Passage:
     @property
     def metadata(self) -> dict:
         return self._metadata
+
+    def highlighted_text(self, token_info: TokenInfo) -> str:
+        return (
+            self._text[: token_info.start]
+            + f"<b>{self._text[token_info.start:token_info.end]}</b>"
+            + self._text[token_info.end :]
+        )
 
     def __contains__(self, token: str) -> bool:
         return token in self._text

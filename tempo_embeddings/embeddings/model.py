@@ -1,7 +1,9 @@
 import abc
+import logging
 import numpy as np
 import torch
 from numpy.typing import ArrayLike
+from tqdm import tqdm
 from transformers import AutoTokenizer
 from transformers import RobertaModel
 from transformers import pipeline
@@ -62,15 +64,19 @@ class TransformerModelWrapper(abc.ABC):
         ), f"Wrong embedding dimensionality: {len(embedding)} != {self.dimensionality}"
         return embedding
 
-    def add_embeddings(self, corpus: Corpus, overwrite: bool = False) -> Corpus:
+    def add_embeddings(self, corpus: Corpus, overwrite: bool = False):
         """Adds the embeddings for the given corpus in place."""
         if corpus.has_embeddings() and not overwrite:
             raise ValueError("Corpus already has embeddings")
 
-        for passage, token_infos in corpus.passages.items():
+        if not corpus.token_infos:
+            logging.warning("Corpus does not have any token infos")
+
+        for passage, token_infos in tqdm(
+            corpus.passages.items(), unit="passage", desc="Computing embeddings"
+        ):
             for token_info in token_infos:
                 token_info.embedding = self.token_embedding(passage, token_info)
-        return corpus
 
     @classmethod
     @abc.abstractmethod
