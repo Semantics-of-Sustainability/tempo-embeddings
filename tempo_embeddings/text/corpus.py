@@ -133,13 +133,13 @@ class Corpus:
     def umap_embeddings(self):
         return self.umap().transform(self.all_embeddings())
 
-    def highlighted_texts(self):
+    def highlighted_texts(self, metadata_fields: Iterable[str] = None):
         """Returns an iterable over all highlighted texts, flattened from all passages.
 
         A passage is returned multiple times if it has multiple highlightings.
         """
         return [
-            passage.highlighted_text(token_info)
+            passage.highlighted_text(token_info, metadata_fields)
             for passage, token_infos in self.passages.items()
             for token_info in token_infos
         ]

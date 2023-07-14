@@ -46,12 +46,31 @@ class Passage:
         """
         self._metadata[key] = value
 
-    def highlighted_text(self, token_info: TokenInfo) -> str:
-        return (
-            self._text[: token_info.start]
-            + f"<b>{self._text[token_info.start:token_info.end]}</b>"
-            + self._text[token_info.end :]
-        )
+    def highlighted_text(
+        self, token_info: TokenInfo, metadata_fields: Iterable[str] = None
+    ) -> str:
+        start = self.word_begin(token_info)
+        end = self.word_end(token_info)
+        text = self._text[:start] + f"<b>{self._text[start:end]}</b>" + self._text[end:]
+
+        if metadata_fields:
+            metadata = {key: self.get_metadata(key) for key in metadata_fields}
+            text += f"<br><br>{metadata}"
+        return text
+
+    def word_begin(self, token_info: TokenInfo) -> int:
+        """Returns the index of the beginning of the word containing the token."""
+        for i in range(token_info.start, 0, -1):
+            if not self._text[i - 1].isalnum():
+                return i
+        return 0
+
+    def word_end(self, token_info: TokenInfo) -> int:
+        """Returns the index of the beginning of the word containing the token."""
+        for i in range(token_info.end, len(self._text), 1):
+            if not self._text[i].isalnum():
+                return i
+        return len(self._text)
 
     def __contains__(self, token: str) -> bool:
         return token in self._text

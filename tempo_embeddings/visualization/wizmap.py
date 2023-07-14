@@ -1,5 +1,6 @@
 """Wrapper around Wizmap."""
 
+import logging
 import os
 import socketserver
 import tempfile
@@ -45,7 +46,7 @@ class WizmapVisualizer(Visualizer):
     def grid_url(self):
         return self.url_prefix + self.grid_file_name
 
-    def _cleanup(self):
+    def cleanup(self):
         self.stop_server()
         for file in (self.data_file, self.grid_file):
             if file:
@@ -58,19 +59,24 @@ class WizmapVisualizer(Visualizer):
         xs = embeddings[:, 0].astype(float).tolist()
         ys = embeddings[:, 1].astype(float).tolist()
 
-        texts = self._corpus.highlighted_texts()
-        assert len(texts) == len(xs)
+        data_list_args = {"xs": xs, "ys": ys}
+        grid_list_args = {"xs": xs, "ys": ys}
 
-        data_list_args = {"texts": texts, "xs": xs, "ys": ys}
-        grid_list_args = {"texts": texts, "xs": xs, "ys": ys}
-
+        metadata_fields = []
         if self._corpus.has_metadata("year"):
+            metadata_fields.append("year")
+
             years = list(self._corpus.get_metadatas("year"))
             assert len(years) == len(xs)
 
             data_list_args["times"] = years
             grid_list_args["times"] = years
             grid_list_args["time_format"] = "%Y"
+
+        texts = self._corpus.highlighted_texts(metadata_fields=metadata_fields)
+        assert len(texts) == len(xs)
+        data_list_args["texts"] = texts
+        grid_list_args["texts"] = texts
 
         data_list = wizmap.generate_data_list(**data_list_args)
         grid_dict = wizmap.generate_grid_dict(**grid_list_args)
@@ -100,13 +106,15 @@ class WizmapVisualizer(Visualizer):
         server_thread.start()
 
     def stop_server(self):
-        if self._server is not None:
+        if self._server is None:
+            logging.warning("Server not running.")
+        else:
             self._server.server_close()
             self._server.shutdown()
             self._server = None
 
     def __del__(self):
-        self._cleanup()
+        self.cleanup()
 
 
 class WizmapRequestHandler(SimpleHTTPRequestHandler):
