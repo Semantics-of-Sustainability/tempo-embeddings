@@ -1,6 +1,5 @@
 """Wrapper around Wizmap."""
 
-import logging
 import os
 import socketserver
 import tempfile
@@ -30,11 +29,13 @@ class WizmapVisualizer(Visualizer):
 
     @property
     def data_file(self):
-        return os.path.join(self._path, self.data_file_name)
+        path = os.path.join(self._path, self.data_file_name)
+        return path if os.path.exists(path) else None
 
     @property
     def grid_file(self):
-        return os.path.join(self._path, self.grid_file_name)
+        path = os.path.join(self._path, self.grid_file_name)
+        return path if os.path.exists(path) else None
 
     @property
     def data_url(self):
@@ -43,6 +44,12 @@ class WizmapVisualizer(Visualizer):
     @property
     def grid_url(self):
         return self.url_prefix + self.grid_file_name
+
+    def _cleanup(self):
+        self.stop_server()
+        for file in (self.data_file, self.grid_file):
+            if file:
+                os.remove(file)
 
     def write_data(self):
         """Write Wizmap visualizations to a file."""
@@ -72,9 +79,10 @@ class WizmapVisualizer(Visualizer):
 
     def visualize(self, **kwargs):
         """Visualize the corpus with Wizmap."""
-        # self.write_data()
-
-        # self.serve(**kwargs)
+        if not (self.data_file and self.grid_file):
+            self.write_data()
+        if not self._server:
+            self.serve(**kwargs)
 
         wizmap.visualize(self.data_url, self.grid_url)
 
@@ -92,12 +100,13 @@ class WizmapVisualizer(Visualizer):
         server_thread.start()
 
     def stop_server(self):
-        if self._server is None:
-            logging.warning("Server not running")
-        else:
+        if self._server is not None:
             self._server.server_close()
             self._server.shutdown()
             self._server = None
+
+    def __del__(self):
+        self._cleanup()
 
 
 class WizmapRequestHandler(SimpleHTTPRequestHandler):

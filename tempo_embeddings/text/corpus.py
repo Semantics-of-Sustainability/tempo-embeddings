@@ -32,7 +32,7 @@ class Corpus:
         return len(self._passages)
 
     def __repr__(self) -> str:
-        return f"Corpus({self._passages!r})"
+        return f"Corpus({list(self._passages.items())[:10]!r})"
 
     def __eq__(self, other: object) -> bool:
         return other._passages == self._passages
