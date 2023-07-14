@@ -51,11 +51,13 @@ class Passage:
     ) -> str:
         start = self.word_begin(token_info)
         end = self.word_end(token_info)
-        text = self._text[:start] + f"<b>{self._text[start:end]}</b>" + self._text[end:]
+        text = (
+            self._text[:start] + f" <b>{self._text[start:end]}</b> " + self._text[end:]
+        )
 
         if metadata_fields:
             metadata = {key: self.get_metadata(key) for key in metadata_fields}
-            text += f"<br><br>{metadata}"
+            text += f"<br>{metadata}"
         return text
 
     def word_begin(self, token_info: TokenInfo) -> int:

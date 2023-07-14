@@ -1,4 +1,5 @@
 import csv
+import gzip
 import logging
 from pathlib import Path
 from typing import Any
@@ -156,24 +157,52 @@ class Corpus:
             return Corpus.from_lines(f)
 
     @classmethod
-    def from_csv(
-        cls, filepath: Path, text_columns: list[str], encoding=DEFAULT_ENCODING
+    def from_csv_file(
+        cls,
+        filepath: Path,
+        text_columns: list[str],
+        encoding=DEFAULT_ENCODING,
+        compression: Optional[str] = None,
+        **kwargs,
     ):
         """Read input data from a CSV file."""
-        with open(filepath, "rt", encoding=encoding) as f:
-            reader = csv.DictReader(f)
-            if not all(column in reader.fieldnames for column in text_columns):
-                raise ValueError("Not all text columns found in CSV file.")
+        open_func = gzip.open if compression == "gzip" else open
 
-            passages = []
-            for row in reader:
-                metadata = {
-                    column: row[column]
-                    for column in reader.fieldnames
-                    if column not in text_columns
-                }
-                for text_column in text_columns:
-                    passages.append(Passage(row[text_column], metadata))
+        with open_func(filepath, "rt", encoding=encoding) as f:
+            return cls.from_csv_stream(f, text_columns, **kwargs)
+
+    @classmethod
+    def from_csv_stream(
+        cls,
+        file_handler,
+        text_columns: list[str],
+        *,
+        window_size: int = 1000,
+        window_overlap: int = 0,
+        **kwargs,
+    ):
+        reader = csv.DictReader(file_handler, **kwargs)
+        if not all(column in reader.fieldnames for column in text_columns):
+            raise ValueError("Not all text columns found in CSV file.")
+
+        passages = []
+        for row in reader:
+            # generate separate passage for each text column, sharing the same metadata
+            metadata = {
+                column: row[column]
+                for column in reader.fieldnames
+                if column not in text_columns
+            }
+
+            for text_column in text_columns:
+                passages.extend(
+                    Passage.from_text(
+                        row[text_column],
+                        metadata=metadata,
+                        window_size=window_size,
+                        window_overlap=window_overlap,
+                    )
+                )
         return Corpus.from_passages(passages)
 
     @classmethod
