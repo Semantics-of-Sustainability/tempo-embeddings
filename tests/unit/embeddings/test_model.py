@@ -21,6 +21,6 @@ class TestRobertaModelWrapper:
         ],
     )
     def test_add_embeddings(self, model_name, corpus):
-        RobertaModelWrapper.from_pretrained(model_name).add_embeddings(corpus)
+        RobertaModelWrapper.from_pretrained(model_name).compute_embeddings(corpus)
         for token_info in corpus.token_infos:
             assert token_info.embedding is not None

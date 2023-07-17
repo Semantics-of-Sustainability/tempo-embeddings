@@ -6,6 +6,7 @@ from typing import Any
 from typing import Iterable
 from typing import Optional
 from typing import TextIO
+import joblib
 import numpy as np
 from numpy.typing import ArrayLike
 from umap import UMAP
@@ -19,6 +20,8 @@ class Corpus:
         self._passages: dict[Passage, set[TokenInfo]] = passages or {}
         self._umap_reducer: Optional[UMAP] = None
         self._umap_embeddings: Optional[np.ndarray] = None
+
+        self._embeddings_model_name: Optional[str] = None
 
     def __add__(self, other: "Corpus") -> "Corpus":
         if self._passages.keys() & other._passages.keys():
@@ -36,11 +39,22 @@ class Corpus:
         return f"Corpus({list(self._passages.items())[:10]!r})"
 
     def __eq__(self, other: object) -> bool:
-        return other._passages == self._passages
+        return (
+            self._embeddings_model_name == other._embeddings_model_name
+            and other._passages == self._passages
+        )
 
     @property
     def passages(self) -> dict[Passage, set[TokenInfo]]:
         return self._passages
+
+    @property
+    def embeddings_model_name(self) -> Optional[str]:
+        return self._embeddings_model_name
+
+    @embeddings_model_name.setter
+    def embeddings_model_name(self, value: str):
+        self._embeddings_model_name = value
 
     def token_passages(self) -> Iterable[Passage]:
         """Returns an iterable over all passages.
@@ -95,10 +109,20 @@ class Corpus:
             raise ValueError("Corpus does not have embeddings")
         return np.array([token_info.embedding for token_info in self.token_infos])
 
-    def has_embeddings(self) -> bool:
-        """Returns True if all TokenInfo objects have an embedding."""
-        # Either all or none of the TokenInfo objects have an embedding
-        return any(token_info.embedding is not None for token_info in self.token_infos)
+    def has_embeddings(self, validate=True) -> bool:
+        """Returns True embeddings have been computed for the corpus.
+
+        Args:
+            validate: If True, validates that all TokenInfo objects have an embedding.
+
+        Returns:
+            True if embeddings have been computed
+        """
+        if self.embeddings_model_name is not None:
+            return (not validate) or all(
+                token_info.embedding for token_info in self.token_infos
+            )
+        return False
 
     def find(self, token: str) -> Iterable[tuple[Passage, int]]:
         # FIXME: skip sub-strings matching within words
@@ -145,13 +169,29 @@ class Corpus:
             for token_info in token_infos
         ]
 
+    def save(self, filepath: Path):
+        """Save the corpus to a file."""
+        with open(filepath, "wb") as f:
+            joblib.dump(self, f)
+
+    @classmethod
+    def load(cls, filepath: Path):
+        """Load the corpus from a file."""
+        with open(filepath, "rb") as f:
+            corpus = joblib.load(f)
+
+        if not isinstance(corpus, cls):
+            raise TypeError(f"Expected {cls}, got {type(corpus)}")
+
+        return corpus
+
     @classmethod
     def from_lines(cls, f: TextIO, metadata: dict = None):
         """Read input data from an open file handler, one sequence per line."""
         return Corpus.from_passages((Passage(line, metadata) for line in f))
 
     @classmethod
-    def from_file(cls, filepath: Path, encoding=DEFAULT_ENCODING):
+    def from_lines_file(cls, filepath: Path, encoding=DEFAULT_ENCODING):
         """Read input data from a file, one sequence per line."""
         with open(filepath, "rt", encoding=encoding) as f:
             return Corpus.from_lines(f)

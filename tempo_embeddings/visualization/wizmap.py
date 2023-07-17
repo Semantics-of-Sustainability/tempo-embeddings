@@ -16,10 +16,20 @@ class WizmapVisualizer(Visualizer):
     data_file_name = "data.ndjson"
     grid_file_name = "grid.json"
 
-    def __init__(self, corpus: Corpus, title: str, path: str = None):
+    def __init__(
+        self, corpus: Corpus, title: str, path: str = None, stopwords: list[str] = None
+    ):
         super().__init__(corpus)
+
         self._path = path or tempfile.gettempdir()
         self._title = title
+
+        self._data_write_args = {}
+        if stopwords:
+            logging.warning(
+                "Pending on Wizmap PR: https://github.com/poloclub/wizmap/pull/11"
+            )
+        self._grid_write_args = {} if stopwords is None else {"stop_words": stopwords}
 
         self._server = None
 
@@ -59,8 +69,8 @@ class WizmapVisualizer(Visualizer):
         xs = embeddings[:, 0].astype(float).tolist()
         ys = embeddings[:, 1].astype(float).tolist()
 
-        data_list_args = {"xs": xs, "ys": ys}
-        grid_list_args = {"xs": xs, "ys": ys}
+        data_list_args = self._data_write_args | {"xs": xs, "ys": ys}
+        grid_list_args = self._grid_write_args | {"xs": xs, "ys": ys}
 
         metadata_fields = []
         if self._corpus.has_metadata("year"):

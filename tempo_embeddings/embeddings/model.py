@@ -25,6 +25,10 @@ class TransformerModelWrapper(abc.ABC):
         """Returns the dimensionality of the embeddings"""
         return self._model.embeddings.word_embeddings.embedding_dim
 
+    @property
+    def name(self) -> str:
+        return self._model.config._name_or_path  # pylint: disable=protected-access
+
     @torch.no_grad()
     def _batch_embeddings(self, passages: list[Passage]) -> ArrayLike:
         # TODO: use this method in token_embedding()
@@ -64,7 +68,7 @@ class TransformerModelWrapper(abc.ABC):
         ), f"Wrong embedding dimensionality: {len(embedding)} != {self.dimensionality}"
         return embedding
 
-    def add_embeddings(self, corpus: Corpus, overwrite: bool = False):
+    def compute_embeddings(self, corpus: Corpus, overwrite: bool = False):
         """Adds the embeddings for the given corpus in place."""
         if corpus.has_embeddings() and not overwrite:
             raise ValueError("Corpus already has embeddings")
@@ -77,6 +81,8 @@ class TransformerModelWrapper(abc.ABC):
         ):
             for token_info in token_infos:
                 token_info.embedding = self.token_embedding(passage, token_info)
+
+        corpus.embeddings_model_name = self.name
 
     @classmethod
     @abc.abstractmethod
