@@ -120,7 +120,7 @@ class Corpus:
         """
         if self.embeddings_model_name is not None:
             return (not validate) or all(
-                token_info.embedding for token_info in self.token_infos
+                token_info.embedding is not None for token_info in self.token_infos
             )
         return False
 
