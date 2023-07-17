@@ -18,7 +18,6 @@ from .types import TokenInfo
 class Corpus:
     def __init__(self, passages: dict[Passage, set[TokenInfo]] = None):
         self._passages: dict[Passage, set[TokenInfo]] = passages or {}
-        self._umap_reducer: Optional[UMAP] = None
         self._umap_embeddings: Optional[np.ndarray] = None
 
         self._embeddings_model_name: Optional[str] = None
@@ -144,19 +143,12 @@ class Corpus:
 
         return Corpus(passages)
 
-    def umap(self):
-        if not self.has_embeddings():
-            raise ValueError("Corpus has no embeddings.")
-
-        if self._umap_reducer is None:
-            reducer = UMAP(metric="cosine")
-            reducer.fit(self.all_embeddings())
-            self._umap_reducer = reducer
-
-        return self._umap_reducer
-
     def umap_embeddings(self):
-        return self.umap().transform(self.all_embeddings())
+        if self._umap_embeddings is None:
+            umap = UMAP(metric="cosine")
+            self._umap_embeddings = umap.fit_transform(self.all_embeddings())
+
+        return self._umap_embeddings
 
     def highlighted_texts(self, metadata_fields: Iterable[str] = None):
         """Returns an iterable over all highlighted texts, flattened from all passages.
