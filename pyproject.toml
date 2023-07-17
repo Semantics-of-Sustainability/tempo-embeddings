@@ -5,6 +5,9 @@ build-backend = "setuptools.build_meta"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
+[tool.pylint."MESSAGES CONTROL"]
+disable = "django-not-available"
+
 [tool.coverage.run]
 branch = true
 source = ["tempo_embeddings"]
@@ -19,3 +22,7 @@ skip_missing_interpreters = true
 commands = pytest
 extras = dev
 """
+
+[tool.pyright]
+exclude = [ "**/*.ipynb", "**/*.ipynb*" ]
+ignore = [ "**/*.ipynb", "**/*.ipynb*" ]
