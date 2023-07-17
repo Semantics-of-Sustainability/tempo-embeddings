@@ -7,6 +7,7 @@ import tempfile
 import threading
 from functools import partial
 from http.server import SimpleHTTPRequestHandler
+from typing import Optional
 import wizmap
 from ..text.corpus import Corpus
 from .visualizer import Visualizer
@@ -29,6 +30,7 @@ class WizmapVisualizer(Visualizer):
             logging.warning(
                 "Pending on Wizmap PR: https://github.com/poloclub/wizmap/pull/11"
             )
+
         self._grid_write_args = {} if stopwords is None else {"stop_words": stopwords}
 
         self._server = None
@@ -56,6 +58,10 @@ class WizmapVisualizer(Visualizer):
     def grid_url(self):
         return self.url_prefix + self.grid_file_name
 
+    @property
+    def stopwords(self) -> Optional[list[str]]:
+        return self._grid_write_args.get("stop_words")
+
     def cleanup(self):
         self.stop_server()
         for file in (self.data_file, self.grid_file):
@@ -82,6 +88,11 @@ class WizmapVisualizer(Visualizer):
             data_list_args["times"] = years
             grid_list_args["times"] = years
             grid_list_args["time_format"] = "%Y"
+
+            # FIXME: this does not work for the default stopwords ("english")
+            self.stopwords.extend(years)
+            self.stopwords.append("year")
+            self.stopwords.append("br")
 
         texts = self._corpus.highlighted_texts(metadata_fields=metadata_fields)
         assert len(texts) == len(xs)
