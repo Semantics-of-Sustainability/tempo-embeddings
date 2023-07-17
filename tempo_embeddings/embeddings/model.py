@@ -1,7 +1,6 @@
 import abc
 import logging
 import torch
-from tqdm import tqdm
 from transformers import AutoTokenizer
 from transformers import RobertaModel
 from transformers import pipeline
@@ -37,13 +36,17 @@ class TransformerModelWrapper(abc.ABC):
 
         # TODO: implement for other hidden layers but last one
 
-        # TODO: run in batches
-        for passage in tqdm(
-            corpus.passages, unit="passage", desc="Computing embeddings"
-        ):
-            passage.embeddings = self._pipeline(passage.text)[0]
-            passage.tokenization = self._tokenizer(passage.text)[0]
+        passage_texts = [passage.text for passage in corpus.passages]
 
+        if passage_texts:
+            embeddings = self._pipeline(passage_texts)
+            tokenizations = self._tokenizer(passage_texts)
+
+            for i, passage in enumerate(corpus.passages):
+                passage.embeddings = embeddings[i][0]
+                passage.tokenization = tokenizations[i]
+        else:
+            logging.warning("Corpus is empty.")
         corpus.embeddings_model_name = self.name
 
     @classmethod
