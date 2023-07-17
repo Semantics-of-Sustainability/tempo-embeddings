@@ -1,6 +1,5 @@
 import pytest
 from tempo_embeddings.text.passage import Passage
-from tempo_embeddings.text.types import TokenInfo
 
 
 class TestPassage:
@@ -65,30 +64,3 @@ class TestPassage:
         else:
             with pytest.raises(expected_exception):
                 passage.get_metadata(key, strict=strict)
-
-    @pytest.mark.parametrize(
-        "passage,token_info,expected",
-        [
-            (Passage("test token"), TokenInfo(0, 4), 0),
-            (Passage("test token"), TokenInfo(1, 4), 0),
-            (Passage("test token"), TokenInfo(5, 10), 5),
-            (Passage("test token"), TokenInfo(6, 10), 5),
-            (Passage("test token"), TokenInfo(10, 10), 5),
-            (Passage("test,token"), TokenInfo(6, 10), 5),
-        ],
-    )
-    def test_word_begin(self, passage, token_info, expected):
-        assert passage.word_begin(token_info) == expected
-
-    @pytest.mark.parametrize(
-        "passage,token_info,expected",
-        [
-            (Passage("test token"), TokenInfo(0, 4), 4),
-            (Passage("test token"), TokenInfo(0, 3), 4),
-            (Passage("test token"), TokenInfo(5, 10), 10),
-            (Passage("test token"), TokenInfo(5, 9), 10),
-            (Passage("test token"), TokenInfo(5, 5), 10),
-        ],
-    )
-    def test_word_end(self, passage, token_info, expected):
-        assert passage.word_end(token_info) == expected

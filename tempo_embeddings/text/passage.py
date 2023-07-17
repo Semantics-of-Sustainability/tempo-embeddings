@@ -71,17 +71,21 @@ class Passage:
         self._metadata[key] = value
 
     def highlighted_text(
-        self, token_info: TokenInfo, metadata_fields: Iterable[str] = None
+        self,
+        token_info: TokenInfo,
+        metadata_fields: Iterable[str] = None,
+        max_context_length: int = 200,
     ) -> str:
-        # start = self.word_begin(token_info)
-        # end = self.word_end(token_info)
-        # FIXME: get word boundaries for highlighting from self._tokenization
+        """Returns the text with the given word highlighted
+        and metadata appended."""
+
+        start, end = self.word_span(token_info)
 
         text = (
-            self._text[: token_info.start]
-            + f" <b>{self._text[token_info.start:token_info.end]}</b> "
-            + self._text[token_info.end :]
+            self._text[:start] + f" <b>{self._text[start:end]}</b> " + self._text[end:]
         )
+        if len(text) > max_context_length:
+            text = text[start - max_context_length // 2 : end + max_context_length // 2]
 
         if metadata_fields:
             metadata = {key: self.get_metadata(key) for key in metadata_fields}
@@ -114,19 +118,13 @@ class Passage:
             self._tokenization.char_to_token(token_info.end - 1),
         )
 
-    def word_begin(self, token_info: TokenInfo) -> int:
-        """Returns the index of the beginning of the word containing the token."""
-        for i in range(token_info.start, 0, -1):
-            if not self._text[i - 1].isalnum():
-                return i
-        return 0
+    def word_span(self, token_info: TokenInfo) -> tuple[int, int]:
+        word_index = self.tokenization.char_to_word(token_info.start)
+        assert (
+            self.tokenization.char_to_word(token_info.end - 1) == word_index
+        ), "Token spans multiple words"
 
-    def word_end(self, token_info: TokenInfo) -> int:
-        """Returns the index of the beginning of the word containing the token."""
-        for i in range(token_info.end, len(self._text), 1):
-            if not self._text[i].isalnum():
-                return i
-        return len(self._text)
+        return self.tokenization.word_to_chars(word_index)
 
     def __contains__(self, token: str) -> bool:
         return token in self._text
