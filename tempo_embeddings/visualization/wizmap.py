@@ -90,9 +90,10 @@ class WizmapVisualizer(Visualizer):
             grid_list_args["time_format"] = "%Y"
 
             # FIXME: this does not work for the default stopwords ("english")
-            self.stopwords.extend(years)
-            self.stopwords.append("year")
-            self.stopwords.append("br")
+            if self.stopwords is not None:
+                self.stopwords.extend(years)
+                self.stopwords.append("year")
+                self.stopwords.append("br")
 
         texts = self._corpus.highlighted_texts(metadata_fields=metadata_fields)
         assert len(texts) == len(xs)
