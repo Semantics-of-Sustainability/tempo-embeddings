@@ -1,8 +1,5 @@
 from dataclasses import dataclass
-from dataclasses import field
-from typing import Optional
 from typing import TypedDict
-from numpy.typing import ArrayLike
 
 
 class Metadata(TypedDict, total=False):
@@ -24,6 +21,3 @@ class TokenInfo:
 
     start: int
     end: int
-
-    embedding: Optional[ArrayLike] = field(default=None, hash=False)
-    """Embedding of the highlighted token in the passage."""

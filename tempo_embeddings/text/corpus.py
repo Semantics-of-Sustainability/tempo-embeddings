@@ -55,7 +55,7 @@ class Corpus:
     def embeddings_model_name(self, value: str):
         self._embeddings_model_name = value
 
-    def token_passages(self) -> Iterable[Passage]:
+    def token_passages(self) -> Iterable[tuple[Passage, TokenInfo]]:
         """Returns an iterable over all passages.
 
         Yields one instance per token highlighting.
@@ -65,7 +65,9 @@ class Corpus:
         for passage, token_infos in self._passages.items():
             if not token_infos:
                 logging.warning("Passage %s has no highlightings", passage)
-            yield from [passage] * len(token_infos)
+
+            for token_info in token_infos:
+                yield passage, token_info
 
     @property
     def token_infos(self) -> Iterable[TokenInfo]:
@@ -84,9 +86,10 @@ class Corpus:
         condition = all if strict else any
         return condition(passage.has_metadata(key) for passage in self.passages)
 
-    def get_metadatas(self, key: str) -> Iterable[Any]:
-        """Returns an iterable over all values for a given metadata key."""
-        for passage in self.token_passages():
+    def get_token_metadatas(self, key: str) -> Iterable[Any]:
+        """Returns an iterable over all values
+        for a given metadata key for each token."""
+        for passage, _ in self.token_passages():
             try:
                 yield passage.get_metadata(key)
             except KeyError as e:
@@ -103,12 +106,18 @@ class Corpus:
         for passage in self.passages:
             passage.set_metadata(key, value)
 
-    def all_embeddings(self) -> ArrayLike:
+    def token_embeddings(self) -> ArrayLike:
         if not self.has_embeddings():
             raise ValueError("Corpus does not have embeddings")
-        return np.array([token_info.embedding for token_info in self.token_infos])
 
-    def has_embeddings(self, validate=True) -> bool:
+        return np.array(
+            [
+                passage.token_embedding(token_info)
+                for passage, token_info in self.token_passages()
+            ]
+        )
+
+    def has_embeddings(self, validate=False) -> bool:
         """Returns True embeddings have been computed for the corpus.
 
         Args:
@@ -119,12 +128,12 @@ class Corpus:
         """
         if self.embeddings_model_name is not None:
             return (not validate) or all(
-                token_info.embedding is not None for token_info in self.token_infos
+                passage.embedding is not None for passage in self.passages
             )
         return False
 
     def find(self, token: str) -> Iterable[tuple[Passage, int]]:
-        # FIXME: skip sub-strings matching within words
+        # FIXME: skip sub-strings matching within words?
         for passage in self._passages:
             for match_index in passage.findall(token):
                 yield (passage, match_index)
@@ -146,7 +155,7 @@ class Corpus:
     def umap_embeddings(self):
         if self._umap_embeddings is None:
             umap = UMAP(metric="cosine")
-            self._umap_embeddings = umap.fit_transform(self.all_embeddings())
+            self._umap_embeddings = umap.fit_transform(self.token_embeddings())
 
         return self._umap_embeddings
 
@@ -157,8 +166,7 @@ class Corpus:
         """
         return [
             passage.highlighted_text(token_info, metadata_fields)
-            for passage, token_infos in self.passages.items()
-            for token_info in token_infos
+            for passage, token_info in self.token_passages()
         ]
 
     def save(self, filepath: Path):

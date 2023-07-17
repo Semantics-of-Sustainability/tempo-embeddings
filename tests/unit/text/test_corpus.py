@@ -83,72 +83,26 @@ class TestCorpus:
         assert Corpus.from_lines(lines).subcorpus(token) == expected
 
     @pytest.mark.parametrize(
-        "corpus,model_name,validate,expected",
-        [
-            (Corpus(), None, False, False),
-            (Corpus(), "test model", False, True),
-            (Corpus(), "test model", True, True),
-            (Corpus({Passage("test"): set()}), None, False, False),
-            (Corpus({Passage("test"): set()}), None, True, False),
-            (Corpus({Passage("test"): set()}), "test model", True, True),
-            (Corpus({Passage("test"): set()}), "test model", False, True),
-            (Corpus({Passage("test"): {TokenInfo(0, 4)}}), None, False, False),
-            (Corpus({Passage("test"): {TokenInfo(0, 4)}}), "test model", False, True),
-            (Corpus({Passage("test"): {TokenInfo(0, 4)}}), "test model", True, False),
-            (
-                Corpus({Passage("test"): {TokenInfo(0, 4, embedding=[0.1, 0.2])}}),
-                "test model",
-                True,
-                True,
-            ),
-            (
-                Corpus(
-                    {
-                        Passage("test"): {
-                            TokenInfo(0, 4, embedding=[0.1, 0.2]),
-                            TokenInfo(0, 4),
-                        }
-                    }
-                ),
-                "test model",
-                False,
-                True,
-            ),
-            (
-                Corpus(
-                    {
-                        Passage("test"): {
-                            TokenInfo(0, 4, embedding=[0.1, 0.2]),
-                            TokenInfo(0, 4),
-                        }
-                    }
-                ),
-                "test model",
-                True,
-                False,
-            ),
-        ],
-    )
-    def test_has_embeddings(self, corpus, model_name, validate, expected):
-        if model_name:
-            corpus.embeddings_model_name = model_name
-        assert corpus.has_embeddings(validate) == expected
-
-    @pytest.mark.parametrize(
-        "corpus, expected",
+        "corpus,expected",
         [
             (Corpus(), []),
             (Corpus.from_passages([Passage("text")]), []),
-            (Corpus({Passage("text"): {TokenInfo(0, 4)}}), [Passage("text")]),
+            (
+                Corpus({Passage("text"): {TokenInfo(0, 4)}}),
+                [(Passage("text"), TokenInfo(0, 4))],
+            ),
             (
                 Corpus(
                     {Passage("text 1"): {TokenInfo(0, 4)}, Passage("text 2"): set()}
                 ),
-                [Passage("text 1")],
+                [(Passage("text 1"), TokenInfo(0, 4))],
             ),
             (
                 Corpus({Passage("text"): {TokenInfo(0, 4), TokenInfo(3, 4)}}),
-                [Passage("text"), Passage("text")],
+                [
+                    (Passage("text"), TokenInfo(0, 4)),
+                    (Passage("text"), TokenInfo(3, 4)),
+                ],
             ),
         ],
     )
@@ -218,20 +172,18 @@ class TestCorpus:
             ),
         ],
     )
-    def test_get_metadatas(self, corpus, key, expected, expected_exception):
+    def test_get_token_metadatas(self, corpus, key, expected, expected_exception):
         if expected_exception is None:
-            assert list(corpus.get_metadatas(key)) == expected
+            assert list(corpus.get_token_metadatas(key)) == expected
         else:
             with pytest.raises(expected_exception):
-                list(corpus.get_metadatas(key))
+                list(corpus.get_token_metadatas(key))
 
     def test_load_save(self, tmp_path):
         filepath = tmp_path / "corpus"
         corpus = Corpus(
             {
-                Passage("text 1", metadata={"key": 1, "other": 3}): {
-                    TokenInfo(0, 4, embedding=[0.1, 0.2])
-                },
+                Passage("text 1", metadata={"key": 1, "other": 3}): {TokenInfo(0, 4)},
                 Passage("text 2", metadata={"key": 2}): {TokenInfo(5, 6)},
             }
         )
