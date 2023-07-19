@@ -66,7 +66,7 @@ class TestCorpus:
         ],
     )
     def test_find(self, lines, token, expected):
-        assert list(Corpus.from_lines(lines).find(token)) == expected
+        assert list(Corpus.from_lines(lines)._find(token)) == expected  # pylint: disable=protected-access
 
     @pytest.mark.parametrize(
         "lines,token,expected",
@@ -107,7 +107,7 @@ class TestCorpus:
         ],
     )
     def test_token_passages(self, corpus, expected):
-        assert list(corpus.token_passages()) == expected
+        assert list(corpus._token_passages()) == expected   # pylint: disable=protected-access
 
     @pytest.mark.parametrize(
         "corpus,key,expected,expected_exception",

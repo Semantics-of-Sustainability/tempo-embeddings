@@ -55,7 +55,7 @@ class Corpus:
     def embeddings_model_name(self, value: str):
         self._embeddings_model_name = value
 
-    def token_passages(self) -> Iterable[tuple[Passage, TokenInfo]]:
+    def _token_passages(self) -> Iterable[tuple[Passage, TokenInfo]]:
         """Returns an iterable over all passages.
 
         Yields one instance per token highlighting.
@@ -89,7 +89,7 @@ class Corpus:
     def get_token_metadatas(self, key: str) -> Iterable[Any]:
         """Returns an iterable over all values
         for a given metadata key for each token."""
-        for passage, _ in self.token_passages():
+        for passage, _ in self._token_passages():
             try:
                 yield passage.get_metadata(key)
             except KeyError as e:
@@ -106,14 +106,14 @@ class Corpus:
         for passage in self.passages:
             passage.set_metadata(key, value)
 
-    def token_embeddings(self) -> ArrayLike:
+    def _token_embeddings(self) -> ArrayLike:
         if not self.has_embeddings():
             raise ValueError("Corpus does not have embeddings")
 
         return np.array(
             [
                 passage.token_embedding(token_info)
-                for passage, token_info in self.token_passages()
+                for passage, token_info in self._token_passages()
             ]
         )
 
@@ -132,20 +132,19 @@ class Corpus:
             )
         return False
 
-    def find(self, token: str) -> Iterable[tuple[Passage, int]]:
+    def _find(self, token: str) -> Iterable[tuple[Passage, int]]:
         # FIXME: skip sub-strings matching within words?
         for passage in self._passages:
             for match_index in passage.findall(token):
                 yield (passage, match_index)
 
     def subcorpus(self, token: str) -> "Corpus":
-        """Uses find() to generate a new Corpus object with matching passages and
-        highlightings."""
+        """Generate a new Corpus object with matching passages and highlightings."""
 
         # TODO make this more efficient (using map/reduce)
 
         passages = {}
-        for passage, match_index in self.find(token):
+        for passage, match_index in self._find(token):
             passages.setdefault(passage, set()).add(
                 TokenInfo(start=match_index, end=match_index + len(token))
             )
@@ -155,18 +154,18 @@ class Corpus:
     def umap_embeddings(self):
         if self._umap_embeddings is None:
             umap = UMAP(metric="cosine")
-            self._umap_embeddings = umap.fit_transform(self.token_embeddings())
+            self._umap_embeddings = umap.fit_transform(self._token_embeddings())
 
         return self._umap_embeddings
 
-    def highlighted_texts(self, metadata_fields: Iterable[str] = None):
+    def highlighted_texts(self, metadata_fields: Iterable[str] = None) -> list[str]:
         """Returns an iterable over all highlighted texts, flattened from all passages.
 
         A passage is returned multiple times if it has multiple highlightings.
         """
         return [
             passage.highlighted_text(token_info, metadata_fields)
-            for passage, token_info in self.token_passages()
+            for passage, token_info in self._token_passages()
         ]
 
     def save(self, filepath: Path):

@@ -63,12 +63,12 @@ class WizmapVisualizer(Visualizer):
         return self._grid_write_args.get("stop_words")
 
     def cleanup(self):
-        self.stop_server()
+        self._stop_server()
         for file in (self.data_file, self.grid_file):
             if file:
                 os.remove(file)
 
-    def write_data(self):
+    def _write_data(self):
         """Write Wizmap visualizations to a file."""
 
         embeddings = self._corpus.umap_embeddings()
@@ -108,26 +108,26 @@ class WizmapVisualizer(Visualizer):
     def visualize(self, **kwargs):
         """Visualize the corpus with Wizmap."""
         if not (self.data_file and self.grid_file):
-            self.write_data()
+            self._write_data()
         if not self._server:
-            self.serve(**kwargs)
+            self._serve(**kwargs)
 
         wizmap.visualize(self.data_url, self.grid_url)
 
-    def serve(self, **kwargs):
+    def _serve(self, **kwargs):
         if self._server is not None:
             raise RuntimeError("Server already running")
 
         port = kwargs.get("port", 8000)
 
         print("Starting server on port", port)
-        handler = partial(WizmapRequestHandler, self)
+        handler = partial(self.WizmapRequestHandler, self)
         self._server = socketserver.TCPServer(("", port), handler)
 
         server_thread = threading.Thread(target=self._server.serve_forever)
         server_thread.start()
 
-    def stop_server(self):
+    def _stop_server(self):
         if self._server is None:
             logging.warning("Server not running.")
         else:
@@ -139,35 +139,35 @@ class WizmapVisualizer(Visualizer):
         self.cleanup()
 
 
-class WizmapRequestHandler(SimpleHTTPRequestHandler):
-    """A HTTP handler serving the Wizmap data files."""
+    class WizmapRequestHandler(SimpleHTTPRequestHandler):
+        """A HTTP handler serving the Wizmap data files."""
 
-    def __init__(self, visualizer, *args, **kwargs):
-        for file in (visualizer.data_file, visualizer.grid_file):
-            if not os.path.exists(file):
-                raise FileNotFoundError(file)
+        def __init__(self, visualizer, *args, **kwargs):
+            for file in (visualizer.data_file, visualizer.grid_file):
+                if not os.path.exists(file):
+                    raise FileNotFoundError(file)
 
-        self._visualizer = visualizer
+            self._visualizer = visualizer
 
-        super().__init__(*args, **kwargs)
+            super().__init__(*args, **kwargs)
 
-    def do_GET(self):
-        if self.path == "/" + self._visualizer.data_file_name:
-            self.send_response(200)
-            self.send_header("Content-type", "text/plain")
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.end_headers()
-            with open(self._visualizer.data_file, "rb") as file:
-                self.wfile.write(file.read())
-        elif self.path == "/" + self._visualizer.grid_file_name:
-            self.send_response(200)
-            self.send_header("Content-type", "text/plain")
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.end_headers()
-            with open(self._visualizer.grid_file, "rb") as file:
-                self.wfile.write(file.read())
-        else:
-            self.send_response(404)
-            self.send_header("Content-type", "text/html")
-            self.end_headers()
-            self.wfile.write(b"File not found")
+        def do_GET(self):
+            if self.path == "/" + self._visualizer.data_file_name:
+                self.send_response(200)
+                self.send_header("Content-type", "text/plain")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                with open(self._visualizer.data_file, "rb") as file:
+                    self.wfile.write(file.read())
+            elif self.path == "/" + self._visualizer.grid_file_name:
+                self.send_response(200)
+                self.send_header("Content-type", "text/plain")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                with open(self._visualizer.grid_file, "rb") as file:
+                    self.wfile.write(file.read())
+            else:
+                self.send_response(404)
+                self.send_header("Content-type", "text/html")
+                self.end_headers()
+                self.wfile.write(b"File not found")
