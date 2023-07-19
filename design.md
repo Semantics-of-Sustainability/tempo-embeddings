@@ -24,6 +24,8 @@
 
 ## Software Design
 
+![Architecture](architecture.png)
+
 - Load language model
   - use the HuggingFace `transformers` library to download models
     - allow for authentication to access private models

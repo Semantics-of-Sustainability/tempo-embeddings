@@ -26,6 +26,8 @@ A library for analysing (temporal) word embeddings.
 
 The project setup is documented in [project_setup.md](project_setup.md). Feel free to remove this document (and/or the link to this document) if you don't need it.
 
+See the [design document](design.md) for more information on the design of this project.
+
 ## Installation
 
 To install tempo_embeddings from GitHub repository, do:
