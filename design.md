@@ -2,14 +2,14 @@
 
 ## Workflow
 
-![The Workflow](tempo-embeddings.png)
+![The Workflow](docs/workflow.png)
 
 ## User Requirements
 
 - Load different language models
 - Load text data from various sources
-  - Initial sources:
-    - (NL) Delhper, ANP, StatenGeneraal
+  - For instance:
+    - (NL) Delpher, ANP, StatenGeneraal
     - (EN) [COHA](https://www.english-corpora.org/coha/)
   - (Optional) implement text indexing with ElasticSearch for quick lookup of words
 - Extract contextualized embeddings for specific words, tokens, or phrases
@@ -24,7 +24,7 @@
 
 ## Software Design
 
-![Architecture](architecture.png)
+![Architecture](docs/Architecture.png)
 
 - Load language model
   - use the HuggingFace `transformers` library to download models

@@ -10,6 +10,9 @@ Welcome to tempo_embeddings's documentation!
   :maxdepth: 2
   :caption: Contents:
 
+  workflow
+  architecture
+
 Indices and tables
 ==================
 
