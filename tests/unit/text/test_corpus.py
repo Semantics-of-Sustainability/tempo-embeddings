@@ -1,3 +1,4 @@
+from contextlib import nullcontext as does_not_raise
 import pytest
 from tempo_embeddings.text.corpus import Corpus
 from tempo_embeddings.text.corpus import TokenInfo
@@ -65,22 +66,79 @@ class TestCorpus:
             ),
         ],
     )
+    # pylint: disable=protected-access
     def test_find(self, lines, token, expected):
-        assert list(Corpus.from_lines(lines)._find(token)) == expected  # pylint: disable=protected-access
+        assert list(Corpus.from_lines(lines)._find(token)) == expected
 
     @pytest.mark.parametrize(
-        "lines,token,expected",
+        "corpus,token,metadata,expected",
         [
-            ([], "test", Corpus()),
+            (Corpus(), "test", {}, Corpus()),
             (
-                ["test line"],
+                Corpus({Passage("test line"): set()}),
                 "test",
+                {},
                 Corpus({Passage("test line"): {TokenInfo(start=0, end=4)}}),
+            ),
+            (
+                Corpus({Passage("test line1"): set(), Passage("test line2"): set()}),
+                "line1",
+                {},
+                Corpus({Passage("test line1"): {TokenInfo(start=5, end=10)}}),
+            ),
+            (
+                Corpus(
+                    {
+                        Passage("test line1", {"test": "value1"}): set(),
+                        Passage("test line2", {"test": "value2"}): set(),
+                    }
+                ),
+                "test",
+                {"test": "value1"},
+                Corpus(
+                    {
+                        Passage("test line1", {"test": "value1"}): {
+                            TokenInfo(start=0, end=4)
+                        }
+                    }
+                ),
+            ),
+            (
+                Corpus(
+                    {
+                        Passage(
+                            "test line1", {"key1": "value1", "key2": "value2"}
+                        ): set(),
+                        Passage(
+                            "test line2", {"key1": "value1", "key2": "value3"}
+                        ): set(),
+                    }
+                ),
+                "test",
+                {"key1": "value1", "key2": "value2"},
+                Corpus(
+                    {
+                        Passage("test line1", {"key1": "value1", "key2": "value2"}): {
+                            TokenInfo(start=0, end=4)
+                        }
+                    }
+                ),
+            ),
+            (
+                Corpus(
+                    {
+                        Passage("test line1", {"test": "value1"}): set(),
+                        Passage("test line2", {"test": "value2"}): set(),
+                    }
+                ),
+                "test",
+                {"test": "value3"},
+                Corpus(),
             ),
         ],
     )
-    def test_subcorpus(self, lines, token, expected):
-        assert Corpus.from_lines(lines).subcorpus(token) == expected
+    def test_subcorpus(self, corpus, token, metadata, expected):
+        assert corpus.subcorpus(token, **metadata) == expected
 
     @pytest.mark.parametrize(
         "corpus,expected",
@@ -106,18 +164,19 @@ class TestCorpus:
             ),
         ],
     )
+    # pylint: disable=protected-access
     def test_token_passages(self, corpus, expected):
-        assert list(corpus._token_passages()) == expected   # pylint: disable=protected-access
+        assert list(corpus._token_passages()) == expected
 
     @pytest.mark.parametrize(
         "corpus,key,expected,expected_exception",
         [
-            (Corpus(), "test key", [], None),
+            (Corpus(), "test key", [], does_not_raise()),
             (
                 Corpus(passages={Passage("text", metadata={"key": 1}): set()}),
                 "key",
                 [],
-                None,
+                does_not_raise(),
             ),
             (
                 Corpus(
@@ -129,7 +188,7 @@ class TestCorpus:
                 ),
                 "key",
                 [1],
-                None,
+                does_not_raise(),
             ),
             (
                 Corpus(
@@ -137,12 +196,14 @@ class TestCorpus:
                         Passage("text 1", metadata={"key": 1, "other": 3}): {
                             TokenInfo(0, 4)
                         },
-                        Passage("text 2", metadata={"key": 2}): {TokenInfo(5, 6)},
+                        Passage("text 2", metadata={"key": 2, "other": 2}): {
+                            TokenInfo(5, 6)
+                        },
                     }
                 ),
                 "key",
                 [1, 2],
-                None,
+                does_not_raise(),
             ),
             (
                 Corpus(
@@ -155,7 +216,7 @@ class TestCorpus:
                 ),
                 "key",
                 [1],
-                ValueError,
+                pytest.raises(ValueError),
             ),
             (
                 Corpus(
@@ -163,21 +224,18 @@ class TestCorpus:
                         Passage("text 1", metadata={"key": 1, "other": 3}): {
                             TokenInfo(0, 4)
                         },
-                        Passage("text 2", metadata={"key": 2}): set(),
+                        Passage("text 2", metadata={"key": 2, "other": 2}): set(),
                     }
                 ),
                 "key",
                 [1],
-                None,
+                does_not_raise(),
             ),
         ],
     )
     def test_get_token_metadatas(self, corpus, key, expected, expected_exception):
-        if expected_exception is None:
+        with expected_exception:
             assert list(corpus.get_token_metadatas(key)) == expected
-        else:
-            with pytest.raises(expected_exception):
-                list(corpus.get_token_metadatas(key))
 
     def test_load_save(self, tmp_path):
         filepath = tmp_path / "corpus"

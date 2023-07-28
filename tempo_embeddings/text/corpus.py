@@ -1,6 +1,7 @@
 import csv
 import gzip
 import logging
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 from typing import Iterable
@@ -133,21 +134,19 @@ class Corpus:
         return False
 
     def _find(self, token: str) -> Iterable[tuple[Passage, int]]:
-        # FIXME: skip sub-strings matching within words?
         for passage in self._passages:
             for match_index in passage.findall(token):
                 yield (passage, match_index)
 
-    def subcorpus(self, token: str) -> "Corpus":
+    def subcorpus(self, token: str, **metadata) -> "Corpus":
         """Generate a new Corpus object with matching passages and highlightings."""
 
-        # TODO make this more efficient (using map/reduce)
-
-        passages = {}
+        passages: dict[Passage, set[TokenInfo]] = defaultdict(set)
         for passage, match_index in self._find(token):
-            passages.setdefault(passage, set()).add(
-                TokenInfo(start=match_index, end=match_index + len(token))
-            )
+            if all(passage.metadata[key] == value for key, value in metadata.items()):
+                passages[passage].add(
+                    TokenInfo(start=match_index, end=match_index + len(token))
+                )
 
         return Corpus(passages)
 
