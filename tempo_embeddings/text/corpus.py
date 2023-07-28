@@ -1,7 +1,6 @@
 import csv
 import gzip
-import logging
-from collections import defaultdict
+from collections import namedtuple
 from pathlib import Path
 from typing import Any
 from typing import Iterable
@@ -16,18 +15,32 @@ from .passage import Passage
 from .types import TokenInfo
 
 
+TokenInfoPassage = namedtuple("TokenInfoPassage", ["token_info", "passage"])
+
+
 class Corpus:
-    def __init__(self, passages: dict[Passage, set[TokenInfo]] = None):
-        self._passages: dict[Passage, set[TokenInfo]] = passages or {}
+    def __init__(
+        self,
+        passages: list[Passage] = None,
+        token_infos: list[TokenInfoPassage] = None,
+        embeddings_model_name: Optional[str] = None,
+    ):
+        self._passages: list[Passage] = passages or []
+        self._token_infos: list[TokenInfoPassage] = token_infos or []
+        self._embeddings_model_name: Optional[str] = embeddings_model_name
+
         self._umap_embeddings: Optional[np.ndarray] = None
 
-        self._embeddings_model_name: Optional[str] = None
-
     def __add__(self, other: "Corpus") -> "Corpus":
-        if self._passages.keys() & other._passages.keys():
-            # TODO: handle passages with multiple highlightings
-            raise NotImplementedError("Passages must be unique")
-        return Corpus(passages=self._passages | other._passages)
+        if self._embeddings_model_name != other._embeddings_model_name:
+            raise ValueError("Cannot add two corpora with different embeddings models")
+
+        # Dropping previously computed UMAP embeddings
+        return Corpus(
+            passages=self._passages + other._passages,
+            token_infos=self._token_infos + other._token_infos,
+            embeddings_model_name=self._embeddings_model_name,
+        )
 
     def __contains__(self, passage: Passage) -> bool:
         return passage in self._passages
@@ -36,16 +49,17 @@ class Corpus:
         return len(self._passages)
 
     def __repr__(self) -> str:
-        return f"Corpus({list(self._passages.items())[:10]!r})"
+        return f"Corpus({self._passages[:10]!r})"
 
     def __eq__(self, other: object) -> bool:
         return (
             self._embeddings_model_name == other._embeddings_model_name
             and other._passages == self._passages
+            and other._token_infos == self._token_infos
         )
 
     @property
-    def passages(self) -> dict[Passage, set[TokenInfo]]:
+    def passages(self) -> list[Passage]:
         return self._passages
 
     @property
@@ -56,26 +70,9 @@ class Corpus:
     def embeddings_model_name(self, value: str):
         self._embeddings_model_name = value
 
-    def _token_passages(self) -> Iterable[tuple[Passage, TokenInfo]]:
-        """Returns an iterable over all passages.
-
-        Yields one instance per token highlighting.
-        If a passage has no highlightings, it is not yielded.
-        If a passage has multiple highlightings, it is yielded multiple times.
-        """
-        for passage, token_infos in self._passages.items():
-            if not token_infos:
-                logging.warning("Passage %s has no highlightings", passage)
-
-            for token_info in token_infos:
-                yield passage, token_info
-
     @property
-    def token_infos(self) -> Iterable[TokenInfo]:
-        """Returns an iterable over all TokenInfo objects,
-        flattened from all passages."""
-        for token_infos in self.passages.values():
-            yield from token_infos
+    def token_infos(self) -> list[TokenInfoPassage]:
+        return self._token_infos
 
     def has_metadata(self, key: str, strict=False) -> bool:
         """Returns True if the corpus has a metadata key.
@@ -90,7 +87,7 @@ class Corpus:
     def get_token_metadatas(self, key: str) -> Iterable[Any]:
         """Returns an iterable over all values
         for a given metadata key for each token."""
-        for passage, _ in self._token_passages():
+        for _, passage in self._token_infos:
             try:
                 yield passage.get_metadata(key)
             except KeyError as e:
@@ -114,7 +111,7 @@ class Corpus:
         return np.array(
             [
                 passage.token_embedding(token_info)
-                for passage, token_info in self._token_passages()
+                for token_info, passage in self._token_infos
             ]
         )
 
@@ -139,16 +136,25 @@ class Corpus:
                 yield (passage, match_index)
 
     def subcorpus(self, token: str, **metadata) -> "Corpus":
-        """Generate a new Corpus object with matching passages and highlightings."""
+        """Generate a new Corpus object with matching passages and highlightings.
 
-        passages: dict[Passage, set[TokenInfo]] = defaultdict(set)
-        for passage, match_index in self._find(token):
-            if all(passage.metadata[key] == value for key, value in metadata.items()):
-                passages[passage].add(
-                    TokenInfo(start=match_index, end=match_index + len(token))
-                )
+        Args:
+            token: The token to search for.
+            metadata: Metadata fields to match against
+        """
 
-        return Corpus(passages)
+        matches = [
+            TokenInfoPassage(
+                TokenInfo(start=match_index, end=match_index + len(token)), passage
+            )
+            for passage, match_index in self._find(token)
+            if all(passage.metadata[key] == value for key, value in metadata.items())
+        ]
+
+        # Dropping unmatched passages
+        return Corpus(
+            [passage for _, passage in matches], matches, self._embeddings_model_name
+        )
 
     def umap_embeddings(self):
         if self._umap_embeddings is None:
@@ -164,7 +170,7 @@ class Corpus:
         """
         return [
             passage.highlighted_text(token_info, metadata_fields)
-            for passage, token_info in self._token_passages()
+            for token_info, passage in self._token_infos
         ]
 
     def save(self, filepath: Path):
@@ -186,7 +192,7 @@ class Corpus:
     @classmethod
     def from_lines(cls, f: TextIO, metadata: dict = None):
         """Read input data from an open file handler, one sequence per line."""
-        return Corpus.from_passages((Passage(line, metadata) for line in f))
+        return Corpus([Passage(line, metadata) for line in f])
 
     @classmethod
     def from_lines_file(cls, filepath: Path, encoding=DEFAULT_ENCODING):
@@ -241,9 +247,4 @@ class Corpus:
                         window_overlap=window_overlap,
                     )
                 )
-        return Corpus.from_passages(passages)
-
-    @classmethod
-    def from_passages(cls, passages: Iterable[Passage]):
-        """Create a Corpus from a list of passages."""
-        return cls({passage: set() for passage in passages})
+        return Corpus(passages)
