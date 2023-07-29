@@ -1,6 +1,7 @@
 import csv
 import gzip
 from collections import namedtuple
+from itertools import groupby
 from pathlib import Path
 from typing import Any
 from typing import Iterable
@@ -130,10 +131,12 @@ class Corpus:
             )
         return False
 
-    def _find(self, token: str) -> Iterable[tuple[Passage, int]]:
+    def _find(self, token: str) -> Iterable[TokenInfoPassage]:
         for passage in self._passages:
             for match_index in passage.findall(token):
-                yield (passage, match_index)
+                yield TokenInfoPassage(
+                    TokenInfo(start=match_index, end=match_index + len(token)), passage
+                )
 
     def subcorpus(self, token: str, **metadata) -> "Corpus":
         """Generate a new Corpus object with matching passages and highlightings.
@@ -143,18 +146,19 @@ class Corpus:
             metadata: Metadata fields to match against
         """
 
-        matches = [
-            TokenInfoPassage(
-                TokenInfo(start=match_index, end=match_index + len(token)), passage
+        matches: list[TokenInfoPassage] = [
+            tokeninfo_passage
+            for tokeninfo_passage in self._find(token)
+            if all(
+                tokeninfo_passage.passage.metadata[key] == value
+                for key, value in metadata.items()
             )
-            for passage, match_index in self._find(token)
-            if all(passage.metadata[key] == value for key, value in metadata.items())
         ]
 
+        passages = [passage for passage, _ in groupby(matches, lambda x: x.passage)]
+
         # Dropping unmatched passages
-        return Corpus(
-            [passage for _, passage in matches], matches, self._embeddings_model_name
-        )
+        return Corpus(passages, matches, self._embeddings_model_name)
 
     def umap_embeddings(self):
         if self._umap_embeddings is None:

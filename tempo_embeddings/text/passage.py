@@ -139,7 +139,7 @@ class Passage:
         return self._text == other._text and self._metadata == other._metadata
 
     def __repr__(self) -> str:
-        return f"Passage({self._text!r},{self.has_embeddings()!r}, {self._metadata!r})"
+        return f"Passage({self._text!r}, {self._metadata!r})"
 
     def find(
         self, token: str, start: Optional[int] = None, end: Optional[int] = None

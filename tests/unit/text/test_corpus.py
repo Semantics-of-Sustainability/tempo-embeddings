@@ -29,12 +29,12 @@ class TestCorpus:
             (
                 ["test token"],
                 "test",
-                [(Passage("test token"), 0)],
+                [TokenInfoPassage(TokenInfo(0, 4), Passage("test token"))],
             ),
             (
                 ["test token", "no match"],
                 "test",
-                [(Passage("test token"), 0)],
+                [TokenInfoPassage(TokenInfo(0, 4), Passage("test token"))],
             ),
         ],
     )
@@ -62,7 +62,7 @@ class TestCorpus:
                 "line1",
                 {},
                 Corpus(
-                    [Passage("test line1"), Passage("test line2")],
+                    [Passage("test line1")],
                     [(TokenInfo(start=5, end=10), Passage("test line1"))],
                 ),
             ),
@@ -76,10 +76,7 @@ class TestCorpus:
                 "test",
                 {"test": "value1"},
                 Corpus(
-                    [
-                        Passage("test line1", {"test": "value1"}),
-                        Passage("test line2", {"test": "value2"}),
-                    ],
+                    [Passage("test line1", {"test": "value1"})],
                     [
                         (
                             TokenInfo(start=0, end=4),
@@ -98,10 +95,7 @@ class TestCorpus:
                 "test",
                 {"key1": "value1", "key2": "value2"},
                 Corpus(
-                    [
-                        Passage("test line1", {"key1": "value1", "key2": "value2"}),
-                        Passage("test line2", {"key1": "value1", "key2": "value3"}),
-                    ],
+                    [Passage("test line1", {"key1": "value1", "key2": "value2"})],
                     [
                         (
                             TokenInfo(start=0, end=4),
@@ -119,12 +113,7 @@ class TestCorpus:
                 ),
                 "test",
                 {"test": "value3"},
-                Corpus(
-                    [
-                        Passage("test line1", {"test": "value1"}),
-                        Passage("test line2", {"test": "value2"}),
-                    ]
-                ),
+                Corpus(),
             ),
         ],
     )
