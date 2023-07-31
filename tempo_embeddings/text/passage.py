@@ -132,6 +132,19 @@ class Passage:
 
         return self.tokenization.word_to_chars(word_index)
 
+    def words(self) -> Iterable[str]:
+        """Returns the words in the passage."""
+
+        if self.tokenization is None:
+            raise ValueError(
+                "Passage has no tokenization. Use Model.compute_embeddings() first."
+            )
+
+        for i in self.tokenization.words:
+            if i is not None:
+                start, end = self.tokenization.word_to_chars(i)
+                yield self._text[start:end]
+
     def __contains__(self, token: str) -> bool:
         return token in self._text
 

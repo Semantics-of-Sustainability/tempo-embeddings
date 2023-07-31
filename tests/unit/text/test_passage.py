@@ -64,3 +64,8 @@ class TestPassage:
         else:
             with pytest.raises(expected_exception):
                 passage.get_metadata(key, strict=strict)
+
+    @pytest.mark.parametrize("passage,expected", [(Passage("test"), ["test"])])
+    @pytest.mark.skip(reason="Not implemented")
+    def test_words(self, passage, expected):
+        assert list(passage.words()) == expected
