@@ -36,18 +36,24 @@ class TransformerModelWrapper(abc.ABC):
 
         # TODO: implement for other hidden layers but last one
 
-        passage_texts = [passage.text for passage in corpus.passages]
+        embeddings = self._pipeline(corpus.texts())
+        for passage, embedding in zip(corpus.passages, embeddings, strict=True):
+            passage.embeddings = embedding[0]
 
-        if passage_texts:
-            embeddings = self._pipeline(passage_texts)
-            tokenizations = self._tokenizer(passage_texts)
+        self.tokenize(corpus)
 
+        corpus.embeddings_model_name = self.name
+
+    @torch.no_grad()
+    def tokenize(self, corpus: Corpus):
+        if corpus.texts():
+            tokenizations = self._tokenizer(corpus.texts())
             for i, passage in enumerate(corpus.passages):
-                passage.embeddings = embeddings[i][0]
+                if passage.tokenization is not None:
+                    raise ValueError(f"Passage {passage} already has a tokenization")
                 passage.tokenization = tokenizations[i]
         else:
             logging.warning("Corpus is empty.")
-        corpus.embeddings_model_name = self.name
 
     @classmethod
     @abc.abstractmethod

@@ -63,6 +63,9 @@ class Corpus:
     def passages(self) -> list[Passage]:
         return self._passages
 
+    def texts(self):
+        return [passage.text for passage in self._passages]
+
     @property
     def embeddings_model_name(self) -> Optional[str]:
         return self._embeddings_model_name
