@@ -68,7 +68,7 @@ class Corpus:
         self._embeddings_model_name = value
 
     @property
-    def token_infos(self) -> list[Highlighting]:
+    def highlightings(self) -> list[Highlighting]:
         return self._highlightings
 
     def has_metadata(self, key: str, strict=False) -> bool:
@@ -81,9 +81,9 @@ class Corpus:
         condition = all if strict else any
         return condition(passage.has_metadata(key) for passage in self.passages)
 
-    def get_token_metadatas(self, key: str) -> Iterable[Any]:
-        """Returns an iterable over all values
-        for a given metadata key for each token."""
+    def get_highlighting_metadatas(self, key: str) -> Iterable[Any]:
+        """Returns an iterable over all metadata values for a key
+        for each _highlighted_ token."""
         for _, _, passage in self._highlightings:
             try:
                 yield passage.get_metadata(key)
@@ -107,8 +107,8 @@ class Corpus:
 
         return np.array(
             [
-                passage.token_embedding(token_info)
-                for token_info, passage in self._highlightings
+                passage.token_embedding(start, end)
+                for start, end, passage in self._highlightings
             ]
         )
 
@@ -181,8 +181,8 @@ class Corpus:
         A passage is returned multiple times if it has multiple highlightings.
         """
         return [
-            passage.highlighted_text(token_info, metadata_fields)
-            for token_info, passage in self._highlightings
+            passage.highlighted_text(start, end, metadata_fields)
+            for start, end, passage in self._highlightings
         ]
 
     def save(self, filepath: Path):

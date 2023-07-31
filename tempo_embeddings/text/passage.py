@@ -4,7 +4,6 @@ from typing import Optional
 import numpy as np
 from numpy.typing import ArrayLike
 from tokenizers import Encoding
-from .types import Highlighting
 
 
 class Passage:
@@ -72,27 +71,34 @@ class Passage:
 
     def highlighted_text(
         self,
-        token_info: Highlighting,
+        start: int,
+        end: int,
         metadata_fields: Iterable[str] = None,
         max_context_length: int = 200,
     ) -> str:
         """Returns the text with the given word highlighted
         and metadata appended."""
 
-        start, end = self.word_span(token_info)
+        word_start, word_end = self.word_span(start, end)
 
         text = (
-            self._text[:start] + f" <b>{self._text[start:end]}</b> " + self._text[end:]
+            self._text[:word_start]
+            + f" <b>{self._text[word_start:word_end]}</b> "
+            + self._text[word_end:]
         )
         if len(text) > max_context_length:
-            text = text[start - max_context_length // 2 : end + max_context_length // 2]
+            text = text[
+                word_start
+                - max_context_length // 2 : word_end
+                + max_context_length // 2
+            ]
 
         if metadata_fields:
             metadata = {key: self.get_metadata(key) for key in metadata_fields}
             text += f"<br>{metadata}"
         return text
 
-    def token_embedding(self, token_info: Highlighting) -> ArrayLike:
+    def token_embedding(self, start, end) -> ArrayLike:
         """Returns the token embedding for the given char span in the given passage."""
 
         if self._embeddings is None:
@@ -100,7 +106,7 @@ class Passage:
                 "Passage has no embeddings. Call compute_embeddings first."
             )
 
-        first_token, last_token = self.token_span(token_info)
+        first_token, last_token = self.token_span(start, end)
 
         if first_token == last_token:
             token_embedding = self.embeddings[first_token]
@@ -111,17 +117,17 @@ class Passage:
 
         return token_embedding
 
-    def token_span(self, token_info: Highlighting) -> tuple[int, int]:
+    def token_span(self, start, end) -> tuple[int, int]:
         """Returns the start and end index of the token in the passage."""
         return (
-            self._tokenization.char_to_token(token_info.start),
-            self._tokenization.char_to_token(token_info.end - 1),
+            self._tokenization.char_to_token(start),
+            self._tokenization.char_to_token(end - 1),
         )
 
-    def word_span(self, token_info: Highlighting) -> tuple[int, int]:
-        word_index = self.tokenization.char_to_word(token_info.start)
+    def word_span(self, start, end) -> tuple[int, int]:
+        word_index = self.tokenization.char_to_word(start)
         assert (
-            self.tokenization.char_to_word(token_info.end - 1) == word_index
+            self.tokenization.char_to_word(end - 1) == word_index
         ), "Token spans multiple words"
 
         return self.tokenization.word_to_chars(word_index)

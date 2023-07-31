@@ -31,7 +31,7 @@ class TransformerModelWrapper(abc.ABC):
         if corpus.has_embeddings() and not overwrite:
             raise ValueError("Corpus already has embeddings")
 
-        if not corpus.token_infos:
+        if not corpus.highlightings:
             logging.warning("Corpus does not have any token infos")
 
         # TODO: implement for other hidden layers but last one

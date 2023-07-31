@@ -191,7 +191,7 @@ class TestCorpus:
         self, corpus: Corpus, key, expected, expected_exception
     ):
         with expected_exception:
-            assert list(corpus.get_token_metadatas(key)) == expected
+            assert list(corpus.get_highlighting_metadatas(key)) == expected
 
     def test_load_save(self, tmp_path):
         filepath = tmp_path / "corpus"

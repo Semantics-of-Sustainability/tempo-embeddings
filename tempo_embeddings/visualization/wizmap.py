@@ -82,7 +82,7 @@ class WizmapVisualizer(Visualizer):
         if self._corpus.has_metadata("year"):
             metadata_fields.append("year")
 
-            years = list(self._corpus.get_token_metadatas("year"))
+            years = list(self._corpus.get_highlighting_metadatas("year"))
             assert len(years) == len(xs)
 
             data_list_args["times"] = years
