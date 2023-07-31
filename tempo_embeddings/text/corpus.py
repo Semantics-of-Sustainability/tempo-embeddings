@@ -1,6 +1,5 @@
 import csv
 import gzip
-from collections import namedtuple
 from itertools import groupby
 from pathlib import Path
 from typing import Any
@@ -13,21 +12,18 @@ from numpy.typing import ArrayLike
 from umap import UMAP
 from ..settings import DEFAULT_ENCODING
 from .passage import Passage
-from .types import TokenInfo
-
-
-TokenInfoPassage = namedtuple("TokenInfoPassage", ["token_info", "passage"])
+from .types import Highlighting
 
 
 class Corpus:
     def __init__(
         self,
         passages: list[Passage] = None,
-        token_infos: list[TokenInfoPassage] = None,
+        highlightings: list[Highlighting] = None,
         embeddings_model_name: Optional[str] = None,
     ):
         self._passages: list[Passage] = passages or []
-        self._token_infos: list[TokenInfoPassage] = token_infos or []
+        self._highlightings: list[Highlighting] = highlightings or []
         self._embeddings_model_name: Optional[str] = embeddings_model_name
 
         self._umap_embeddings: Optional[np.ndarray] = None
@@ -39,7 +35,7 @@ class Corpus:
         # Dropping previously computed UMAP embeddings
         return Corpus(
             passages=self._passages + other._passages,
-            token_infos=self._token_infos + other._token_infos,
+            highlightings=self._highlightings + other._highlightings,
             embeddings_model_name=self._embeddings_model_name,
         )
 
@@ -56,7 +52,7 @@ class Corpus:
         return (
             self._embeddings_model_name == other._embeddings_model_name
             and other._passages == self._passages
-            and other._token_infos == self._token_infos
+            and other._highlightings == self._highlightings
         )
 
     @property
@@ -72,8 +68,8 @@ class Corpus:
         self._embeddings_model_name = value
 
     @property
-    def token_infos(self) -> list[TokenInfoPassage]:
-        return self._token_infos
+    def token_infos(self) -> list[Highlighting]:
+        return self._highlightings
 
     def has_metadata(self, key: str, strict=False) -> bool:
         """Returns True if the corpus has a metadata key.
@@ -88,7 +84,7 @@ class Corpus:
     def get_token_metadatas(self, key: str) -> Iterable[Any]:
         """Returns an iterable over all values
         for a given metadata key for each token."""
-        for _, passage in self._token_infos:
+        for _, _, passage in self._highlightings:
             try:
                 yield passage.get_metadata(key)
             except KeyError as e:
@@ -112,7 +108,7 @@ class Corpus:
         return np.array(
             [
                 passage.token_embedding(token_info)
-                for token_info, passage in self._token_infos
+                for token_info, passage in self._highlightings
             ]
         )
 
@@ -131,11 +127,11 @@ class Corpus:
             )
         return False
 
-    def _find(self, token: str) -> Iterable[TokenInfoPassage]:
+    def _find(self, token: str) -> Iterable[Highlighting]:
         for passage in self._passages:
             for match_index in passage.findall(token):
-                yield TokenInfoPassage(
-                    TokenInfo(start=match_index, end=match_index + len(token)), passage
+                yield Highlighting(
+                    start=match_index, end=match_index + len(token), passage=passage
                 )
 
     def subcorpus(self, token: str, **metadata) -> "Corpus":
@@ -146,11 +142,11 @@ class Corpus:
             metadata: Metadata fields to match against
         """
 
-        matches: list[TokenInfoPassage] = [
-            tokeninfo_passage
-            for tokeninfo_passage in self._find(token)
+        matches: list[Highlighting] = [
+            highlighting
+            for highlighting in self._find(token)
             if all(
-                tokeninfo_passage.passage.metadata[key] == value
+                highlighting.passage.metadata[key] == value
                 for key, value in metadata.items()
             )
         ]
@@ -159,6 +155,18 @@ class Corpus:
 
         # Dropping unmatched passages
         return Corpus(passages, matches, self._embeddings_model_name)
+
+    def context_words(self, token: str):
+        raise NotImplementedError()
+
+    def mean(self) -> ArrayLike:
+        raise NotImplementedError()
+
+    def cosine_distance(self, other: "Corpus") -> float:
+        raise NotImplementedError()
+
+    def clusters(self, **kwargs):
+        raise NotImplementedError()
 
     def umap_embeddings(self):
         if self._umap_embeddings is None:
@@ -174,7 +182,7 @@ class Corpus:
         """
         return [
             passage.highlighted_text(token_info, metadata_fields)
-            for token_info, passage in self._token_infos
+            for token_info, passage in self._highlightings
         ]
 
     def save(self, filepath: Path):

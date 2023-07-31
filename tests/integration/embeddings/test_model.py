@@ -1,7 +1,7 @@
 import pytest
 from tempo_embeddings.embeddings.model import RobertaModelWrapper
 from tempo_embeddings.text.corpus import Corpus
-from tempo_embeddings.text.corpus import TokenInfo
+from tempo_embeddings.text.corpus import Highlighting
 from tempo_embeddings.text.passage import Passage
 
 
@@ -11,11 +11,21 @@ class TestRobertaModelWrapper:
         [
             ("roberta-base", Corpus()),
             ("roberta-base", Corpus.from_lines(["This is a test."])),
-            ("roberta-base", Corpus({Passage("This is a test."): {TokenInfo(0, 4)}})),
             (
                 "roberta-base",
                 Corpus(
-                    {Passage("This is a test."): {TokenInfo(0, 4), TokenInfo(5, 7)}}
+                    [Passage("This is a test.")],
+                    [Highlighting(0, 4, Passage("This is a test."))],
+                ),
+            ),
+            (
+                "roberta-base",
+                Corpus(
+                    [Passage("This is a test.")],
+                    [
+                        Highlighting(0, 4, Passage("This is a test.")),
+                        Highlighting(5, 7, Passage("This is a test.")),
+                    ],
                 ),
             ),
         ],

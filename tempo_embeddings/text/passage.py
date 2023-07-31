@@ -4,7 +4,7 @@ from typing import Optional
 import numpy as np
 from numpy.typing import ArrayLike
 from tokenizers import Encoding
-from .types import TokenInfo
+from .types import Highlighting
 
 
 class Passage:
@@ -72,7 +72,7 @@ class Passage:
 
     def highlighted_text(
         self,
-        token_info: TokenInfo,
+        token_info: Highlighting,
         metadata_fields: Iterable[str] = None,
         max_context_length: int = 200,
     ) -> str:
@@ -92,7 +92,7 @@ class Passage:
             text += f"<br>{metadata}"
         return text
 
-    def token_embedding(self, token_info: TokenInfo) -> ArrayLike:
+    def token_embedding(self, token_info: Highlighting) -> ArrayLike:
         """Returns the token embedding for the given char span in the given passage."""
 
         if self._embeddings is None:
@@ -111,14 +111,14 @@ class Passage:
 
         return token_embedding
 
-    def token_span(self, token_info: TokenInfo) -> tuple[int, int]:
+    def token_span(self, token_info: Highlighting) -> tuple[int, int]:
         """Returns the start and end index of the token in the passage."""
         return (
             self._tokenization.char_to_token(token_info.start),
             self._tokenization.char_to_token(token_info.end - 1),
         )
 
-    def word_span(self, token_info: TokenInfo) -> tuple[int, int]:
+    def word_span(self, token_info: Highlighting) -> tuple[int, int]:
         word_index = self.tokenization.char_to_word(token_info.start)
         assert (
             self.tokenization.char_to_word(token_info.end - 1) == word_index

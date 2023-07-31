@@ -1,8 +1,7 @@
 from contextlib import nullcontext as does_not_raise
 import pytest
 from tempo_embeddings.text.corpus import Corpus
-from tempo_embeddings.text.corpus import TokenInfo
-from tempo_embeddings.text.corpus import TokenInfoPassage
+from tempo_embeddings.text.corpus import Highlighting
 from tempo_embeddings.text.passage import Passage
 
 
@@ -26,15 +25,11 @@ class TestCorpus:
         "lines,token,expected",
         [
             ([], "test", []),
-            (
-                ["test token"],
-                "test",
-                [TokenInfoPassage(TokenInfo(0, 4), Passage("test token"))],
-            ),
+            (["test token"], "test", [Highlighting(0, 4, Passage("test token"))]),
             (
                 ["test token", "no match"],
                 "test",
-                [TokenInfoPassage(TokenInfo(0, 4), Passage("test token"))],
+                [Highlighting(0, 4, Passage("test token"))],
             ),
         ],
     )
@@ -51,8 +46,7 @@ class TestCorpus:
                 "test",
                 {},
                 Corpus(
-                    [Passage("test line")],
-                    [(TokenInfo(start=0, end=4), Passage("test line"))],
+                    [Passage("test line")], [Highlighting(0, 4, Passage("test line"))]
                 ),
             ),
             (
@@ -63,7 +57,7 @@ class TestCorpus:
                 {},
                 Corpus(
                     [Passage("test line1")],
-                    [(TokenInfo(start=5, end=10), Passage("test line1"))],
+                    [Highlighting(5, 10, Passage("test line1"))],
                 ),
             ),
             (
@@ -77,12 +71,7 @@ class TestCorpus:
                 {"test": "value1"},
                 Corpus(
                     [Passage("test line1", {"test": "value1"})],
-                    [
-                        (
-                            TokenInfo(start=0, end=4),
-                            Passage("test line1", {"test": "value1"}),
-                        )
-                    ],
+                    [Highlighting(0, 4, Passage("test line1", {"test": "value1"}))],
                 ),
             ),
             (
@@ -97,10 +86,11 @@ class TestCorpus:
                 Corpus(
                     [Passage("test line1", {"key1": "value1", "key2": "value2"})],
                     [
-                        (
-                            TokenInfo(start=0, end=4),
+                        Highlighting(
+                            0,
+                            4,
                             Passage("test line1", {"key1": "value1", "key2": "value2"}),
-                        ),
+                        )
                     ],
                 ),
             ),
@@ -134,9 +124,8 @@ class TestCorpus:
                 Corpus(
                     [Passage("text", metadata={"key": 1, "other": 3})],
                     [
-                        TokenInfoPassage(
-                            TokenInfo(0, 4),
-                            Passage("text", metadata={"key": 1, "other": 3}),
+                        Highlighting(
+                            0, 4, Passage("text", metadata={"key": 1, "other": 3})
                         )
                     ],
                 ),
@@ -151,13 +140,11 @@ class TestCorpus:
                         Passage("text 2", metadata={"key": 2, "other": 2}),
                     ],
                     [
-                        TokenInfoPassage(
-                            TokenInfo(0, 4),
-                            Passage("text 1", metadata={"key": 1, "other": 3}),
+                        Highlighting(
+                            0, 4, Passage("text 1", metadata={"key": 1, "other": 3})
                         ),
-                        TokenInfoPassage(
-                            TokenInfo(5, 6),
-                            Passage("text 2", metadata={"key": 2, "other": 2}),
+                        Highlighting(
+                            5, 6, Passage("text 2", metadata={"key": 2, "other": 2})
                         ),
                     ],
                 ),
@@ -172,13 +159,10 @@ class TestCorpus:
                         Passage("text 2", metadata={"other": 2}),
                     ],
                     [
-                        TokenInfoPassage(
-                            TokenInfo(0, 4),
-                            Passage("text 1", metadata={"key": 1, "other": 3}),
+                        Highlighting(
+                            0, 4, Passage("text 1", metadata={"key": 1, "other": 3})
                         ),
-                        TokenInfoPassage(
-                            TokenInfo(5, 6), Passage("text 2", metadata={"other": 2})
-                        ),
+                        Highlighting(5, 6, Passage("text 2", metadata={"other": 2})),
                     ],
                 ),
                 "key",
@@ -192,9 +176,8 @@ class TestCorpus:
                         Passage("text 2", metadata={"key": 2, "other": 2}),
                     ],
                     [
-                        TokenInfoPassage(
-                            TokenInfo(0, 4),
-                            Passage("text 1", metadata={"key": 1, "other": 3}),
+                        Highlighting(
+                            0, 4, Passage("text 1", metadata={"key": 1, "other": 3})
                         )
                     ],
                 ),
@@ -217,11 +200,7 @@ class TestCorpus:
                 Passage("text 1", metadata={"key": 1, "other": 3}),
                 Passage("text 2", metadata={"key": 2}),
             ],
-            [
-                TokenInfoPassage(
-                    TokenInfo(0, 4), Passage("text 1", metadata={"key": 1, "other": 3})
-                )
-            ],
+            [Highlighting(0, 4, Passage("text 1", metadata={"key": 1, "other": 3}))],
         )
         corpus.embeddings_model_name = "test model"
         corpus.save(filepath)

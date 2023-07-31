@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from collections import namedtuple
 from typing import TypedDict
 
 
@@ -15,9 +15,4 @@ class Metadata(TypedDict, total=False):
     """Year of publication for the text sequence."""
 
 
-@dataclass(eq=True, unsafe_hash=True)
-class TokenInfo:
-    """Data class to store information about a sub-string of a passage."""
-
-    start: int
-    end: int
+Highlighting = namedtuple("Highlighting", ["start", "end", "passage"])
