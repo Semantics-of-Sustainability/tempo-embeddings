@@ -1,5 +1,7 @@
 import csv
 import gzip
+import logging
+from collections import defaultdict
 from itertools import groupby
 from pathlib import Path
 from typing import Any
@@ -9,6 +11,8 @@ from typing import TextIO
 import joblib
 import numpy as np
 from numpy.typing import ArrayLike
+from scipy.spatial.distance import cosine
+from sklearn.cluster import HDBSCAN
 from umap import UMAP
 from ..settings import DEFAULT_ENCODING
 from .passage import Passage
@@ -157,16 +161,36 @@ class Corpus:
         return Corpus(passages, matches, self._embeddings_model_name)
 
     def context_words(self, token: str):
-        raise NotImplementedError()
+        """The most common words in the context of a token in all passages."""
 
     def mean(self) -> ArrayLike:
-        raise NotImplementedError()
+        """The mean for all passage embeddings."""
+        return self._token_embeddings().mean(axis=0)
 
-    def cosine_distance(self, other: "Corpus") -> float:
-        raise NotImplementedError()
+    def cosine(self, other: "Corpus") -> float:
+        """The cosine distance between the mean of this corpus and another."""
+        return cosine(self.mean(), other.mean())
 
-    def clusters(self, **kwargs):
-        raise NotImplementedError()
+    def clusters(self, **kwargs) -> Iterable["Corpus"]:
+        labels = HDBSCAN(**kwargs).fit_predict(self._token_embeddings())
+
+        # TODO: handle cluster with outliers (label -1)
+        corpora = defaultdict(list)
+        for label, highlighting in zip(labels, self._highlightings, strict=True):
+            corpora[label].append(highlighting)
+
+        if corpora[-1]:
+            logging.warning("Found %d outliers", len(corpora[-1]))
+
+        return [
+            Corpus(
+                passages=[p for p, _ in groupby(highlightings, lambda h: h.passage)],
+                highlightings=highlightings,
+                embeddings_model_name=self._embeddings_model_name,
+            )
+            for label, highlightings in corpora.items()
+            if label >= 0
+        ]
 
     def umap_embeddings(self):
         if self._umap_embeddings is None:
