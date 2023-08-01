@@ -192,7 +192,7 @@ class Corpus:
 
     def clusters(self, *, umap_embeddings: bool = True, **kwargs) -> Iterable["Corpus"]:
         embeddings = (
-            self._umap_embeddings() if umap_embeddings else self._token_embeddings()
+            self.umap_embeddings() if umap_embeddings else self._token_embeddings()
         )
         labels = HDBSCAN(**kwargs).fit_predict(embeddings)
 
