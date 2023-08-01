@@ -1,6 +1,6 @@
 import pytest
+from tempo_embeddings.text.highlighting import Highlighting
 from tempo_embeddings.text.passage import Passage
-from tempo_embeddings.text.types import Highlighting
 
 
 class TestPassage:

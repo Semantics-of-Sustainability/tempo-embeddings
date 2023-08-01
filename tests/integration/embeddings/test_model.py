@@ -1,7 +1,7 @@
 import pytest
 from tempo_embeddings.embeddings.model import RobertaModelWrapper
 from tempo_embeddings.text.corpus import Corpus
-from tempo_embeddings.text.corpus import Highlighting
+from tempo_embeddings.text.highlighting import Highlighting
 from tempo_embeddings.text.passage import Passage
 
 

@@ -16,8 +16,8 @@ from sklearn.cluster import HDBSCAN
 from umap import UMAP
 from ..embeddings.model import TransformerModelWrapper
 from ..settings import DEFAULT_ENCODING
+from .highlighting import Highlighting
 from .passage import Passage
-from .types import Highlighting
 
 
 class Corpus:
@@ -99,11 +99,13 @@ class Corpus:
     def get_highlighting_metadatas(self, key: str) -> Iterable[Any]:
         """Returns an iterable over all metadata values for a key
         for each _highlighted_ token."""
-        for _, _, passage in self._highlightings:
+        for highlighting in self._highlightings:
             try:
-                yield passage.get_metadata(key)
+                yield highlighting.passage.get_metadata(key)
             except KeyError as e:
-                raise ValueError(f"Passage missing metadata key: {passage}") from e
+                raise ValueError(
+                    f"Passage missing metadata key: {highlighting.passage}"
+                ) from e
 
     def set_metadatas(self, key, value):
         """Sets a metadata key to a value for all passages.
@@ -218,13 +220,10 @@ class Corpus:
         return self._umap_embeddings
 
     def highlighted_texts(self, metadata_fields: Iterable[str] = None) -> list[str]:
-        """Returns an iterable over all highlighted texts, flattened from all passages.
-
-        A passage is returned multiple times if it has multiple highlightings.
-        """
+        """Returns an iterable over all highlightings."""
         texts = [
-            passage.highlighted_text(start, end, metadata_fields)
-            for start, end, passage in self._highlightings
+            highlighting.text(metadata_fields)
+            for highlighting in self._highlightings
         ]
         assert all(text.strip() for text in texts), "Empty text."
         return texts

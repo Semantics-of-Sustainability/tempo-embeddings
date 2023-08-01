@@ -6,7 +6,7 @@ import numpy as np
 from numpy.typing import ArrayLike
 from tokenizers import Encoding
 from ..embeddings.model import TransformerModelWrapper
-from .types import Highlighting
+from .highlighting import Highlighting
 
 
 class Passage:
@@ -84,35 +84,6 @@ class Passage:
         """
         self._metadata[key] = value
 
-    def highlighted_text(
-        self,
-        start: int,
-        end: int,
-        metadata_fields: Iterable[str] = None,
-        max_context_length: int = 200,
-    ) -> str:
-        """Returns the text with the given word highlighted
-        and metadata appended."""
-
-        word_start, word_end = self.word_span(start, end)
-
-        text = (
-            self._text[:word_start]
-            + f" <b>{self._text[word_start:word_end]}</b> "
-            + self._text[word_end:]
-        )
-        if len(text) > max_context_length:
-            text = text[
-                word_start
-                - max_context_length // 2 : word_end
-                + max_context_length // 2
-            ]
-
-        if metadata_fields:
-            metadata = {key: self.get_metadata(key) for key in metadata_fields}
-            text += f"<br>{metadata}"
-        return text
-
     def token_embedding(self, start, end) -> ArrayLike:
         """Returns the token embedding for the given char span in the given passage."""
 
@@ -138,6 +109,11 @@ class Passage:
         )
 
     def word_span(self, start, end) -> tuple[int, int]:
+        if not self.tokenization and self._model:
+            self._model.tokenize_passage(self)
+        if self.tokenization is None:
+            raise ValueError("Passage has no tokenization.")
+
         word_index = self.tokenization.char_to_word(start)
         assert (
             self.tokenization.char_to_word(end - 1) == word_index
