@@ -133,8 +133,10 @@ class Corpus:
 
         return np.array(
             [
-                passage.token_embedding(start, end)
-                for start, end, passage in self._highlightings
+                highlighting.passage.token_embedding(
+                    highlighting.start, highlighting.end
+                )
+                for highlighting in self._highlightings
             ]
         )
 
@@ -222,8 +224,7 @@ class Corpus:
     def highlighted_texts(self, metadata_fields: Iterable[str] = None) -> list[str]:
         """Returns an iterable over all highlightings."""
         texts = [
-            highlighting.text(metadata_fields)
-            for highlighting in self._highlightings
+            highlighting.text(metadata_fields) for highlighting in self._highlightings
         ]
         assert all(text.strip() for text in texts), "Empty text."
         return texts
