@@ -61,8 +61,6 @@ class TransformerModelWrapper(abc.ABC):
         corpus.embeddings_model_name = self.name
 
     def tokenize_passage(self, passage: "Passage"):
-        if passage.tokenization is not None:
-            raise ValueError(f"Passage {passage} already has a tokenization")
         passage.tokenization = self._tokenize([passage.text])[0]
 
     def tokenize(self, corpus: "Corpus"):

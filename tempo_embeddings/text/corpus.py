@@ -1,6 +1,7 @@
 import csv
 import gzip
 import logging
+from collections import Counter
 from collections import defaultdict
 from itertools import groupby
 from pathlib import Path
@@ -179,8 +180,26 @@ class Corpus:
         # Dropping unmatched passages
         return Corpus(passages, matches, self._model)
 
-    def context_words(self, token: str):
+    def frequent_words(
+        self,
+        stop_words: set[str] = None,
+        n: int = 10,
+        *,
+        use_tokenizer: bool = False,
+    ) -> list[tuple[str, int]]:
         """The most common words in the context of a token in all passages."""
+
+        if stop_words is None:
+            stop_words = set()
+
+        return Counter(
+            (
+                word
+                for passage in self._passages
+                for word in passage.words(use_tokenizer)
+                if word.casefold() not in stop_words
+            )
+        ).most_common(n)
 
     def mean(self) -> ArrayLike:
         """The mean for all passage embeddings."""

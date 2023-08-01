@@ -84,6 +84,12 @@ class Passage:
         """
         self._metadata[key] = value
 
+    def tokenize(self) -> None:
+        if self._model is None:
+            raise ValueError("No model set.")
+
+        self._model.tokenize_passage(self)
+
     def token_embedding(self, start, end) -> ArrayLike:
         """Returns the token embedding for the given char span in the given passage."""
 
@@ -121,18 +127,29 @@ class Passage:
 
         return self.tokenization.word_to_chars(word_index)
 
-    def words(self) -> Iterable[str]:
-        """Returns the words in the passage."""
+    def words(self, use_tokenizer: bool = True) -> Iterable[str]:
+        """Returns the words in the passage.
 
-        if self.tokenization is None:
-            raise ValueError(
-                "Passage has no tokenization. Use Model.compute_embeddings() first."
+        Args:
+            use_tokenizer: If True, uses the tokenizer to split the passage into words.
+                Otherwise, splits the passage by whitespace.
+
+        Returns:
+            An iterable of words in the passage.
+        """
+
+        if not use_tokenizer and self.tokenization is not None:
+            logging.debug(
+                "Passage has already been tokenized, using words from tokenization."
             )
+            yield from self._text.split()
+        else:
+            self.tokenize()
 
-        for i in self.tokenization.words:
-            if i is not None:
-                start, end = self.tokenization.word_to_chars(i)
-                yield self._text[start:end]
+            for i in self.tokenization.words:
+                if i is not None:
+                    start, end = self.tokenization.word_to_chars(i)
+                    yield self._text[start:end]
 
     def __contains__(self, token: str) -> bool:
         return token in self._text
