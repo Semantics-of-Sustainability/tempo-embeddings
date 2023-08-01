@@ -11,6 +11,8 @@ from typing import Optional
 from typing import TextIO
 import joblib
 import numpy as np
+import pandas as pd
+import umap.plot
 from numpy.typing import ArrayLike
 from scipy.spatial.distance import cosine
 from sklearn.cluster import HDBSCAN
@@ -131,16 +133,12 @@ class Corpus:
             return np.array([])
 
         if not self.has_embeddings():
+            # batch-compute embeddings for all passages in corpus.
             self.compute_embeddings()
 
-        return np.array(
-            [
-                highlighting.passage.token_embedding(
-                    highlighting.start, highlighting.end
-                )
-                for highlighting in self._highlightings
-            ]
-        )
+        return [
+            highlighting.get_token_embedding() for highlighting in self._highlightings
+        ]
 
     def has_embeddings(self, validate=False) -> bool:
         """Returns True embeddings have been computed for the corpus.
@@ -178,8 +176,8 @@ class Corpus:
 
         passages = [passage for passage, _ in groupby(matches, lambda x: x.passage)]
 
-        # Dropping unmatched passages
-        return Corpus(passages, matches, self._model, self._umap)
+        # Dropping unmatched passages and Umap
+        return Corpus(passages, matches, self._model)
 
     def frequent_words(
         self,
@@ -207,13 +205,30 @@ class Corpus:
 
     def mean(self) -> ArrayLike:
         """The mean for all passage embeddings."""
-        return self._token_embeddings().mean(axis=0)
+        return np.array(self._token_embeddings()).mean(axis=0)
 
     def cosine(self, other: "Corpus") -> float:
         """The cosine distance between the mean of this corpus and another."""
         return cosine(self.mean(), other.mean())
 
+    def cluster(self, *, overwrite: bool = False, **kwargs) -> None:
+        """Clusters the corpus using HDBSCAN and assigns labels to highlightings.
+        
+        Outliers are assigend the label -1.
+        """
+
+        labels = HDBSCAN(**kwargs).fit_predict(self.umap_embeddings())
+        for label, highlighting in zip(labels, self._highlightings, strict=True):
+            if highlighting.label is not None and not overwrite:
+                raise ValueError(f"Highlight already has label: {highlighting}")
+
+            highlighting.label = label
+
     def clusters(self, **kwargs) -> Iterable["Corpus"]:
+        """Clusters the corpus using HDBSCAN and returns a list of subcorpora.
+
+        Outliers are dropped.
+        """
         labels = HDBSCAN(**kwargs).fit_predict(self.umap_embeddings())
 
         # TODO: handle cluster with outliers (label -1)
@@ -235,16 +250,46 @@ class Corpus:
             if label >= 0
         ]
 
+    def _labels(self) -> Optional[list]:
+        labels = [highlighting.label for highlighting in self._highlightings]
+        if not any(labels):
+            return None
+        return labels
+
+    def plot(self, **kwargs):
+        labels = kwargs.get("labels", self._labels())
+        if labels is not None:
+            labels = np.array(labels)
+
+        umap.plot.points(self.umap, labels=labels, **kwargs)
+
+    def hover_datas(self, metadata_keys=None) -> list[dict[str, Any]]:
+        return [
+            highlighting.hover_data(metadata_keys=metadata_keys)
+            for highlighting in self._highlightings
+        ]
+
+    def interactive_plot(self, **kwargs):
+        hover_data = pd.DataFrame(self.hover_datas())
+
+        labels = kwargs.get("labels", self._labels())
+        if labels is not None:
+            labels = np.array(labels)
+
+        return umap.plot.interactive(
+            self.umap, labels=labels, hover_data=hover_data, **kwargs
+        )
+
     @property
     def umap(self):
         if self._umap is None:
             umap = UMAP(metric="cosine")
-            umap.fit(self._token_embeddings())
+            umap.fit(np.array(self._token_embeddings()))
             self._umap = umap
         return self._umap
 
     def umap_embeddings(self):
-        return self.umap.transform(self._token_embeddings())
+        return self.umap.embedding_
 
     def highlighted_texts(self, metadata_fields: Iterable[str] = None) -> list[str]:
         """Returns an iterable over all highlightings."""
