@@ -22,22 +22,6 @@ class TestCorpus:
         )
 
     @pytest.mark.parametrize(
-        "lines,token,expected",
-        [
-            ([], "test", []),
-            (["test token"], "test", [Highlighting(0, 4, Passage("test token"))]),
-            (
-                ["test token", "no match"],
-                "test",
-                [Highlighting(0, 4, Passage("test token"))],
-            ),
-        ],
-    )
-    # pylint: disable=protected-access
-    def test_find(self, lines, token, expected):
-        assert list(Corpus.from_lines(lines)._find(token)) == expected
-
-    @pytest.mark.parametrize(
         "corpus,token,metadata,expected",
         [
             (Corpus(), "test", {}, Corpus()),
@@ -202,7 +186,7 @@ class TestCorpus:
             ],
             [Highlighting(0, 4, Passage("text 1", metadata={"key": 1, "other": 3}))],
         )
-        corpus.embeddings_model_name = "test model"
+        corpus.model = None
         corpus.save(filepath)
 
         assert filepath.is_file()

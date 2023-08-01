@@ -1,5 +1,6 @@
 import pytest
 from tempo_embeddings.text.passage import Passage
+from tempo_embeddings.text.types import Highlighting
 
 
 class TestPassage:
@@ -20,10 +21,21 @@ class TestPassage:
         "passage, token, expected",
         [
             (Passage(""), "test", []),
-            (Passage("test"), "test", [0]),
+            (Passage("test"), "test", [Highlighting(0, 4, Passage("test"))]),
             (Passage("no match"), "test", []),
-            (Passage("one test match"), "test", [4]),
-            (Passage("one test another test match"), "test", [4, 17]),
+            (
+                Passage("one test match"),
+                "test",
+                [Highlighting(4, 8, Passage("one test match"))],
+            ),
+            (
+                Passage("one test another test match"),
+                "test",
+                [
+                    Highlighting(4, 8, Passage("one test another test match")),
+                    Highlighting(17, 21, Passage("one test another test match")),
+                ],
+            ),
         ],
     )
     def test_findall(self, passage, token, expected):

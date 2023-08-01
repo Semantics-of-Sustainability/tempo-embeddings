@@ -1,15 +1,25 @@
+import logging
 from typing import Any
 from typing import Iterable
 from typing import Optional
 import numpy as np
 from numpy.typing import ArrayLike
 from tokenizers import Encoding
+from ..embeddings.model import TransformerModelWrapper
+from .types import Highlighting
 
 
 class Passage:
-    def __init__(self, text: str, metadata: dict = None) -> None:
+    def __init__(
+        self,
+        text: str,
+        metadata: dict = None,
+        model: Optional[TransformerModelWrapper] = None,
+    ) -> None:
         self._text = text.strip()
         self._metadata = metadata or {}
+        self._model = model
+
         self._embeddings: Optional[Any] = None
         self._tokenization: Optional[Encoding] = None
 
@@ -22,15 +32,20 @@ class Passage:
         return self._metadata
 
     @property
+    def model(self) -> Optional[TransformerModelWrapper]:
+        return self._model
+
+    @model.setter
+    def model(self, value: TransformerModelWrapper) -> None:
+        self._model = value
+
+    @property
     def embeddings(self) -> Optional[Any]:
         return self._embeddings
 
     @embeddings.setter
     def embeddings(self, value: Any):
         self._embeddings = value
-
-    def has_embeddings(self) -> bool:
-        return self.embeddings is not None
 
     @property
     def tokenization(self) -> Optional[Encoding]:
@@ -101,10 +116,8 @@ class Passage:
     def token_embedding(self, start, end) -> ArrayLike:
         """Returns the token embedding for the given char span in the given passage."""
 
-        if self._embeddings is None:
-            raise ValueError(
-                "Passage has no embeddings. Call compute_embeddings first."
-            )
+        if self._embeddings is None and self._model is not None:
+            self._model.compute_passage_embeddings(self)
 
         first_token, last_token = self.token_span(start, end)
 
@@ -162,19 +175,44 @@ class Passage:
 
     def find(
         self, token: str, start: Optional[int] = None, end: Optional[int] = None
-    ) -> int:
-        return self._text.find(token, start, end)
+    ) -> tuple[int, int]:
+        start = self._text.casefold().find(token.casefold(), start, end)
+        end = start + len(token)
+        return start, end
 
-    def findall(self, token: str) -> Iterable[int]:
-        match_index = self.find(token)
-        while match_index >= 0:
-            yield match_index
-            match_index = self.find(token, match_index + 1)
+    def findall(self, token: str) -> Iterable[Highlighting]:
+        # Quick check for match:
+        if token.casefold() in self._text.casefold():
+            if self.tokenization is None and self._model is not None:
+                # Tokenize if needed
+                self._model.tokenize_passage(self)
+
+            if self.tokenization is None:
+                logging.warning(
+                    "Passage has no tokenization. "
+                    "Proceeding with simple string matching."
+                )
+                start, end = self.find(token)
+
+                while start >= 0:
+                    yield Highlighting(start, end, self)
+                    start, end = self.find(token, end + 1)
+            else:
+                # Search for full tokens
+                for word_index in self.tokenization.words:
+                    if word_index is not None:
+                        start, end = self.tokenization.word_to_chars(word_index)
+                        word = self._text[start:end]
+                        if word.casefold() == token.casefold():
+                            yield Highlighting(start, end, self)
+        else:
+            yield from ()
 
     @classmethod
     def from_text(
         cls,
         text: str,
+        model: Optional[TransformerModelWrapper] = None,
         *,
         window_size: int = None,
         window_overlap: int = None,
@@ -192,4 +230,4 @@ class Passage:
                 window_overlap = int(window_size / 10)
 
             for start in range(0, len(text), window_size - window_overlap):
-                yield cls(text[start : start + window_size], metadata)
+                yield cls(text[start : start + window_size], metadata, model)

@@ -15,4 +15,5 @@ class Metadata(TypedDict, total=False):
     """Year of publication for the text sequence."""
 
 
+# TODO: move Passage.highlighted_text() to here
 Highlighting = namedtuple("Highlighting", ["start", "end", "passage"])
