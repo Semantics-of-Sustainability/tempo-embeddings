@@ -27,12 +27,13 @@ class Corpus:
         passages: list[Passage] = None,
         highlightings: list[Highlighting] = None,
         model: Optional[TransformerModelWrapper] = None,
+        umap: Optional[UMAP] = None,
     ):
         self._passages: list[Passage] = passages or []
         self._highlightings: list[Highlighting] = highlightings or []
         self._model: Optional[TransformerModelWrapper] = model
 
-        self._umap_embeddings: Optional[np.ndarray] = None
+        self._umap: Optional[UMAP] = umap
 
     def __add__(self, other: "Corpus") -> "Corpus":
         # TODO: does model.__eq__() work?
@@ -178,7 +179,7 @@ class Corpus:
         passages = [passage for passage, _ in groupby(matches, lambda x: x.passage)]
 
         # Dropping unmatched passages
-        return Corpus(passages, matches, self._model)
+        return Corpus(passages, matches, self._model, self._umap)
 
     def frequent_words(
         self,
@@ -191,6 +192,9 @@ class Corpus:
 
         if stop_words is None:
             stop_words = set()
+
+        if any(word.casefold() != word for word in stop_words):
+            raise ValueError("Stop words should be lowercase")
 
         return Counter(
             (
@@ -209,11 +213,8 @@ class Corpus:
         """The cosine distance between the mean of this corpus and another."""
         return cosine(self.mean(), other.mean())
 
-    def clusters(self, *, umap_embeddings: bool = True, **kwargs) -> Iterable["Corpus"]:
-        embeddings = (
-            self.umap_embeddings() if umap_embeddings else self._token_embeddings()
-        )
-        labels = HDBSCAN(**kwargs).fit_predict(embeddings)
+    def clusters(self, **kwargs) -> Iterable["Corpus"]:
+        labels = HDBSCAN(**kwargs).fit_predict(self.umap_embeddings())
 
         # TODO: handle cluster with outliers (label -1)
         corpora = defaultdict(list)
@@ -228,17 +229,22 @@ class Corpus:
                 passages=[p for p, _ in groupby(highlightings, lambda h: h.passage)],
                 highlightings=highlightings,
                 model=self._model,
+                umap=self._umap,
             )
             for label, highlightings in corpora.items()
             if label >= 0
         ]
 
-    def umap_embeddings(self):
-        if self._umap_embeddings is None:
+    @property
+    def umap(self):
+        if self._umap is None:
             umap = UMAP(metric="cosine")
-            self._umap_embeddings = umap.fit_transform(self._token_embeddings())
+            umap.fit(self._token_embeddings())
+            self._umap = umap
+        return self._umap
 
-        return self._umap_embeddings
+    def umap_embeddings(self):
+        return self.umap.transform(self._token_embeddings())
 
     def highlighted_texts(self, metadata_fields: Iterable[str] = None) -> list[str]:
         """Returns an iterable over all highlightings."""

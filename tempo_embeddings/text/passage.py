@@ -138,10 +138,7 @@ class Passage:
             An iterable of words in the passage.
         """
 
-        if not use_tokenizer and self.tokenization is not None:
-            logging.debug(
-                "Passage has already been tokenized, using words from tokenization."
-            )
+        if not use_tokenizer and self.tokenization is None:
             yield from self._text.split()
         else:
             self.tokenize()
