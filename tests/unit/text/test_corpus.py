@@ -29,9 +29,7 @@ class TestCorpus:
                 Corpus([Passage("test line")]),
                 "test",
                 {},
-                Corpus(
-                    [Passage("test line")], [Highlighting(0, 4, Passage("test line"))]
-                ),
+                Corpus([Passage("test line", highlightings=[Highlighting(0, 4)])]),
             ),
             (
                 Corpus(
@@ -40,8 +38,10 @@ class TestCorpus:
                 "line1",
                 {},
                 Corpus(
-                    [Passage("test line1")],
-                    [Highlighting(5, 10, Passage("test line1"))],
+                    [
+                        Passage("test line1", highlightings=[Highlighting(5, 10)]),
+                        Passage("test line2"),
+                    ],
                 ),
             ),
             (
@@ -54,8 +54,18 @@ class TestCorpus:
                 "test",
                 {"test": "value1"},
                 Corpus(
-                    [Passage("test line1", {"test": "value1"})],
-                    [Highlighting(0, 4, Passage("test line1", {"test": "value1"}))],
+                    [
+                        Passage(
+                            "test line1",
+                            {"test": "value1"},
+                            highlightings=[
+                                Highlighting(
+                                    0, 4, Passage("test line1", {"test": "value1"})
+                                )
+                            ],
+                        ),
+                        Passage("test line2", {"test": "value2"}),
+                    ],
                 ),
             ),
             (
@@ -68,13 +78,22 @@ class TestCorpus:
                 "test",
                 {"key1": "value1", "key2": "value2"},
                 Corpus(
-                    [Passage("test line1", {"key1": "value1", "key2": "value2"})],
                     [
-                        Highlighting(
-                            0,
-                            4,
-                            Passage("test line1", {"key1": "value1", "key2": "value2"}),
-                        )
+                        Passage(
+                            "test line1",
+                            {"key1": "value1", "key2": "value2"},
+                            highlightings=[
+                                Highlighting(
+                                    0,
+                                    4,
+                                    Passage(
+                                        "test line1",
+                                        {"key1": "value1", "key2": "value2"},
+                                    ),
+                                )
+                            ],
+                        ),
+                        Passage("test line2", {"key1": "value1", "key2": "value3"}),
                     ],
                 ),
             ),
@@ -87,7 +106,12 @@ class TestCorpus:
                 ),
                 "test",
                 {"test": "value3"},
-                Corpus(),
+                Corpus(
+                    [
+                        Passage("test line1", {"test": "value1"}),
+                        Passage("test line2", {"test": "value2"}),
+                    ]
+                ),
             ),
         ],
     )
@@ -106,10 +130,17 @@ class TestCorpus:
             ),
             (
                 Corpus(
-                    [Passage("text", metadata={"key": 1, "other": 3})],
                     [
-                        Highlighting(
-                            0, 4, Passage("text", metadata={"key": 1, "other": 3})
+                        Passage(
+                            "text",
+                            metadata={"key": 1, "other": 3},
+                            highlightings=[
+                                Highlighting(
+                                    0,
+                                    4,
+                                    Passage("text", metadata={"key": 1, "other": 3}),
+                                )
+                            ],
                         )
                     ],
                 ),
@@ -120,15 +151,27 @@ class TestCorpus:
             (
                 Corpus(
                     [
-                        Passage("text 1", metadata={"key": 1, "other": 3}),
-                        Passage("text 2", metadata={"key": 2, "other": 2}),
-                    ],
-                    [
-                        Highlighting(
-                            0, 4, Passage("text 1", metadata={"key": 1, "other": 3})
+                        Passage(
+                            "text 1",
+                            metadata={"key": 1, "other": 3},
+                            highlightings=[
+                                Highlighting(
+                                    0,
+                                    4,
+                                    Passage("text 1", metadata={"key": 1, "other": 3}),
+                                )
+                            ],
                         ),
-                        Highlighting(
-                            5, 6, Passage("text 2", metadata={"key": 2, "other": 2})
+                        Passage(
+                            "text 2",
+                            metadata={"key": 2, "other": 2},
+                            highlightings=[
+                                Highlighting(
+                                    5,
+                                    6,
+                                    Passage("text 2", metadata={"key": 2, "other": 2}),
+                                ),
+                            ],
                         ),
                     ],
                 ),
@@ -139,30 +182,47 @@ class TestCorpus:
             (
                 Corpus(
                     [
-                        Passage("text 1", metadata={"key": 1, "other": 3}),
-                        Passage("text 2", metadata={"other": 2}),
-                    ],
-                    [
-                        Highlighting(
-                            0, 4, Passage("text 1", metadata={"key": 1, "other": 3})
+                        Passage(
+                            "text 1",
+                            metadata={"key": 1, "other": 3},
+                            highlightings=[
+                                Highlighting(
+                                    0,
+                                    4,
+                                    Passage("text 1", metadata={"key": 1, "other": 3}),
+                                )
+                            ],
                         ),
-                        Highlighting(5, 6, Passage("text 2", metadata={"other": 2})),
+                        Passage(
+                            "text 2",
+                            metadata={"other": 2},
+                            highlightings=[
+                                Highlighting(
+                                    5, 6, Passage("text 2", metadata={"other": 2})
+                                )
+                            ],
+                        ),
                     ],
                 ),
                 "key",
                 [1],
-                pytest.raises(ValueError),
+                pytest.raises(KeyError),
             ),
             (
                 Corpus(
                     [
-                        Passage("text 1", metadata={"key": 1, "other": 3}),
+                        Passage(
+                            "text 1",
+                            metadata={"key": 1, "other": 3},
+                            highlightings=[
+                                Highlighting(
+                                    0,
+                                    4,
+                                    Passage("text 1", metadata={"key": 1, "other": 3}),
+                                )
+                            ],
+                        ),
                         Passage("text 2", metadata={"key": 2, "other": 2}),
-                    ],
-                    [
-                        Highlighting(
-                            0, 4, Passage("text 1", metadata={"key": 1, "other": 3})
-                        )
                     ],
                 ),
                 "key",

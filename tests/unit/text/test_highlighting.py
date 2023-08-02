@@ -43,6 +43,8 @@ class TestHighlighting:
         self, start, end, passage, metadata_fields, max_context_length, expected
     ):
         assert (
-            Highlighting(start, end, passage).text(metadata_fields, max_context_length)
+            Highlighting(start, end).text(
+                passage, metadata_fields, max_context_length=max_context_length
+            )
             == expected
         )

@@ -38,8 +38,9 @@ class TestPassage:
             ),
         ],
     )
-    def test_findall(self, passage, token, expected):
-        assert list(passage.findall(token)) == expected
+    def test_add_highlightings(self, passage, token, expected):
+        passage.add_highlightings(token)
+        assert passage.highlightings == expected
 
     @pytest.mark.parametrize(
         "text,window_size,window_overlap,expected",

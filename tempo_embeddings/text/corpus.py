@@ -3,7 +3,6 @@ import gzip
 import logging
 from collections import Counter
 from collections import defaultdict
-from itertools import groupby
 from pathlib import Path
 from typing import Any
 from typing import Iterable
@@ -27,12 +26,10 @@ class Corpus:
     def __init__(
         self,
         passages: list[Passage] = None,
-        highlightings: list[Highlighting] = None,
         model: Optional[TransformerModelWrapper] = None,
         umap: Optional[UMAP] = None,
     ):
         self._passages: list[Passage] = passages or []
-        self._highlightings: list[Highlighting] = highlightings or []
         self._model: Optional[TransformerModelWrapper] = model
 
         self._umap: Optional[UMAP] = umap
@@ -43,11 +40,7 @@ class Corpus:
             raise ValueError("Cannot add two corpora with different embeddings models")
 
         # Dropping previously computed UMAP embeddings
-        return Corpus(
-            passages=self._passages + other._passages,
-            highlightings=self._highlightings + other._highlightings,
-            model=self._model,
-        )
+        return Corpus(passages=self._passages + other._passages, model=self._model)
 
     def __contains__(self, passage: Passage) -> bool:
         return passage in self._passages
@@ -59,15 +52,17 @@ class Corpus:
         return f"Corpus({self._passages[:10]!r})"
 
     def __eq__(self, other: object) -> bool:
-        return (
-            self._model == other._model
-            and other._passages == self._passages
-            and other._highlightings == self._highlightings
-        )
+        return self._model == other._model and other._passages == self._passages
 
     @property
     def passages(self) -> list[Passage]:
+        # TODO: filter by mask in subcorpora
         return self._passages
+
+    def highlighted_passages(self) -> Iterable[Passage]:
+        for passage in self.passages:
+            for _ in passage.highlightings:
+                yield passage
 
     def texts(self):
         return [passage.text for passage in self._passages]
@@ -88,7 +83,11 @@ class Corpus:
 
     @property
     def highlightings(self) -> list[Highlighting]:
-        return self._highlightings
+        return [
+            highlighting
+            for passage in self.passages
+            for highlighting in passage.highlightings
+        ]
 
     def has_metadata(self, key: str, strict=False) -> bool:
         """Returns True if the corpus has a metadata key.
@@ -102,14 +101,13 @@ class Corpus:
 
     def get_highlighting_metadatas(self, key: str) -> Iterable[Any]:
         """Returns an iterable over all metadata values for a key
-        for each _highlighted_ token."""
-        for highlighting in self._highlightings:
-            try:
-                yield highlighting.passage.get_metadata(key)
-            except KeyError as e:
-                raise ValueError(
-                    f"Passage missing metadata key: {highlighting.passage}"
-                ) from e
+        for each highlighted token."""
+
+        return [
+            passage.get_metadata(key)
+            for passage in self.passages
+            for _ in passage.highlightings
+        ]
 
     def set_metadatas(self, key, value):
         """Sets a metadata key to a value for all passages.
@@ -127,8 +125,8 @@ class Corpus:
             raise ValueError("Corpus does not have a model.")
         self._model.compute_embeddings(self)
 
-    def _token_embeddings(self) -> ArrayLike:
-        if not self._highlightings:
+    def _token_embeddings(self) -> list[ArrayLike]:
+        if not self.highlightings:
             logging.warning("Corpus has no highlightings")
             return np.array([])
 
@@ -137,7 +135,9 @@ class Corpus:
             self.compute_embeddings()
 
         return [
-            highlighting.get_token_embedding() for highlighting in self._highlightings
+            embedding
+            for passage in self.passages
+            for embedding in passage.token_embeddings()
         ]
 
     def has_embeddings(self, validate=False) -> bool:
@@ -164,20 +164,15 @@ class Corpus:
             metadata: Metadata fields to match against
         """
 
-        matches: list[Highlighting] = [
-            highlighting
-            for passage in self._passages
-            for highlighting in passage.findall(token)
+        # TODO: add highlighted passages to mask
+        for passage in self.passages:
             if all(
-                highlighting.passage.metadata[key] == value
-                for key, value in metadata.items()
-            )
-        ]
-
-        passages = [passage for passage, _ in groupby(matches, lambda x: x.passage)]
+                passage.metadata.get(key) == value for key, value in metadata.items()
+            ):
+                passage.add_highlightings(token)
 
         # Dropping unmatched passages and Umap
-        return Corpus(passages, matches, self._model)
+        return Corpus(self._passages, self._model, self._umap)
 
     def frequent_words(
         self,
@@ -213,12 +208,12 @@ class Corpus:
 
     def cluster(self, *, overwrite: bool = False, **kwargs) -> None:
         """Clusters the corpus using HDBSCAN and assigns labels to highlightings.
-        
+
         Outliers are assigend the label -1.
         """
 
         labels = HDBSCAN(**kwargs).fit_predict(self.umap_embeddings())
-        for label, highlighting in zip(labels, self._highlightings, strict=True):
+        for label, highlighting in zip(labels, self.highlightings, strict=True):
             if highlighting.label is not None and not overwrite:
                 raise ValueError(f"Highlight already has label: {highlighting}")
 
@@ -232,26 +227,23 @@ class Corpus:
         labels = HDBSCAN(**kwargs).fit_predict(self.umap_embeddings())
 
         # TODO: handle cluster with outliers (label -1)
-        corpora = defaultdict(list)
-        for label, highlighting in zip(labels, self._highlightings, strict=True):
-            corpora[label].append(highlighting)
+        corpora: dict[int, list[Passage]] = defaultdict(list)
+
+        for label, passage in zip(labels, self.highlighted_passages(), strict=True):
+            corpora[label].append(passage)
 
         if corpora[-1]:
             logging.warning("Found %d outliers", len(corpora[-1]))
 
+        # TODO: add mask for matched passages, pass all passages
         return [
-            Corpus(
-                passages=[p for p, _ in groupby(highlightings, lambda h: h.passage)],
-                highlightings=highlightings,
-                model=self._model,
-                umap=self._umap,
-            )
-            for label, highlightings in corpora.items()
+            Corpus(passages=passages, model=self._model, umap=self._umap)
+            for label, passages in corpora.items()
             if label >= 0
         ]
 
     def _labels(self) -> Optional[list]:
-        labels = [highlighting.label for highlighting in self._highlightings]
+        labels = [highlighting.label for highlighting in self.highlightings]
         if not any(labels):
             return None
         return labels
@@ -266,7 +258,7 @@ class Corpus:
     def hover_datas(self, metadata_keys=None) -> list[dict[str, Any]]:
         return [
             highlighting.hover_data(metadata_keys=metadata_keys)
-            for highlighting in self._highlightings
+            for highlighting in self.highlightings
         ]
 
     def interactive_plot(self, **kwargs):
@@ -284,6 +276,7 @@ class Corpus:
     def umap(self):
         if self._umap is None:
             umap = UMAP(metric="cosine")
+            # TODO: this becomes invalid when highlightings are changes
             umap.fit(np.array(self._token_embeddings()))
             self._umap = umap
         return self._umap
@@ -294,8 +287,11 @@ class Corpus:
     def highlighted_texts(self, metadata_fields: Iterable[str] = None) -> list[str]:
         """Returns an iterable over all highlightings."""
         texts = [
-            highlighting.text(metadata_fields) for highlighting in self._highlightings
+            text
+            for passage in self.passages
+            for text in passage.highlighted_texts(metadata_fields)
         ]
+        # TODO: remove assertion
         assert all(text.strip() for text in texts), "Empty text."
         return texts
 

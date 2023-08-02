@@ -1,6 +1,7 @@
 import abc
 import logging
 from typing import TYPE_CHECKING
+import numpy as np
 import torch
 from transformers import AutoTokenizer
 from transformers import RobertaModel
@@ -8,8 +9,8 @@ from transformers import pipeline
 
 
 if TYPE_CHECKING:
-    # imports for type checking
     from ..text.corpus import Corpus
+    from ..text.highlighting import Highlighting
     from ..text.passage import Passage
 
 
@@ -31,7 +32,7 @@ class TransformerModelWrapper(abc.ABC):
         return self._model.config._name_or_path  # pylint: disable=protected-access
 
     @torch.no_grad()
-    def compute_passage_embeddings(self, passage: "Passage"):
+    def compute_passage_embeddings(self, passage: "Passage") -> None:
         """Adds the embeddings for the given passage."""
         if passage.has_embeddings():
             raise ValueError("Passage already has embeddings")
@@ -60,10 +61,10 @@ class TransformerModelWrapper(abc.ABC):
 
         corpus.embeddings_model_name = self.name
 
-    def tokenize_passage(self, passage: "Passage"):
+    def tokenize_passage(self, passage: "Passage") -> None:
         passage.tokenization = self._tokenize([passage.text])[0]
 
-    def tokenize(self, corpus: "Corpus"):
+    def tokenize(self, corpus: "Corpus") -> None:
         passages = corpus.passages_untokenized()
         if passages:
             tokenizations = self._tokenize([passage.text for passage in passages])
@@ -71,6 +72,31 @@ class TransformerModelWrapper(abc.ABC):
                 if passage.tokenization is not None:
                     raise ValueError(f"Passage {passage} already has a tokenization")
                 passage.tokenization = tokenizations[i]
+
+    def compute_token_embedding(
+        self, passage: "Passage", highlighting: "Highlighting"
+    ) -> None:
+        """Returns the token embedding for the given char span in the given passage."""
+
+        if highlighting.token_embedding is not None:
+            raise ValueError(
+                f"Highlighting already has a token embedding: {highlighting}"
+            )
+        if passage.embeddings is None:
+            self._model.compute_passage_embeddings(passage)
+
+        first_token, last_token = passage.token_span(
+            highlighting.start, highlighting.end
+        )
+
+        if first_token == last_token:
+            token_embedding = passage.embeddings[first_token]
+        else:
+            # highlighting spans multiple tokens
+            token_embeddings = passage.embeddings[first_token : last_token + 1]
+            token_embedding = np.mean(token_embeddings, axis=0)
+
+        highlighting.token_embedding = token_embedding
 
     @torch.no_grad()
     def _tokenize(self, texts):

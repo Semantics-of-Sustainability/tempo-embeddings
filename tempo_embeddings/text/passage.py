@@ -2,7 +2,6 @@ import logging
 from typing import Any
 from typing import Iterable
 from typing import Optional
-import numpy as np
 from numpy.typing import ArrayLike
 from tokenizers import Encoding
 from ..embeddings.model import TransformerModelWrapper
@@ -15,12 +14,14 @@ class Passage:
         text: str,
         metadata: dict = None,
         model: Optional[TransformerModelWrapper] = None,
+        highlightings: Optional[list[Highlighting]] = None,
     ) -> None:
         self._text = text.strip()
         self._metadata = metadata or {}
         self._model = model
+        self._highlightings = highlightings or []
 
-        self._embeddings: Optional[Any] = None
+        self._embeddings: Optional[ArrayLike] = None
         self._tokenization: Optional[Encoding] = None
 
     @property
@@ -32,6 +33,14 @@ class Passage:
         return self._metadata
 
     @property
+    def highlightings(self) -> list[Highlighting]:
+        return self._highlightings
+
+    @highlightings.setter
+    def highlightings(self, value: list[Highlighting]) -> None:
+        self._highlightings = value
+
+    @property
     def model(self) -> Optional[TransformerModelWrapper]:
         return self._model
 
@@ -40,7 +49,7 @@ class Passage:
         self._model = value
 
     @property
-    def embeddings(self) -> Optional[Any]:
+    def embeddings(self) -> Optional[ArrayLike]:
         return self._embeddings
 
     @embeddings.setter
@@ -54,6 +63,21 @@ class Passage:
     @tokenization.setter
     def tokenization(self, value: Encoding):
         self._tokenization = value
+
+    def highlighted_texts(self, metadata_fields: list[str]) -> list[str]:
+        return [
+            highlighting.text(self, metadata_fields)
+            for highlighting in self._highlightings
+        ]
+
+    def hover_datas(self) -> list[dict[str, Any]]:
+        return [highlighting.hover_data(self) for highlighting in self._highlightings]
+
+    def token_embeddings(self) -> Iterable[ArrayLike]:
+        for highlighting in self.highlightings:
+            if highlighting.token_embedding is None:
+                self._model.compute_token_embedding(self, highlighting)
+            yield highlighting.token_embedding
 
     def has_metadata(self, key: str) -> bool:
         """Returns True if the metadata key exists."""
@@ -89,23 +113,6 @@ class Passage:
             raise ValueError("No model set.")
 
         self._model.tokenize_passage(self)
-
-    def token_embedding(self, start, end) -> ArrayLike:
-        """Returns the token embedding for the given char span in the given passage."""
-
-        if self._embeddings is None and self._model is not None:
-            self._model.compute_passage_embeddings(self)
-
-        first_token, last_token = self.token_span(start, end)
-
-        if first_token == last_token:
-            token_embedding = self.embeddings[first_token]
-        else:
-            # multiple tokens
-            token_embeddings = self.embeddings[first_token : last_token + 1]
-            token_embedding = np.mean(token_embeddings, axis=0)
-
-        return token_embedding
 
     def token_span(self, start, end) -> tuple[int, int]:
         """Returns the start and end index of the token in the passage."""
@@ -170,8 +177,11 @@ class Passage:
         end = start + len(token)
         return start, end
 
-    def findall(self, token: str) -> Iterable[Highlighting]:
+    def add_highlightings(self, token: str) -> None:
+        """Find matches for token string and add highlightings to the passage."""
         # Quick check for match:
+        highlightings = []
+
         if token.casefold() in self._text.casefold():
             if self.tokenization is None and self._model is not None:
                 # Tokenize if needed
@@ -185,7 +195,7 @@ class Passage:
                 start, end = self.find(token)
 
                 while start >= 0:
-                    yield Highlighting(start, end, self)
+                    highlightings.append(Highlighting(start, end, self))
                     start, end = self.find(token, end + 1)
             else:
                 # Search for full tokens
@@ -194,9 +204,9 @@ class Passage:
                         start, end = self.tokenization.word_to_chars(word_index)
                         word = self._text[start:end]
                         if word.casefold() == token.casefold():
-                            yield Highlighting(start, end, self)
-        else:
-            yield from ()
+                            highlightings.append(Highlighting(start, end, self))
+
+        self.highlightings += highlightings
 
     @classmethod
     def from_text(
