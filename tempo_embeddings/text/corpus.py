@@ -164,15 +164,17 @@ class Corpus:
             metadata: Metadata fields to match against
         """
 
-        # TODO: add highlighted passages to mask
-        for passage in self.passages:
+        highlighted_passages = [
+            passage
+            for passage in self.passages
             if all(
                 passage.metadata.get(key) == value for key, value in metadata.items()
-            ):
-                passage.add_highlightings(token)
+            )
+            and passage.add_highlightings(token)
+        ]
 
-        # Dropping unmatched passages and Umap
-        return Corpus(self._passages, self._model, self._umap)
+        # Dropping unmatched passages
+        return Corpus(highlighted_passages, self._model, self._umap)
 
     def frequent_words(
         self,
@@ -233,7 +235,7 @@ class Corpus:
             corpora[label].append(passage)
 
         if corpora[-1]:
-            logging.warning("Found %d outliers", len(corpora[-1]))
+            logging.info("Found %d outliers", len(corpora[-1]))
 
         # TODO: add mask for matched passages, pass all passages
         return [
@@ -249,6 +251,12 @@ class Corpus:
         return labels
 
     def plot(self, **kwargs):
+        if len(self.umap.embedding_) != len(self.highlightings):
+            logging.error(
+                "Number of highlightings (%d) does not match UMAP embeddings (%d).",
+                len(self.highlightings),
+                len(self.umap.embedding_),
+            )
         labels = kwargs.get("labels", self._labels())
         if labels is not None:
             labels = np.array(labels)
@@ -277,12 +285,18 @@ class Corpus:
         if self._umap is None:
             umap = UMAP(metric="cosine")
             # TODO: this becomes invalid when highlightings are changes
-            umap.fit(np.array(self._token_embeddings()))
+            logging.info("Computing UMAP...")
+            embeddings = umap.fit_transform(np.array(self._token_embeddings()))
+
+            for embedding, highlighting in zip(embeddings, self.highlightings):
+                highlighting.umap_embedding = embedding
             self._umap = umap
         return self._umap
 
-    def umap_embeddings(self):
-        return self.umap.embedding_
+    def umap_embeddings(self) -> ArrayLike:
+        return np.array(
+            [highlighting.umap_embedding for highlighting in self.highlightings]
+        )
 
     def highlighted_texts(self, metadata_fields: Iterable[str] = None) -> list[str]:
         """Returns an iterable over all highlightings."""

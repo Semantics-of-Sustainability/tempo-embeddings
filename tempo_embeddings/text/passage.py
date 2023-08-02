@@ -177,7 +177,7 @@ class Passage:
         end = start + len(token)
         return start, end
 
-    def add_highlightings(self, token: str) -> None:
+    def add_highlightings(self, token: str) -> bool:
         """Find matches for token string and add highlightings to the passage."""
         # Quick check for match:
         highlightings = []
@@ -207,6 +207,13 @@ class Passage:
                             highlightings.append(Highlighting(start, end, self))
 
         self.highlightings += highlightings
+        return len(highlightings) > 0
+
+    def with_highlightings(self, *spans: tuple[int, int]) -> "Passage":
+        self.highlightings.extend(
+            [Highlighting(start, end, self) for start, end in spans]
+        )
+        return self
 
     @classmethod
     def from_text(
