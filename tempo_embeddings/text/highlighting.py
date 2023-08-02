@@ -16,7 +16,6 @@ class Highlighting:
     end: int
     passage: "Passage"
     """Backlink to the passage this highlighting belongs to."""
-    label: Any = None
     token_embedding: Optional[ArrayLike] = None
     umap_embedding: tuple[float, float] = None
 
@@ -49,7 +48,5 @@ class Highlighting:
             metadata = self.passage.metadata
         else:
             metadata = {key: self.passage.get_metadata(key) for key in metadata_keys}
-        if self.label is not None:
-            metadata["label"] = self.label
 
         return {"text": self.text(self.passage)} | metadata

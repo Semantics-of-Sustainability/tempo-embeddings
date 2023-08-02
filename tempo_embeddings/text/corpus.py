@@ -28,11 +28,13 @@ class Corpus:
         passages: list[Passage] = None,
         model: Optional[TransformerModelWrapper] = None,
         umap: Optional[UMAP] = None,
+        label: Optional[Any] = None,
     ):
         self._passages: list[Passage] = passages or []
         self._model: Optional[TransformerModelWrapper] = model
 
         self._umap: Optional[UMAP] = umap
+        self._label: str = str(label) or ""
 
     def __add__(self, other: "Corpus") -> "Corpus":
         # TODO: does model.__eq__() work?
@@ -49,20 +51,18 @@ class Corpus:
         return len(self._passages)
 
     def __repr__(self) -> str:
-        return f"Corpus({self._passages[:10]!r})"
+        return f"Corpus({self._label!r} {self._passages[:10]!r})"
 
     def __eq__(self, other: object) -> bool:
         return self._model == other._model and other._passages == self._passages
 
     @property
     def passages(self) -> list[Passage]:
-        # TODO: filter by mask in subcorpora
         return self._passages
 
-    def highlighted_passages(self) -> Iterable[Passage]:
+    def split_passages(self) -> list[Passage]:
         for passage in self.passages:
-            for _ in passage.highlightings:
-                yield passage
+            yield from passage.split_per_highlighting()
 
     def texts(self):
         return [passage.text for passage in self._passages]
@@ -208,64 +208,24 @@ class Corpus:
         """The cosine distance between the mean of this corpus and another."""
         return cosine(self.mean(), other.mean())
 
-    def cluster(self, *, overwrite: bool = False, **kwargs) -> None:
-        """Clusters the corpus using HDBSCAN and assigns labels to highlightings.
-
-        Outliers are assigend the label -1.
-        """
-
-        labels = HDBSCAN(**kwargs).fit_predict(self.umap_embeddings())
-        for label, highlighting in zip(labels, self.highlightings, strict=True):
-            if highlighting.label is not None and not overwrite:
-                raise ValueError(f"Highlight already has label: {highlighting}")
-
-            highlighting.label = label
-
     def clusters(self, **kwargs) -> Iterable["Corpus"]:
-        """Clusters the corpus using HDBSCAN and returns a list of subcorpora.
-
-        Outliers are dropped.
-        """
+        """Clusters the corpus using HDBSCAN and returns a list of subcorpora."""
         labels = HDBSCAN(**kwargs).fit_predict(self.umap_embeddings())
 
-        # TODO: handle cluster with outliers (label -1)
-        corpora: dict[int, list[Passage]] = defaultdict(list)
+        clusters: dict[int, list[Passage]] = defaultdict(list)
 
-        for label, passage in zip(labels, self.highlighted_passages(), strict=True):
-            corpora[label].append(passage)
+        for label, passage in zip(labels, self.split_passages(), strict=True):
+            clusters[label].append(passage)
 
-        if corpora[-1]:
-            logging.info("Found %d outliers", len(corpora[-1]))
-
-        # TODO: add mask for matched passages, pass all passages
         return [
-            Corpus(passages=passages, model=self._model, umap=self._umap)
-            for label, passages in corpora.items()
-            if label >= 0
+            Corpus(passages=passages, model=self._model, umap=self._umap, label=label)
+            for label, passages in clusters.items()
         ]
-
-    def _labels(self) -> Optional[list]:
-        labels = [highlighting.label for highlighting in self.highlightings]
-        if not any(labels):
-            return None
-        return labels
-
-    def plot(self, **kwargs):
-        if len(self.umap.embedding_) != len(self.highlightings):
-            logging.error(
-                "Number of highlightings (%d) does not match UMAP embeddings (%d).",
-                len(self.highlightings),
-                len(self.umap.embedding_),
-            )
-        labels = kwargs.get("labels", self._labels())
-        if labels is not None:
-            labels = np.array(labels)
-
-        umap.plot.points(self.umap, labels=labels, **kwargs)
 
     def hover_datas(self, metadata_keys=None) -> list[dict[str, Any]]:
         return [
             highlighting.hover_data(metadata_keys=metadata_keys)
+            | {"label": self._label}
             for highlighting in self.highlightings
         ]
 

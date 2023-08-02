@@ -215,6 +215,16 @@ class Passage:
         )
         return self
 
+    def split_per_highlighting(self) -> Iterable["Passage"]:
+        """Split the passage into multiple passages, one for each highlighting."""
+        if len(self.highlightings) < 2:
+            yield self
+        else:
+            for highlighting in self.highlightings:
+                yield Passage(self.text, self.metadata, self.model).with_highlightings(
+                    (highlighting.start, highlighting.end)
+                )
+
     @classmethod
     def from_text(
         cls,
