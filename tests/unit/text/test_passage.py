@@ -1,5 +1,6 @@
 from contextlib import nullcontext as does_not_raise
 import pytest
+from tempo_embeddings.text.highlighting import Highlighting
 from tempo_embeddings.text.passage import Passage
 
 
@@ -21,18 +22,26 @@ class TestPassage:
         "passage, token, expected_passage, expected_result",
         [
             (Passage(""), "test", Passage(""), False),
-            (Passage("test"), "test", Passage("test").with_highlighting(0, 4), True),
+            (
+                Passage("test"),
+                "test",
+                Passage("test", highlightings=[Highlighting(0, 4)]),
+                True,
+            ),
             (Passage("no match"), "test", Passage("no match"), False),
             (
                 Passage("one test match"),
                 "test",
-                Passage("one test match").with_highlighting(4, 8),
+                Passage("one test match", highlightings=[Highlighting(0, 4)]),
                 True,
             ),
             (
                 Passage("one test another test match"),
                 "test",
-                Passage("one test another test match").with_highlighting(4, 8, 17, 21),
+                Passage(
+                    "one test another test match",
+                    highlightings=[Highlighting(4, 8), Highlighting(17, 21)],
+                ),
                 True,
             ),
         ],
@@ -71,17 +80,19 @@ class TestPassage:
                 pytest.raises(ValueError),
             ),
             (
-                Passage("test text").with_highlighting(0, 4),
+                Passage("test text", highlightings=[Highlighting(0, 4)]),
                 [1],
-                [Passage("test text").with_highlighting(0, 4)],
+                [Passage("test text", highlightings=[Highlighting(0, 4)])],
                 does_not_raise(),
             ),
             (
-                Passage("test text").with_highlighting(0, 4).with_highlighting(6, 10),
+                Passage(
+                    "test text", highlightings=[Highlighting(0, 4), Highlighting(6, 10)]
+                ),
                 [1, 2],
                 [
-                    Passage("test text").with_highlighting(0, 4),
-                    Passage("test text").with_highlighting(6, 10),
+                    Passage("test text", highlightings=[Highlighting(0, 4)]),
+                    Passage("test text", highlightings=[Highlighting(6, 10)]),
                 ],
                 does_not_raise(),
             ),

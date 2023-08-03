@@ -67,14 +67,15 @@ class Passage:
 
     def highlighted_texts(self, metadata_fields: list[str]) -> list[str]:
         return [
-            highlighting.text(metadata_fields) for highlighting in self._highlightings
+            highlighting.text(metadata_fields, self)
+            for highlighting in self._highlightings
         ]
 
     def hover_datas(
         self, metadata_keys: Optional[list[str]] = None
     ) -> list[dict[str, Any]]:
         return [
-            highlighting.hover_data(metadata_keys)
+            highlighting.hover_data(self, metadata_keys)
             for highlighting in self._highlightings
         ]
 
@@ -214,23 +215,6 @@ class Passage:
         self.highlightings += highlightings
         return len(highlightings) > 0
 
-    def with_highlighting(self, *args) -> "Passage":
-        """Add highlightings to the passage.
-
-        Args:
-            *args: A list of start and end indices for the highlightings.
-            Must be an even number of arguments.
-
-        Returns:
-            The passage with the added highlightings.
-        """
-        if len(args) % 2 != 0:
-            raise ValueError("with_highlighting() takes an even number of arguments.")
-
-        for start, end in zip(args[0::2], args[1::2]):
-            self.highlightings.append(Highlighting(start, end, self))
-        return self
-
     def split_highlightings(self, labels: list[Any]) -> Iterable["Passage"]:
         """Split the passage into multiple passages based on labels per highlighting.
 
@@ -256,15 +240,8 @@ class Passage:
             for label, highlighting in zip(labels, self.highlightings):
                 labeled_highlightings[label].append(highlighting)
 
-            for label, highlightings in labeled_highlightings.items():
-                spans = []
-                for highlighting in highlightings:
-                    spans.append(highlighting.start)
-                    spans.append(highlighting.end)
-
-                yield Passage(self.text, self.metadata, self.model).with_highlighting(
-                    *spans
-                )
+            for highlightings in labeled_highlightings.values():
+                yield Passage(self.text, self.metadata, self.model, highlightings)
 
     @classmethod
     def from_text(
