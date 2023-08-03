@@ -242,6 +242,12 @@ class Corpus:
             for hover_data in passage.hover_datas(metadata_keys=metadata_keys)
         ]
 
+    def document_frequencies(self, **kwargs) -> Counter[str]:
+        """Returns the document frequency of each word in the corpus."""
+        return Counter(
+            word for passage in self.passages for word in set(passage.words(**kwargs))
+        )
+
     def interactive_plot(self, **kwargs):
         return umap.plot.interactive(
             self.umap, hover_data=pd.DataFrame(self.hover_datas()), **kwargs
