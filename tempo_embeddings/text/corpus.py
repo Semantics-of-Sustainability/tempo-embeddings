@@ -124,7 +124,7 @@ class Corpus:
     def _token_embeddings(self) -> list[ArrayLike]:
         if not self.highlightings:
             logging.warning("Corpus has no highlightings")
-            return np.array([])
+            return []
 
         if not self.has_embeddings():
             # batch-compute embeddings for all passages in corpus.
@@ -216,9 +216,17 @@ class Corpus:
             highlightings = passage.highlightings
             assert highlightings, "No highlightings in passage"
 
-            passage_labels: list[int] = [labels.pop() for _ in highlightings]
+            passage_labels: list[int] = []
+            unique_labels: list[int] = []
+
+            for _ in highlightings:
+                label = labels.pop(0)
+                passage_labels.append(label)
+                if label not in unique_labels:
+                    unique_labels.append(label)
+
             for label, passage in zip(
-                passage_labels, passage.split_highlightings(passage_labels)
+                unique_labels, passage.split_highlightings(passage_labels), strict=True
             ):
                 clusters[label].append(passage)
 
@@ -229,20 +237,14 @@ class Corpus:
 
     def hover_datas(self, metadata_keys=None) -> list[dict[str, Any]]:
         return [
-            highlighting.hover_data(metadata_keys=metadata_keys)
-            | {"label": self._label}
-            for highlighting in self.highlightings
+            hover_data | {"label": self._label}
+            for passage in self.passages
+            for hover_data in passage.hover_datas(metadata_keys=metadata_keys)
         ]
 
     def interactive_plot(self, **kwargs):
-        hover_data = pd.DataFrame(self.hover_datas())
-
-        labels = kwargs.get("labels", self._labels())
-        if labels is not None:
-            labels = np.array(labels)
-
         return umap.plot.interactive(
-            self.umap, labels=labels, hover_data=hover_data, **kwargs
+            self.umap, hover_data=pd.DataFrame(self.hover_datas()), **kwargs
         )
 
     @property

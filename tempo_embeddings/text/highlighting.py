@@ -1,8 +1,13 @@
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 from typing import Any
 from typing import Iterable
 from typing import Optional
 from numpy.typing import ArrayLike
+
+
+if TYPE_CHECKING:
+    from .passage import Passage
 
 
 @dataclass
@@ -14,7 +19,7 @@ class Highlighting:
 
     def text(
         self,
-        passage,
+        passage: "Passage",
         metadata_fields: Iterable[str] = None,
         *,
         max_context_length: int = 200,

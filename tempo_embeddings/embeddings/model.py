@@ -59,8 +59,6 @@ class TransformerModelWrapper(abc.ABC):
 
         self.tokenize(corpus)
 
-        corpus.embeddings_model_name = self.name
-
     def tokenize_passage(self, passage: "Passage") -> None:
         passage.tokenization = self._tokenize([passage.text])[0]
 

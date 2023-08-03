@@ -67,7 +67,7 @@ class Passage:
 
     def highlighted_texts(self, metadata_fields: list[str]) -> list[str]:
         return [
-            highlighting.text(metadata_fields, self)
+            highlighting.text(self, metadata_fields)
             for highlighting in self._highlightings
         ]
 
@@ -75,7 +75,7 @@ class Passage:
         self, metadata_keys: Optional[list[str]] = None
     ) -> list[dict[str, Any]]:
         return [
-            highlighting.hover_data(self, metadata_keys)
+            highlighting.hover_data(self, metadata_keys=metadata_keys)
             for highlighting in self._highlightings
         ]
 
@@ -201,7 +201,7 @@ class Passage:
                 start, end = self.find(token)
 
                 while start >= 0:
-                    highlightings.append(Highlighting(start, end, self))
+                    highlightings.append(Highlighting(start, end))
                     start, end = self.find(token, end + 1)
             else:
                 # Search for full tokens
@@ -210,7 +210,7 @@ class Passage:
                         start, end = self.tokenization.word_to_chars(word_index)
                         word = self._text[start:end]
                         if word.casefold() == token.casefold():
-                            highlightings.append(Highlighting(start, end, self))
+                            highlightings.append(Highlighting(start, end))
 
         self.highlightings += highlightings
         return len(highlightings) > 0
