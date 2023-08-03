@@ -118,7 +118,7 @@ class Corpus:
 
     def compute_embeddings(self):
         if self._model is None:
-            raise ValueError("Corpus does not have a model.")
+            logging.warning("Corpus does not have a model.")
         self._model.compute_embeddings(self)
 
     def _token_embeddings(self) -> list[ArrayLike]:

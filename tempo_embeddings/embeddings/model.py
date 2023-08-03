@@ -41,14 +41,14 @@ class TransformerModelWrapper(abc.ABC):
         passage.embeddings = embeddings[0][0]
 
     @torch.no_grad()
-    def compute_embeddings(self, corpus: "Corpus", overwrite: bool = False):
+    def compute_embeddings(self, corpus: "Corpus"):
         """Adds the embeddings for all passages in the given corpus."""
 
-        if corpus.has_embeddings() and not overwrite:
-            raise ValueError("Corpus already has embeddings")
+        if corpus.has_embeddings(validate=False):
+            logging.warning("Corpus already has embeddings")
 
         if not corpus.highlightings:
-            logging.warning("Corpus does not have any token infos")
+            logging.warning("Corpus does not have any highlighted tokens.")
 
         # TODO: implement for other hidden layers but last one
 
