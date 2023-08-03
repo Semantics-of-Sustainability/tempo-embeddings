@@ -66,12 +66,16 @@ class Passage:
 
     def highlighted_texts(self, metadata_fields: list[str]) -> list[str]:
         return [
-            highlighting.text(self, metadata_fields)
-            for highlighting in self._highlightings
+            highlighting.text(metadata_fields) for highlighting in self._highlightings
         ]
 
-    def hover_datas(self) -> list[dict[str, Any]]:
-        return [highlighting.hover_data(self) for highlighting in self._highlightings]
+    def hover_datas(
+        self, metadata_keys: Optional[list[str]] = None
+    ) -> list[dict[str, Any]]:
+        return [
+            highlighting.hover_data(metadata_keys)
+            for highlighting in self._highlightings
+        ]
 
     def token_embeddings(self) -> Iterable[ArrayLike]:
         for highlighting in self.highlightings:
