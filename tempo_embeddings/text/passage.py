@@ -1,4 +1,5 @@
 import logging
+from collections import Counter
 from collections import defaultdict
 from typing import Any
 from typing import Iterable
@@ -139,6 +140,19 @@ class Passage:
         ), "Token spans multiple words"
 
         return self.tokenization.word_to_chars(word_index)
+
+    def term_frequencies(self, use_tokenizer: bool = True) -> Counter[str]:
+        """Returns the term frequencies of the passage.
+
+        Args:
+            use_tokenizer: If True, uses the tokenizer to split the passage into words.
+                Otherwise, splits the passage by whitespace.
+
+        Returns:
+            A Counter mapping words to their term frequencies.
+        """
+
+        return Counter(self.words(use_tokenizer=use_tokenizer))
 
     def words(self, use_tokenizer: bool = True) -> Iterable[str]:
         """Returns the words in the passage.

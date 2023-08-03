@@ -245,7 +245,9 @@ class Corpus:
     def document_frequencies(self, **kwargs) -> Counter[str]:
         """Returns the document frequency of each word in the corpus."""
         return Counter(
-            word for passage in self.passages for word in set(passage.words(**kwargs))
+            word
+            for passage in self.passages
+            for word in passage.term_frequencies(**kwargs).keys()
         )
 
     def interactive_plot(self, **kwargs):
