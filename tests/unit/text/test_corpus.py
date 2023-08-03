@@ -1,3 +1,4 @@
+from collections import Counter
 from contextlib import nullcontext as does_not_raise
 import pytest
 from tempo_embeddings.text.corpus import Corpus
@@ -177,6 +178,21 @@ class TestCorpus:
     ):
         with expected_exception:
             assert list(corpus.get_highlighting_metadatas(key)) == expected
+
+    @pytest.mark.parametrize(
+        "corpus,expected",
+        [
+            (Corpus(), Counter()),
+            (Corpus([Passage("test text")]), Counter({"test": 1, "text": 1})),
+            (
+                Corpus([Passage("test text"), Passage("test token")]),
+                Counter({"test": 2, "text": 1, "token": 1}),
+            ),
+            (Corpus([Passage("test test test")]), Counter({"test": 1})),
+        ],
+    )
+    def test_document_frequencyies(self, corpus, expected):
+        assert corpus.document_frequencies(use_tokenizer=False) == expected
 
     def test_load_save(self, tmp_path):
         filepath = tmp_path / "corpus"
