@@ -8,6 +8,7 @@ import threading
 from functools import partial
 from http.server import SimpleHTTPRequestHandler
 from typing import Optional
+import numpy as np
 import wizmap
 from ..text.corpus import Corpus
 from .visualizer import Visualizer
@@ -71,7 +72,7 @@ class WizmapVisualizer(Visualizer):
     def _write_data(self):
         """Write Wizmap visualizations to a file."""
 
-        embeddings = self._corpus.umap_embeddings()
+        embeddings = np.array(self._corpus.umap_embeddings())
         xs = embeddings[:, 0].astype(float).tolist()
         ys = embeddings[:, 1].astype(float).tolist()
 

@@ -1,4 +1,5 @@
 import logging
+from collections import defaultdict
 from typing import Any
 from typing import Iterable
 from typing import Optional
@@ -213,20 +214,56 @@ class Passage:
         self.highlightings += highlightings
         return len(highlightings) > 0
 
-    def with_highlightings(self, *spans: tuple[int, int]) -> "Passage":
-        self.highlightings.extend(
-            [Highlighting(start, end, self) for start, end in spans]
-        )
+    def with_highlighting(self, *args) -> "Passage":
+        """Add highlightings to the passage.
+
+        Args:
+            *args: A list of start and end indices for the highlightings.
+            Must be an even number of arguments.
+
+        Returns:
+            The passage with the added highlightings.
+        """
+        if len(args) % 2 != 0:
+            raise ValueError("with_highlighting() takes an even number of arguments.")
+
+        for start, end in zip(args[0::2], args[1::2]):
+            self.highlightings.append(Highlighting(start, end, self))
         return self
 
-    def split_per_highlighting(self) -> Iterable["Passage"]:
-        """Split the passage into multiple passages, one for each highlighting."""
-        if len(self.highlightings) < 2:
+    def split_highlightings(self, labels: list[Any]) -> Iterable["Passage"]:
+        """Split the passage into multiple passages based on labels per highlighting.
+
+        This is used for splitting a passage into multiple passages for clustering.
+
+        Args:
+            labels: A list of labels for each highlighting.
+
+        Returns:
+            One Passage per label, containing all highlightings for that label.
+        """
+        if not len(labels) == len(self.highlightings):
+            raise ValueError(
+                f"Number of labels ({len(labels)} "
+                f"does not match number of highlightings ({len(self.highlightings)})."
+            )
+
+        if len(self.highlightings) < 2 or len(set(labels)) < 2:
+            # no highlightings or all have the same label
             yield self
         else:
-            for highlighting in self.highlightings:
-                yield Passage(self.text, self.metadata, self.model).with_highlightings(
-                    (highlighting.start, highlighting.end)
+            labeled_highlightings = defaultdict(list)
+            for label, highlighting in zip(labels, self.highlightings):
+                labeled_highlightings[label].append(highlighting)
+
+            for label, highlightings in labeled_highlightings.items():
+                spans = []
+                for highlighting in highlightings:
+                    spans.append(highlighting.start)
+                    spans.append(highlighting.end)
+
+                yield Passage(self.text, self.metadata, self.model).with_highlighting(
+                    *spans
                 )
 
     @classmethod

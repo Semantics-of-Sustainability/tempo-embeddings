@@ -1,5 +1,5 @@
+from contextlib import nullcontext as does_not_raise
 import pytest
-from tempo_embeddings.text.highlighting import Highlighting
 from tempo_embeddings.text.passage import Passage
 
 
@@ -18,29 +18,28 @@ class TestPassage:
         assert Passage(text, metadata) == expected
 
     @pytest.mark.parametrize(
-        "passage, token, expected",
+        "passage, token, expected_passage, expected_result",
         [
-            (Passage(""), "test", []),
-            (Passage("test"), "test", [Highlighting(0, 4, Passage("test"))]),
-            (Passage("no match"), "test", []),
+            (Passage(""), "test", Passage(""), False),
+            (Passage("test"), "test", Passage("test").with_highlighting(0, 4), True),
+            (Passage("no match"), "test", Passage("no match"), False),
             (
                 Passage("one test match"),
                 "test",
-                [Highlighting(4, 8, Passage("one test match"))],
+                Passage("one test match").with_highlighting(4, 8),
+                True,
             ),
             (
                 Passage("one test another test match"),
                 "test",
-                [
-                    Highlighting(4, 8, Passage("one test another test match")),
-                    Highlighting(17, 21, Passage("one test another test match")),
-                ],
+                Passage("one test another test match").with_highlighting(4, 8, 17, 21),
+                True,
             ),
         ],
     )
-    def test_add_highlightings(self, passage, token, expected):
-        passage.add_highlightings(token)
-        assert passage.highlightings == expected
+    def test_add_highlightings(self, passage, token, expected_passage, expected_result):
+        assert passage.add_highlightings(token) == expected_result
+        assert passage == expected_passage
 
     @pytest.mark.parametrize(
         "text,window_size,window_overlap,expected",
@@ -60,6 +59,37 @@ class TestPassage:
             )
             == expected
         )
+
+    @pytest.mark.parametrize(
+        "passage,labels,expected,exception_context",
+        [
+            (Passage("test text"), [], [Passage("test text")], does_not_raise()),
+            (
+                Passage("test text"),
+                [1],
+                [Passage("test text")],
+                pytest.raises(ValueError),
+            ),
+            (
+                Passage("test text").with_highlighting(0, 4),
+                [1],
+                [Passage("test text").with_highlighting(0, 4)],
+                does_not_raise(),
+            ),
+            (
+                Passage("test text").with_highlighting(0, 4).with_highlighting(6, 10),
+                [1, 2],
+                [
+                    Passage("test text").with_highlighting(0, 4),
+                    Passage("test text").with_highlighting(6, 10),
+                ],
+                does_not_raise(),
+            ),
+        ],
+    )
+    def test_split_highlightings(self, passage, labels, expected, exception_context):
+        with exception_context:
+            assert list(passage.split_highlightings(labels)) == expected
 
     @pytest.mark.parametrize(
         "passage,key,strict,expected,expected_exception",

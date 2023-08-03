@@ -60,10 +60,6 @@ class Corpus:
     def passages(self) -> list[Passage]:
         return self._passages
 
-    def split_passages(self) -> list[Passage]:
-        for passage in self.passages:
-            yield from passage.split_per_highlighting()
-
     def texts(self):
         return [passage.text for passage in self._passages]
 
@@ -210,12 +206,21 @@ class Corpus:
 
     def clusters(self, **kwargs) -> Iterable["Corpus"]:
         """Clusters the corpus using HDBSCAN and returns a list of subcorpora."""
-        labels = HDBSCAN(**kwargs).fit_predict(self.umap_embeddings())
+        labels: list[int] = (
+            HDBSCAN(**kwargs).fit_predict(self.umap_embeddings()).astype(int).tolist()
+        )
 
         clusters: dict[int, list[Passage]] = defaultdict(list)
 
-        for label, passage in zip(labels, self.split_passages(), strict=True):
-            clusters[label].append(passage)
+        for passage in self.passages:
+            highlightings = passage.highlightings
+            assert highlightings, "No highlightings in passage"
+
+            passage_labels: list[int] = [labels.pop() for _ in highlightings]
+            for label, passage in zip(
+                passage_labels, passage.split_highlightings(passage_labels)
+            ):
+                clusters[label].append(passage)
 
         return [
             Corpus(passages=passages, model=self._model, umap=self._umap, label=label)
@@ -243,20 +248,33 @@ class Corpus:
     @property
     def umap(self):
         if self._umap is None:
-            umap = UMAP(metric="cosine")
-            # TODO: this becomes invalid when highlightings are changes
-            logging.info("Computing UMAP...")
-            embeddings = umap.fit_transform(np.array(self._token_embeddings()))
-
-            for embedding, highlighting in zip(embeddings, self.highlightings):
-                highlighting.umap_embedding = embedding
-            self._umap = umap
+            self._compute_umap()
         return self._umap
 
-    def umap_embeddings(self) -> ArrayLike:
-        return np.array(
-            [highlighting.umap_embedding for highlighting in self.highlightings]
-        )
+    def _compute_umap(self) -> list[ArrayLike]:
+        assert self._umap is None, "UMAP has already been computed."
+
+        logging.info("Computing UMAP...")
+        umap = UMAP(metric="cosine")
+        embeddings = umap.fit_transform(np.array(self._token_embeddings()))
+
+        # TODO: this becomes invalid when highlightings are changes
+        for embedding, highlighting in zip(embeddings, self.highlightings):
+            highlighting.umap_embedding = embedding
+
+        self._umap = umap
+        return embeddings
+
+    def umap_embeddings(self) -> list[ArrayLike]:
+        embeddings = [
+            highlighting.umap_embedding for highlighting in self.highlightings
+        ]
+        if any(embedding is None for embedding in embeddings):
+            logging.warning("UMAP embeddings have not been computed.")
+            embeddings = self._compute_umap()
+
+        assert len(embeddings) == len(self.highlightings)
+        return embeddings
 
     def highlighted_texts(self, metadata_fields: Iterable[str] = None) -> list[str]:
         """Returns an iterable over all highlightings."""
