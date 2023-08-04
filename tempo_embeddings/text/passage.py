@@ -5,6 +5,7 @@ from typing import Any
 from typing import Iterable
 from typing import Optional
 from numpy.typing import ArrayLike
+from scipy.spatial.distance import cosine
 from tokenizers import Encoding
 from ..embeddings.model import TransformerModelWrapper
 from .highlighting import Highlighting
@@ -141,6 +142,14 @@ class Passage:
 
         return self.tokenization.word_to_chars(word_index)
 
+    def umap_distances(self, umap: ArrayLike) -> list[float]:
+        """Returns the distance of the passage to the given UMAP."""
+
+        return [
+            cosine(umap, highlighting.umap_embedding)
+            for highlighting in self.highlightings
+        ]
+
     def term_frequencies(self, use_tokenizer: bool = True) -> Counter[str]:
         """Returns the term frequencies of the passage.
 
@@ -256,6 +265,12 @@ class Passage:
 
             for highlightings in labeled_highlightings.values():
                 yield Passage(self.text, self.metadata, self.model, highlightings)
+
+    def closest_umap_distance(self, array: ArrayLike) -> float:
+        return min(
+            cosine(array, highlighting.umap_embedding)
+            for highlighting in self.highlightings
+        )
 
     @classmethod
     def from_text(

@@ -211,23 +211,35 @@ class Corpus:
     def topic_words(self, vectorizer: TfidfVectorizer, n: int = 5) -> list[str]:
         """The most important words in the corpus according to a vectorizer."""
         tf_idfs: csr_matrix = self.tf_idf(vectorizer)
-        term_tf_idfs = tf_idfs.toarray().sum(axis=0)
+        assert tf_idfs.shape[0] == len(self.highlightings)
 
         ### Weigh in vector distances
-        # distances: list[float] = self.highlighting_umap_distances()
-        # assert len(distances) == tf_idfs.shape[0]
-        # assert len(vectorizer.get_feature_names_out()) == tf_idfs.shape[1]
-        # weighted_tf_idfs = tf_idfs.toarray() * np.array(distances)[:, np.newaxis]
-        # total_weighted_tf_idfs = weighted_tf_idfs.sum(axis=0)
-        # top_indices = np.argpartition(-total_weighted_tf_idfs, n)
+        centroid = self.umap_mean()
+        distances: ArrayLike = np.array(
+            [
+                distance
+                for passage in self.passages
+                for distance in passage.umap_distances(centroid)
+            ]
+        )
+        assert len(distances) == tf_idfs.shape[0]
+        assert len(vectorizer.get_feature_names_out()) == tf_idfs.shape[1]
 
-        top_indices = np.argpartition(-term_tf_idfs, n)
+        weighted_tf_idfs = np.average(tf_idfs.toarray(), weights=distances, axis=0)
+        assert weighted_tf_idfs.shape[0] == len(vectorizer.get_feature_names_out())
+
+        # pylint: disable=invalid-unary-operand-type
+        top_indices = np.argpartition(-weighted_tf_idfs, n)
 
         return [vectorizer.get_feature_names_out()[i] for i in top_indices[:n]]
 
     def mean(self) -> ArrayLike:
         """The mean for all passage embeddings."""
         return np.array(self._token_embeddings()).mean(axis=0)
+
+    def umap_mean(self) -> ArrayLike:
+        """The mean for all passage embeddings."""
+        return np.array(self.umap_embeddings()).mean(axis=0)
 
     def cosine(self, other: "Corpus") -> float:
         """The cosine distance between the mean of this corpus and another."""
@@ -251,7 +263,7 @@ class Corpus:
             for _ in highlightings:
                 label = labels.pop(0)
                 if label == -1:
-                    label = "outlie"
+                    label = "outliers"
                 passage_labels.append(label)
                 if label not in unique_labels:
                     unique_labels.append(label)
