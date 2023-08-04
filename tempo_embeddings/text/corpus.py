@@ -28,7 +28,6 @@ class Corpus:
     def __init__(
         self,
         passages: list[Passage] = None,
-        # TODO: make model mandatory?
         model: Optional[TransformerModelWrapper] = None,
         umap: Optional[UMAP] = None,
         label: Optional[Any] = None,
@@ -208,6 +207,27 @@ class Corpus:
             )
         ).most_common(n)
 
+    def nearest_neighbours(self, n: int = 5) -> Iterable[Passage]:
+        centroid = self.umap_mean()
+
+        cosines: ArrayLike = np.array(
+            [
+                distance
+                for passage in self.passages
+                for distance in passage.umap_cosines(centroid)
+            ]
+        )
+        if n > len(cosines):
+            logging.warning(
+                "n (%d) is greater than the number of passages (%d).", n, len(cosines)
+            )
+            n = len(cosines)
+
+        nearest_highlighting_indices: ArrayLike = np.argpartition(cosines, n)
+        for i, passage in enumerate(self.passages_expanded()):
+            if i in nearest_highlighting_indices[:n]:
+                yield passage
+
     def topic_words(self, vectorizer: TfidfVectorizer, n: int = 5) -> list[str]:
         """The most important words in the corpus according to a vectorizer."""
         tf_idfs: csr_matrix = self.tf_idf(vectorizer)
@@ -215,17 +235,19 @@ class Corpus:
 
         ### Weigh in vector distances
         centroid = self.umap_mean()
-        distances: ArrayLike = np.array(
+        cosine_distances: ArrayLike = np.array(
             [
-                distance
+                1 - cosine
                 for passage in self.passages
-                for distance in passage.umap_distances(centroid)
+                for cosine in passage.umap_cosines(centroid)
             ]
         )
-        assert len(distances) == tf_idfs.shape[0]
+        assert len(cosine_distances) == tf_idfs.shape[0]
         assert len(vectorizer.get_feature_names_out()) == tf_idfs.shape[1]
 
-        weighted_tf_idfs = np.average(tf_idfs.toarray(), weights=distances, axis=0)
+        weighted_tf_idfs = np.average(
+            tf_idfs.toarray(), weights=cosine_distances, axis=0
+        )
         assert weighted_tf_idfs.shape[0] == len(vectorizer.get_feature_names_out())
 
         # pylint: disable=invalid-unary-operand-type
@@ -385,9 +407,19 @@ class Corpus:
         f: TextIO,
         metadata: dict = None,
         model: Optional[TransformerModelWrapper] = None,
+        window_size: Optional[int] = None,
     ):
         """Read input data from an open file handler, one sequence per line."""
-        return Corpus([Passage(line, metadata, model) for line in f], model=model)
+        return Corpus(
+            passages=[
+                passage
+                for line in f
+                for passage in Passage.from_text(
+                    line, model, metadata=metadata, window_size=window_size
+                )
+            ],
+            model=model,
+        )
 
     @classmethod
     def from_lines_file(

@@ -142,7 +142,7 @@ class Passage:
 
         return self.tokenization.word_to_chars(word_index)
 
-    def umap_distances(self, umap: ArrayLike) -> list[float]:
+    def umap_cosines(self, umap: ArrayLike) -> list[float]:
         """Returns the distance of the passage to the given UMAP."""
 
         return [
@@ -197,7 +197,7 @@ class Passage:
         return self._text == other._text and self._metadata == other._metadata
 
     def __repr__(self) -> str:
-        return f"Passage({self._text!r}, {self._metadata!r})"
+        return f"Passage({self._text!r}, {self._metadata!r}, {self._highlightings!r})"
 
     def find(
         self, token: str, start: Optional[int] = None, end: Optional[int] = None
@@ -285,10 +285,11 @@ class Passage:
         """Create a Passage from a text string."""
 
         # TODO validate parameters
+        # TODO: use window_size on tokens instead of characters
 
         if window_size is None:
             # Single "window" of the entire text
-            yield cls(text, metadata)
+            yield cls(text, metadata, model)
         else:
             if window_overlap is None:
                 window_overlap = int(window_size / 10)

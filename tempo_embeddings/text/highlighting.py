@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from dataclasses import field
 from typing import TYPE_CHECKING
 from typing import Any
 from typing import Iterable
@@ -14,7 +15,7 @@ if TYPE_CHECKING:
 class Highlighting:
     start: int
     end: int
-    token_embedding: Optional[ArrayLike] = None
+    token_embedding: Optional[ArrayLike] = field(default=None, repr=False)
     umap_embedding: tuple[float, float] = None
 
     def text(
