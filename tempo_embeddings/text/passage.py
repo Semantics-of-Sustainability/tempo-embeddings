@@ -286,6 +286,13 @@ class Passage:
             for highlighting in self.highlightings
         )
 
+    def split(self) -> Iterable["Passage"]:
+        if len(self.highlightings) < 2:
+            yield self
+        else:
+            for highlighting in self.highlightings:
+                yield Passage(self.text, self.metadata, self.model, [highlighting])
+
     @classmethod
     def from_text(
         cls,

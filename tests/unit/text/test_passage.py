@@ -103,6 +103,29 @@ class TestPassage:
             assert list(passage.split_highlightings(labels)) == expected
 
     @pytest.mark.parametrize(
+        ["passage", "expected"],
+        [
+            (Passage("test"), [Passage("test")]),
+            (Passage("test"), [Passage("test")]),
+            (
+                Passage("test", highlightings=[Highlighting(0, 4)]),
+                [Passage("test", highlightings=[Highlighting(0, 4)])],
+            ),
+            (
+                Passage(
+                    "test text", highlightings=[Highlighting(0, 4), Highlighting(5, 9)]
+                ),
+                [
+                    Passage("test text", highlightings=[Highlighting(0, 4)]),
+                    Passage("test text", highlightings=[Highlighting(5, 9)]),
+                ],
+            ),
+        ],
+    )
+    def test_split(self, passage, expected):
+        assert list(passage.split()) == expected
+
+    @pytest.mark.parametrize(
         "passage,key,strict,expected,expected_exception",
         [
             (Passage("test text", metadata={}), "test key", False, None, None),
