@@ -6,6 +6,7 @@ from typing import Iterable
 from typing import Optional
 from numpy.typing import ArrayLike
 from scipy.spatial.distance import cosine
+from scipy.spatial.distance import euclidean
 from tokenizers import Encoding
 from ..embeddings.model import TransformerModelWrapper
 from .highlighting import Highlighting
@@ -141,6 +142,19 @@ class Passage:
         ), "Token spans multiple words"
 
         return self.tokenization.word_to_chars(word_index)
+
+    def distances(self, vector: ArrayLike) -> list[float]:
+        """Returns the distance for each UMAP embedding (highlighting) to a vector.
+
+        Args:
+            vector: The vector to compute the distance to.
+        Returns:
+            A list of floats, one for each highlighting in this passage.
+        """
+        return [
+            euclidean(highlighting.umap_embedding, vector)
+            for highlighting in self.highlightings
+        ]
 
     def umap_cosines(self, umap: ArrayLike) -> list[float]:
         """Returns the distance of the passage to the given UMAP."""

@@ -210,20 +210,20 @@ class Corpus:
     def nearest_neighbours(self, n: int = 5) -> Iterable[Passage]:
         centroid = self.umap_mean()
 
-        cosines: ArrayLike = np.array(
+        distances: ArrayLike = np.array(
             [
                 distance
                 for passage in self.passages
-                for distance in passage.umap_cosines(centroid)
+                for distance in passage.distances(centroid)
             ]
         )
-        if n > len(cosines):
+        if n > len(distances) - 1:
             logging.warning(
-                "n (%d) is greater than the number of passages (%d).", n, len(cosines)
+                "n (%d) is greater than the number of passages (%d).", n, len(distances)
             )
-            n = len(cosines)
+            n = len(distances) - 1
 
-        nearest_highlighting_indices: ArrayLike = np.argpartition(cosines, n)
+        nearest_highlighting_indices: ArrayLike = np.argpartition(-distances, n)
         for i, passage in enumerate(self.passages_expanded()):
             if i in nearest_highlighting_indices[:n]:
                 yield passage
@@ -231,23 +231,25 @@ class Corpus:
     def topic_words(self, vectorizer: TfidfVectorizer, n: int = 5) -> list[str]:
         """The most important words in the corpus according to a vectorizer."""
         tf_idfs: csr_matrix = self.tf_idf(vectorizer)
-        assert tf_idfs.shape[0] == len(self.highlightings)
+        assert tf_idfs.shape == (
+            len(self.highlightings),
+            len(vectorizer.get_feature_names_out()),
+        ), f"tf_idfs shape ({tf_idfs.shape}) does not match expected shape."
 
         ### Weigh in vector distances
         centroid = self.umap_mean()
-        cosine_distances: ArrayLike = np.array(
+        distances: ArrayLike = np.array(
             [
-                1 - cosine
+                distance
                 for passage in self.passages
-                for cosine in passage.umap_cosines(centroid)
+                for distance in passage.distances(centroid)
             ]
         )
-        assert len(cosine_distances) == tf_idfs.shape[0]
-        assert len(vectorizer.get_feature_names_out()) == tf_idfs.shape[1]
+        assert (
+            distances.shape[0] == tf_idfs.shape[0]
+        ), f"distances shape ({distances.shape}) does not match expected shape."
 
-        weighted_tf_idfs = np.average(
-            tf_idfs.toarray(), weights=cosine_distances, axis=0
-        )
+        weighted_tf_idfs = np.average(tf_idfs.toarray(), weights=distances, axis=0)
         assert weighted_tf_idfs.shape[0] == len(vectorizer.get_feature_names_out())
 
         # pylint: disable=invalid-unary-operand-type
