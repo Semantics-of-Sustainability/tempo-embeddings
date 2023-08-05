@@ -207,7 +207,7 @@ class Corpus:
             )
         ).most_common(n)
 
-    def nearest_neighbours(self, n: int = 5) -> Iterable[Passage]:
+    def nearest_neighbours(self, n: int = 5) -> Iterable[tuple[Passage, float]]:
         centroid = self.umap_mean()
 
         distances: ArrayLike = np.array(
@@ -223,10 +223,10 @@ class Corpus:
             )
             n = len(distances) - 1
 
-        nearest_highlighting_indices: ArrayLike = np.argpartition(-distances, n)
+        nearest_highlighting_indices: ArrayLike = np.argpartition(distances, n)
         for i, passage in enumerate(self.passages_expanded()):
             if i in nearest_highlighting_indices[:n]:
-                yield passage
+                yield passage, distances[i]
 
     def topic_words(self, vectorizer: TfidfVectorizer, n: int = 5) -> list[str]:
         """The most important words in the corpus according to a vectorizer."""
@@ -238,18 +238,18 @@ class Corpus:
 
         ### Weigh in vector distances
         centroid = self.umap_mean()
-        distances: ArrayLike = np.array(
+        weights: ArrayLike = np.array(
             [
-                distance
+                1 - distance
                 for passage in self.passages
                 for distance in passage.distances(centroid)
             ]
         )
         assert (
-            distances.shape[0] == tf_idfs.shape[0]
-        ), f"distances shape ({distances.shape}) does not match expected shape."
+            weights.shape[0] == tf_idfs.shape[0]
+        ), f"distances shape ({weights.shape}) does not match expected shape."
 
-        weighted_tf_idfs = np.average(tf_idfs.toarray(), weights=distances, axis=0)
+        weighted_tf_idfs = np.average(tf_idfs.toarray(), weights=weights, axis=0)
         assert weighted_tf_idfs.shape[0] == len(vectorizer.get_feature_names_out())
 
         # pylint: disable=invalid-unary-operand-type
