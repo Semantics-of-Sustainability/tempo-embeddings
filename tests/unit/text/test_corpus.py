@@ -1,4 +1,3 @@
-from collections import Counter
 from contextlib import nullcontext as does_not_raise
 import pytest
 from tempo_embeddings.text.corpus import Corpus
@@ -30,7 +29,7 @@ class TestCorpus:
                 Corpus([Passage("test line")]),
                 "test",
                 {},
-                Corpus([Passage("test line", highlightings=[Highlighting(0, 4)])]),
+                Corpus([Passage("test line", highlighting=Highlighting(0, 4))]),
             ),
             (
                 Corpus(
@@ -38,7 +37,7 @@ class TestCorpus:
                 ),
                 "line1",
                 {},
-                Corpus([Passage("test line1", highlightings=[Highlighting(5, 10)])]),
+                Corpus([Passage("test line1", highlighting=Highlighting(5, 10))]),
             ),
             (
                 Corpus(
@@ -54,7 +53,7 @@ class TestCorpus:
                         Passage(
                             "test line1",
                             {"test": "value1"},
-                            highlightings=[Highlighting(0, 4)],
+                            highlighting=Highlighting(0, 4),
                         )
                     ]
                 ),
@@ -73,7 +72,7 @@ class TestCorpus:
                         Passage(
                             "test line1",
                             {"key1": "value1", "key2": "value2"},
-                            highlightings=[Highlighting(0, 4)],
+                            highlighting=Highlighting(0, 4),
                         )
                     ],
                 ),
@@ -92,31 +91,27 @@ class TestCorpus:
         ],
     )
     def test_subcorpus(self, corpus, token, metadata, expected):
-        assert corpus.subcorpus(token, **metadata) == expected
+        # TODO: test with exact_match=True
+        assert corpus.subcorpus(token, exact_match=False, **metadata) == expected
 
     @pytest.mark.parametrize(
-        "corpus,key,expected,expected_exception",
+        "corpus,key,expected",
         [
-            (Corpus(), "test key", [], does_not_raise()),
-            (
-                Corpus(passages=[Passage("text", metadata={"key": 1})]),
-                "key",
-                [],
-                does_not_raise(),
-            ),
+            (Corpus(), "test key", []),
+            (Corpus(passages=[Passage("text", metadata={"key": 1})]), "key", [1]),
+            # FIXME: redundant test cases since passages are not filtered by highlighting
             (
                 Corpus(
                     [
                         Passage(
                             "text",
                             metadata={"key": 1, "other": 3},
-                            highlightings=[Highlighting(0, 4)],
+                            highlighting=Highlighting(0, 4),
                         )
                     ],
                 ),
                 "key",
                 [1],
-                does_not_raise(),
             ),
             (
                 Corpus(
@@ -124,18 +119,17 @@ class TestCorpus:
                         Passage(
                             "text 1",
                             metadata={"key": 1, "other": 3},
-                            highlightings=[Highlighting(0, 4)],
+                            highlighting=Highlighting(0, 4),
                         ),
                         Passage(
                             "text 2",
                             metadata={"key": 2, "other": 2},
-                            highlightings=[Highlighting(5, 6)],
+                            highlighting=Highlighting(5, 6),
                         ),
                     ],
                 ),
                 "key",
                 [1, 2],
-                does_not_raise(),
             ),
             (
                 Corpus(
@@ -143,18 +137,17 @@ class TestCorpus:
                         Passage(
                             "text 1",
                             metadata={"key": 1, "other": 3},
-                            highlightings=[Highlighting(0, 4)],
+                            highlighting=Highlighting(0, 4),
                         ),
                         Passage(
                             "text 2",
                             metadata={"other": 2},
-                            highlightings=[Highlighting(5, 6)],
+                            highlighting=Highlighting(5, 6),
                         ),
                     ],
                 ),
                 "key",
-                [1],
-                pytest.raises(KeyError),
+                [1, None],
             ),
             (
                 Corpus(
@@ -162,37 +155,18 @@ class TestCorpus:
                         Passage(
                             "text 1",
                             metadata={"key": 1, "other": 3},
-                            highlightings=[Highlighting(0, 4)],
+                            highlighting=Highlighting(0, 4),
                         ),
                         Passage("text 2", metadata={"key": 2, "other": 2}),
                     ],
                 ),
                 "key",
-                [1],
-                does_not_raise(),
+                [1, 2],
             ),
         ],
     )
-    def test_get_token_metadatas(
-        self, corpus: Corpus, key, expected, expected_exception
-    ):
-        with expected_exception:
-            assert list(corpus.get_highlighting_metadatas(key)) == expected
-
-    @pytest.mark.parametrize(
-        "corpus,expected",
-        [
-            (Corpus(), Counter()),
-            (Corpus([Passage("test text")]), Counter({"test": 1, "text": 1})),
-            (
-                Corpus([Passage("test text"), Passage("test token")]),
-                Counter({"test": 2, "text": 1, "token": 1}),
-            ),
-            (Corpus([Passage("test test test")]), Counter({"test": 1})),
-        ],
-    )
-    def test_document_frequencyies(self, corpus, expected):
-        assert corpus.document_frequencies(use_tokenizer=False) == expected
+    def test_get_token_metadatas(self, corpus: Corpus, key, expected):
+        assert list(corpus.get_metadatas(key)) == expected
 
     def test_load_save(self, tmp_path):
         filepath = tmp_path / "corpus"

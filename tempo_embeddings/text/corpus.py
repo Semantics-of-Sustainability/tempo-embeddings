@@ -1,7 +1,6 @@
 import csv
 import gzip
 import logging
-from collections import Counter
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -10,11 +9,8 @@ from typing import Optional
 from typing import TextIO
 import joblib
 import numpy as np
-import pandas as pd
-import umap.plot
 from numpy.typing import ArrayLike
 from scipy.sparse import csr_matrix
-from scipy.spatial.distance import cosine
 from sklearn.cluster import HDBSCAN
 from sklearn.feature_extraction.text import TfidfVectorizer
 from umap import UMAP
@@ -62,15 +58,6 @@ class Corpus:
     def passages(self) -> list[Passage]:
         return self._passages
 
-    def passages_expanded(self) -> list[Passage]:
-        """Returns a list of passages that corresponds to the contained highlightings.
-
-        If a Passage has n highlightings, it will be returned n times.
-        """
-        for passage in self.passages:
-            for _ in passage.highlightings:
-                yield passage
-
     def texts(self):
         return [passage.text for passage in self._passages]
 
@@ -78,7 +65,7 @@ class Corpus:
         return [passage for passage in self._passages if passage.tokenization is None]
 
     def passages_unembeddened(self) -> list[Passage]:
-        return [passage for passage in self._passages if passage.embeddings is None]
+        return [passage for passage in self._passages if passage.embedding is None]
 
     @property
     def embeddings_model(self) -> Optional[TransformerModelWrapper]:
@@ -90,11 +77,7 @@ class Corpus:
 
     @property
     def highlightings(self) -> list[Highlighting]:
-        return [
-            highlighting
-            for passage in self.passages
-            for highlighting in passage.highlightings
-        ]
+        return [passage.highlighting for passage in self.passages]
 
     def has_metadata(self, key: str, strict=False) -> bool:
         """Returns True if the corpus has a metadata key.
@@ -106,15 +89,10 @@ class Corpus:
         condition = all if strict else any
         return condition(passage.has_metadata(key) for passage in self.passages)
 
-    def get_highlighting_metadatas(self, key: str) -> Iterable[Any]:
-        """Returns an iterable over all metadata values for a key
-        for each highlighted token."""
+    def get_metadatas(self, key: str) -> list[Any]:
+        """Returns all metadata values for a key."""
 
-        return [
-            passage.get_metadata(key)
-            for passage in self.passages
-            for _ in passage.highlightings
-        ]
+        return [passage.metadata.get(key) for passage in self.passages]
 
     def set_metadatas(self, key, value):
         """Sets a metadata key to a value for all passages.
@@ -141,11 +119,7 @@ class Corpus:
             # batch-compute embeddings for all passages in corpus.
             self.compute_embeddings()
 
-        return [
-            embedding
-            for passage in self.passages
-            for embedding in passage.token_embeddings()
-        ]
+        return [passage.token_embedding for passage in self.passages]
 
     def has_embeddings(self, validate=False) -> bool:
         """Returns True embeddings have been computed for the corpus.
@@ -157,65 +131,40 @@ class Corpus:
             True if embeddings have been computed
         """
         func = all if validate else any
-        return func(passage.embeddings is not None for passage in self.passages)
+        return func(passage.embedding is not None for passage in self.passages)
 
     def has_tokenizations(self, validate: bool = False) -> bool:
         func = all if validate else any
         return func(passage.tokenization is not None for passage in self.passages)
 
-    def subcorpus(self, token: str, **metadata) -> "Corpus":
+    def subcorpus(self, token: str, exact_match: bool = True, **metadata) -> "Corpus":
         """Generate a new Corpus object with matching passages and highlightings.
 
         Args:
             token: The token to search for.
             metadata: Metadata fields to match against
         """
-
-        highlighted_passages = [
-            passage
-            for passage in self.passages
-            if all(
-                passage.metadata.get(key) == value for key, value in metadata.items()
+        passages = []
+        for passage in self.passages:
+            passages.extend(
+                [
+                    passage
+                    for passage in passage.highlight(token, exact_match=exact_match)
+                    if all(
+                        passage.metadata.get(key) == value
+                        for key, value in metadata.items()
+                    )
+                ]
             )
-            and passage.add_highlightings(token)
-        ]
 
         # Dropping unmatched passages
-        return Corpus(highlighted_passages, self._model, self._umap)
-
-    def frequent_words(
-        self,
-        stop_words: set[str] = None,
-        n: int = 10,
-        *,
-        use_tokenizer: bool = False,
-    ) -> list[tuple[str, int]]:
-        """The most common words in the context of a token in all passages."""
-
-        if stop_words is None:
-            stop_words = set()
-
-        if any(word.casefold() != word for word in stop_words):
-            raise ValueError("Stop words should be lowercase")
-
-        return Counter(
-            (
-                word
-                for passage in self._passages
-                for word in passage.words(use_tokenizer)
-                if word.casefold() not in stop_words
-            )
-        ).most_common(n)
+        return Corpus(passages, self._model, self._umap, label=token)
 
     def nearest_neighbours(self, n: int = 5) -> Iterable[tuple[Passage, float]]:
         centroid = self.umap_mean()
 
         distances: ArrayLike = np.array(
-            [
-                distance
-                for passage in self.passages
-                for distance in passage.distances(centroid)
-            ]
+            [passage.distance(centroid) for passage in self.passages]
         )
         if n > len(distances) - 1:
             logging.warning(
@@ -223,28 +172,32 @@ class Corpus:
             )
             n = len(distances) - 1
 
-        nearest_highlighting_indices: ArrayLike = np.argpartition(distances, n)
-        for i, passage in enumerate(self.passages_expanded()):
-            if i in nearest_highlighting_indices[:n]:
-                yield passage, distances[i]
+        nearest_highlighting_indices: ArrayLike = np.argpartition(-distances, n)
+        for i in nearest_highlighting_indices[:n]:
+            yield self.passages[i], distances[i]
 
     def topic_words(self, vectorizer: TfidfVectorizer, n: int = 5) -> list[str]:
         """The most important words in the corpus according to a vectorizer."""
         tf_idfs: csr_matrix = self.tf_idf(vectorizer)
+
+        assert all(
+            passage.highlighting for passage in self.passages
+        ), "Passages must have highlightings"
+
         assert tf_idfs.shape == (
-            len(self.highlightings),
+            len(self.passages),
             len(vectorizer.get_feature_names_out()),
         ), f"tf_idfs shape ({tf_idfs.shape}) does not match expected shape."
 
         ### Weigh in vector distances
         centroid = self.umap_mean()
-        weights: ArrayLike = np.array(
-            [
-                1 - distance
-                for passage in self.passages
-                for distance in passage.distances(centroid)
-            ]
+        distances: ArrayLike = np.array(
+            [passage.distance(centroid) for passage in self.passages]
         )
+        weights = np.ones(distances.shape[0]) - (distances / np.linalg.norm(distances))
+
+        assert weights.argmin() == distances.argmax()
+        assert weights.argmax() == distances.argmin()
         assert (
             weights.shape[0] == tf_idfs.shape[0]
         ), f"distances shape ({weights.shape}) does not match expected shape."
@@ -257,17 +210,9 @@ class Corpus:
 
         return [vectorizer.get_feature_names_out()[i] for i in top_indices[:n]]
 
-    def mean(self) -> ArrayLike:
-        """The mean for all passage embeddings."""
-        return np.array(self._token_embeddings()).mean(axis=0)
-
     def umap_mean(self) -> ArrayLike:
         """The mean for all passage embeddings."""
         return np.array(self.umap_embeddings()).mean(axis=0)
-
-    def cosine(self, other: "Corpus") -> float:
-        """The cosine distance between the mean of this corpus and another."""
-        return cosine(self.mean(), other.mean())
 
     def clusters(self, **kwargs) -> Iterable["Corpus"]:
         """Clusters the corpus using HDBSCAN and returns a list of subcorpora."""
@@ -277,25 +222,12 @@ class Corpus:
 
         clusters: dict[int, list[Passage]] = defaultdict(list)
 
-        for passage in self.passages:
-            highlightings = passage.highlightings
-            assert highlightings, "No highlightings in passage"
+        for label, passage in zip(labels, self.passages):
+            if label == -1:
+                label = "outliers"
 
-            passage_labels: list[int] = []
-            unique_labels: list[int] = []
-
-            for _ in highlightings:
-                label = labels.pop(0)
-                if label == -1:
-                    label = "outliers"
-                passage_labels.append(label)
-                if label not in unique_labels:
-                    unique_labels.append(label)
-
-            for label, passage in zip(
-                unique_labels, passage.split_highlightings(passage_labels), strict=True
-            ):
-                clusters[label].append(passage)
+            clusters[label].append(passage)
+            clusters[label].extend(passage.split_highlightings([label]))
 
         return [
             Corpus(passages=passages, model=self._model, umap=self._umap, label=label)
@@ -306,12 +238,11 @@ class Corpus:
         return [
             hover_data | {"label": self._label}
             for passage in self.passages
-            for hover_data in passage.hover_datas(metadata_keys=metadata_keys)
+            for hover_data in passage.hover_data(metadata_keys=metadata_keys)
         ]
 
     def tfidf_vectorizer(self, **kwargs) -> TfidfVectorizer:
         def tokenizer(passage: Passage) -> list[str]:
-            # TODO: add use_tokenizer parameters?
             return [word.casefold() for word in passage.words()]
 
         vectorizer = TfidfVectorizer(
@@ -329,20 +260,7 @@ class Corpus:
         Returns:
             ArrayLike: a sparse matrix of n_passages x n_words
         """
-        return vectorizer.transform(self.passages_expanded())
-
-    def document_frequencies(self, **kwargs) -> Counter[str]:
-        """Returns the document frequency of each word in the corpus."""
-        return Counter(
-            word
-            for passage in self.passages
-            for word in passage.term_frequencies(**kwargs).keys()
-        )
-
-    def interactive_plot(self, **kwargs):
-        return umap.plot.interactive(
-            self.umap, hover_data=pd.DataFrame(self.hover_datas()), **kwargs
-        )
+        return vectorizer.transform(self.passages)
 
     @property
     def umap(self):
@@ -358,18 +276,18 @@ class Corpus:
         embeddings = umap.fit_transform(np.array(self._token_embeddings()))
 
         # TODO: this becomes invalid when highlightings are changes
-        for embedding, highlighting in zip(embeddings, self.highlightings):
-            highlighting.umap_embedding = embedding
+        for embedding, passage in zip(embeddings, self.passages):
+            passage.highlighting.umap_embedding = embedding
 
         self._umap = umap
         return embeddings
 
     def umap_embeddings(self) -> list[ArrayLike]:
-        embeddings = [
-            highlighting.umap_embedding for highlighting in self.highlightings
-        ]
+        embeddings = [passage.highlighting.umap_embedding for passage in self.passages]
+
         if any(embedding is None for embedding in embeddings):
             logging.warning("UMAP embeddings have not been computed.")
+            # FIXME: this will raise an error for newly added passages
             embeddings = self._compute_umap()
 
         assert len(embeddings) == len(self.highlightings)
@@ -377,11 +295,8 @@ class Corpus:
 
     def highlighted_texts(self, metadata_fields: Iterable[str] = None) -> list[str]:
         """Returns an iterable over all highlightings."""
-        texts = [
-            text
-            for passage in self.passages
-            for text in passage.highlighted_texts(metadata_fields)
-        ]
+        texts = [passage.highlighted_text(metadata_fields) for passage in self.passages]
+
         # TODO: remove assertion
         assert all(text.strip() for text in texts), "Empty text."
         return texts

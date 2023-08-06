@@ -10,7 +10,6 @@ from transformers import pipeline
 
 if TYPE_CHECKING:
     from ..text.corpus import Corpus
-    from ..text.highlighting import Highlighting
     from ..text.passage import Passage
 
 
@@ -38,7 +37,7 @@ class TransformerModelWrapper(abc.ABC):
             raise ValueError("Passage already has embeddings")
 
         embeddings = self._pipeline([passage.text])
-        passage.embeddings = embeddings[0][0]
+        passage.embedding = embeddings[0][0]
 
     @torch.no_grad()
     def compute_embeddings(self, corpus: "Corpus"):
@@ -71,16 +70,18 @@ class TransformerModelWrapper(abc.ABC):
                     raise ValueError(f"Passage {passage} already has a tokenization")
                 passage.tokenization = tokenizations[i]
 
-    def compute_token_embedding(
-        self, passage: "Passage", highlighting: "Highlighting"
-    ) -> None:
+    def compute_token_embedding(self, passage: "Passage") -> None:
         """Returns the token embedding for the given char span in the given passage."""
+        highlighting = passage.highlighting
 
+        if highlighting is None:
+            raise ValueError(f"Passage {passage} does not have a highlighting")
         if highlighting.token_embedding is not None:
             raise ValueError(
                 f"Highlighting already has a token embedding: {highlighting}"
             )
-        if passage.embeddings is None:
+
+        if passage.embedding is None:
             self._model.compute_passage_embeddings(passage)
 
         first_token, last_token = passage.token_span(
@@ -88,10 +89,10 @@ class TransformerModelWrapper(abc.ABC):
         )
 
         if first_token == last_token:
-            token_embedding = passage.embeddings[first_token]
+            token_embedding = passage.embedding[first_token]
         else:
             # highlighting spans multiple tokens
-            token_embeddings = passage.embeddings[first_token : last_token + 1]
+            token_embeddings = passage.embedding[first_token : last_token + 1]
             token_embedding = np.mean(token_embeddings, axis=0)
 
         highlighting.token_embedding = token_embedding

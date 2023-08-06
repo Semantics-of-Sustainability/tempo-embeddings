@@ -1,11 +1,8 @@
 import logging
-from collections import Counter
-from collections import defaultdict
 from typing import Any
 from typing import Iterable
 from typing import Optional
 from numpy.typing import ArrayLike
-from scipy.spatial.distance import cosine
 from scipy.spatial.distance import euclidean
 from tokenizers import Encoding
 from ..embeddings.model import TransformerModelWrapper
@@ -13,19 +10,21 @@ from .highlighting import Highlighting
 
 
 class Passage:
+    """A text passage with optional metadata and highlighting."""
+
     def __init__(
         self,
         text: str,
         metadata: dict = None,
         model: Optional[TransformerModelWrapper] = None,
-        highlightings: Optional[list[Highlighting]] = None,
+        highlighting: Optional[Highlighting] = None,
     ) -> None:
         self._text = text.strip()
         self._metadata = metadata or {}
         self._model = model
-        self._highlightings = highlightings or []
+        self._highlighting = highlighting
 
-        self._embeddings: Optional[ArrayLike] = None
+        self._embedding: Optional[ArrayLike] = None
         self._tokenization: Optional[Encoding] = None
 
     @property
@@ -37,12 +36,8 @@ class Passage:
         return self._metadata
 
     @property
-    def highlightings(self) -> list[Highlighting]:
-        return self._highlightings
-
-    @highlightings.setter
-    def highlightings(self, value: list[Highlighting]) -> None:
-        self._highlightings = value
+    def highlighting(self) -> Optional[Highlighting]:
+        return self._highlighting
 
     @property
     def model(self) -> Optional[TransformerModelWrapper]:
@@ -53,12 +48,12 @@ class Passage:
         self._model = value
 
     @property
-    def embeddings(self) -> Optional[ArrayLike]:
-        return self._embeddings
+    def embedding(self) -> Optional[ArrayLike]:
+        return self._embedding
 
-    @embeddings.setter
-    def embeddings(self, value: Any):
-        self._embeddings = value
+    @embedding.setter
+    def embedding(self, value: Any):
+        self._embedding = value
 
     @property
     def tokenization(self) -> Optional[Encoding]:
@@ -68,45 +63,42 @@ class Passage:
     def tokenization(self, value: Encoding):
         self._tokenization = value
 
-    def highlighted_texts(self, metadata_fields: list[str]) -> list[str]:
-        return [
-            highlighting.text(self, metadata_fields)
-            for highlighting in self._highlightings
-        ]
+    def highlighted_text(
+        self,
+        metadata_fields: list[str],
+        *,
+        max_context_length: int = 200,
+    ) -> str:
+        word_start, word_end = self.word_span(
+            self.highlighting.start, self.highlighting.end
+        )
 
-    def hover_datas(
-        self, metadata_keys: Optional[list[str]] = None
-    ) -> list[dict[str, Any]]:
-        return [
-            highlighting.hover_data(self, metadata_keys=metadata_keys)
-            for highlighting in self._highlightings
-        ]
+        pre_context = self.text[:word_start][-max_context_length:]
+        post_context = self.text[word_end:][:max_context_length]
 
-    def token_embeddings(self) -> Iterable[ArrayLike]:
-        for highlighting in self.highlightings:
-            if highlighting.token_embedding is None:
-                self._model.compute_token_embedding(self, highlighting)
-            yield highlighting.token_embedding
+        text = (
+            pre_context + f"<b>{self.text[word_start:word_end]}</b>" + post_context
+        ).strip()
 
-    def has_metadata(self, key: str) -> bool:
-        """Returns True if the metadata key exists."""
-        return key in self.metadata
+        if metadata_fields:
+            metadata = {key: self.metadata.get(key) for key in metadata_fields}
+            text += f"<br>{metadata}"
+        return text
 
-    def get_metadata(self, key: str, strict: bool = True) -> Any:
-        """Returns the value for a given metadata key.
+    def hover_data(self, metadata_keys: Optional[list[str]] = None) -> dict[str, Any]:
+        if metadata_keys is None:
+            metadata = self.metadata
+        else:
+            metadata = {key: self.metadata.get(key) for key in metadata_keys}
 
-        Args:
-            key: The metadata key to return the value for.
-            strict: If True, raises KeyError if the key does not exist.
+        return {"text": self.highlighting.text(self)} | metadata
 
-        Raises:
-            KeyError: If the metadata key does not exist and strict is True.
-
-        Returns:
-            The value for the given metadata key or
-            None if the key does not exist strict is False.
-        """
-        return self._metadata[key] if strict else self._metadata.get(key)
+    def token_embedding(self) -> ArrayLike:
+        if self.highlighting is None:
+            raise ValueError("No highlighting set.")
+        if self.highlighting.token_embedding is None:
+            self._model.compute_token_embedding(self, self.highlighting)
+        return self.highlighting.token_embedding
 
     def set_metadata(self, key: str, value: Any) -> None:
         """Sets a metadata key to a value.
@@ -143,39 +135,15 @@ class Passage:
 
         return self.tokenization.word_to_chars(word_index)
 
-    def distances(self, vector: ArrayLike) -> list[float]:
-        """Returns the distance for each UMAP embedding (highlighting) to a vector.
+    def distance(self, vector: ArrayLike) -> float:
+        """Returns the distance for UMAP embedding of highlighting to a vector.
 
         Args:
             vector: The vector to compute the distance to.
-        Returns:
-            A list of floats, one for each highlighting in this passage.
+        Returns (float):
+            The distance between the UMAP embedding of the highlighting and the vector.
         """
-        return [
-            euclidean(highlighting.umap_embedding, vector)
-            for highlighting in self.highlightings
-        ]
-
-    def umap_cosines(self, umap: ArrayLike) -> list[float]:
-        """Returns the distance of the passage to the given UMAP."""
-
-        return [
-            cosine(umap, highlighting.umap_embedding)
-            for highlighting in self.highlightings
-        ]
-
-    def term_frequencies(self, use_tokenizer: bool = True) -> Counter[str]:
-        """Returns the term frequencies of the passage.
-
-        Args:
-            use_tokenizer: If True, uses the tokenizer to split the passage into words.
-                Otherwise, splits the passage by whitespace.
-
-        Returns:
-            A Counter mapping words to their term frequencies.
-        """
-
-        return Counter(self.words(use_tokenizer=use_tokenizer))
+        return euclidean(self.highlighting.umap_embedding, vector)
 
     def words(self, use_tokenizer: bool = True) -> Iterable[str]:
         """Returns the words in the passage.
@@ -189,6 +157,7 @@ class Passage:
         """
 
         if not use_tokenizer and self.tokenization is None:
+            logging.warning("Passage has no tokenization. Using whitespace splitting.")
             yield from self._text.split()
         else:
             self.tokenize()
@@ -211,87 +180,98 @@ class Passage:
         return self._text == other._text and self._metadata == other._metadata
 
     def __repr__(self) -> str:
-        return f"Passage({self._text!r}, {self._metadata!r}, {self._highlightings!r})"
+        return f"Passage({self._text!r}, {self._metadata!r}, {self._highlighting!r})"
 
-    def find(
-        self, token: str, start: Optional[int] = None, end: Optional[int] = None
-    ) -> tuple[int, int]:
-        start = self._text.casefold().find(token.casefold(), start, end)
-        end = start + len(token)
-        return start, end
+    def _partial_match(self, token: str, case_sensitive) -> Iterable[Highlighting]:
+        if case_sensitive:
+            text = self._text
+        else:
+            text = self._text.casefold()
+            token = token.casefold()
 
-    def add_highlightings(self, token: str) -> bool:
-        """Find matches for token string and add highlightings to the passage."""
-        # Quick check for match:
-        highlightings = []
+        start: int = text.find(token)
+        while start > -1:
+            yield Highlighting(start, start + len(token))
+            start = text.find(token, start + 1)
 
-        if token.casefold() in self._text.casefold():
-            if self.tokenization is None and self._model is not None:
-                # Tokenize if needed
-                self._model.tokenize_passage(self)
+    def _exact_match(self, token: str, case_sensitive) -> list[Highlighting]:
+        highlightings: list[Highlighting] = []
+        if case_sensitive:
+            text = self._text
+        else:
+            token = token.casefold()
+            text = self._text.casefold()
 
+        if token in text:  # quick check
+            ### Tokenize if needed
             if self.tokenization is None:
-                logging.warning(
-                    "Passage has no tokenization. "
-                    "Proceeding with simple string matching."
-                )
-                start, end = self.find(token)
+                if self._model:
+                    self._model.tokenize_passage(self)
+                else:
+                    raise RuntimeError(
+                        "Passage has no tokenization and no model. "
+                        "Cannot match exact tokens."
+                    )
 
-                while start >= 0:
-                    highlightings.append(Highlighting(start, end))
-                    start, end = self.find(token, end + 1)
-            else:
-                # Search for full tokens
-                for word_index in self.tokenization.words:
-                    if word_index is not None:
-                        start, end = self.tokenization.word_to_chars(word_index)
-                        word = self._text[start:end]
-                        if word.casefold() == token.casefold():
-                            highlightings.append(Highlighting(start, end))
+            ### Search for full tokens
+            for word_index in self.tokenization.words:
+                if word_index is not None:
+                    start, end = self.tokenization.word_to_chars(word_index)
+                    word = text[start:end]
+                    if word == token:
+                        highlightings.append(Highlighting(start, end))
+        return highlightings
 
-        self.highlightings += highlightings
-        return len(highlightings) > 0
-
-    def split_highlightings(self, labels: list[Any]) -> Iterable["Passage"]:
-        """Split the passage into multiple passages based on labels per highlighting.
-
-        This is used for splitting a passage into multiple passages for clustering.
+    def highlight(
+        self, token: str, case_sensitive: bool = False, exact_match: bool = True
+    ) -> list["Passage"]:
+        """Match a token in this Passage and return a Passage for each match.
 
         Args:
-            labels: A list of labels for each highlighting.
+            token: The token to match.
+            case_sensitive: If True, matches tokens with same capitalization only.
+            partial_match: If True, matches tokens that are part of a word.
 
         Returns:
-            One Passage per label, containing all highlightings for that label.
+            A Passage for each match. Empty if there is no match
+
         """
-        if not len(labels) == len(self.highlightings):
-            raise ValueError(
-                f"Number of labels ({len(labels)} "
-                f"does not match number of highlightings ({len(self.highlightings)})."
-            )
 
-        if len(self.highlightings) < 2 or len(set(labels)) < 2:
-            # no highlightings or all have the same label
-            yield self
-        else:
-            labeled_highlightings = defaultdict(list)
-            for label, highlighting in zip(labels, self.highlightings):
-                labeled_highlightings[label].append(highlighting)
-
-            for highlightings in labeled_highlightings.values():
-                yield Passage(self.text, self.metadata, self.model, highlightings)
-
-    def closest_umap_distance(self, array: ArrayLike) -> float:
-        return min(
-            cosine(array, highlighting.umap_embedding)
-            for highlighting in self.highlightings
+        highlightings: list[Highlighting] = (
+            self._exact_match(token, case_sensitive)
+            if exact_match
+            else list(self._partial_match(token, case_sensitive))
         )
 
-    def split(self) -> Iterable["Passage"]:
-        if len(self.highlightings) < 2:
-            yield self
-        else:
-            for highlighting in self.highlightings:
-                yield Passage(self.text, self.metadata, self.model, [highlighting])
+        match highlightings:
+            case []:
+                return []
+            case [highlighting]:
+                self._highlighting = highlighting
+                return [self]
+            case [*highlightings]:
+                return [
+                    self.with_highlighting(highlighting)
+                    for highlighting in highlightings
+                ]
+
+    def with_highlighting(self, highlighting: Highlighting) -> "Passage":
+        """Returns a new passage with the given highlighting.
+
+        Args:
+            highlighting: The highlighting to add.
+
+        Returns:
+            A new passage with the given highlighting.
+        """
+        if self.highlighting is not None:
+            raise ValueError("Passage already has a highlighting.")
+        return Passage(
+            self._text,
+            self._metadata,
+            self.tokenization,
+            highlighting=highlighting,
+        )
 
     @classmethod
     def from_text(

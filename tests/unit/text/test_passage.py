@@ -1,10 +1,65 @@
-from contextlib import nullcontext as does_not_raise
 import pytest
+from tempo_embeddings.embeddings.model import RobertaModelWrapper
 from tempo_embeddings.text.highlighting import Highlighting
 from tempo_embeddings.text.passage import Passage
 
 
 class TestPassage:
+    # TODO: mock this
+    model = RobertaModelWrapper.from_pretrained("roberta-base")
+
+    @pytest.mark.parametrize(
+        "passage, metadata_fields, max_context_length, expected",
+        [
+            (
+                Passage("test", model=model, highlighting=Highlighting(0, 4)),
+                [],
+                200,
+                "<b>test</b>",
+            ),
+            (
+                Passage(
+                    "this is a test text",
+                    model=model,
+                    highlighting=Highlighting(10, 14),
+                ),
+                [],
+                200,
+                "this is a <b>test</b> text",
+            ),
+            (
+                Passage(
+                    "this is a test text in context",
+                    model=model,
+                    highlighting=Highlighting(10, 14),
+                ),
+                [],
+                5,
+                "is a <b>test</b> text",
+            ),
+            (
+                Passage(
+                    "test",
+                    metadata={"key": "value"},
+                    model=model,
+                    highlighting=Highlighting(0, 4),
+                ),
+                ["key"],
+                200,
+                "<b>test</b><br>{'key': 'value'}",
+            ),
+        ],
+    )
+    def test_highlighted_text(
+        self, passage, metadata_fields, max_context_length, expected
+    ):
+        assert (
+            passage.highlighted_text(
+                metadata_fields, max_context_length=max_context_length
+            )
+            == expected
+        )
+
     @pytest.mark.parametrize(
         "text,metadata,expected",
         [
@@ -17,38 +72,6 @@ class TestPassage:
     )
     def test_init(self, text, metadata, expected):
         assert Passage(text, metadata) == expected
-
-    @pytest.mark.parametrize(
-        "passage, token, expected_passage, expected_result",
-        [
-            (Passage(""), "test", Passage(""), False),
-            (
-                Passage("test"),
-                "test",
-                Passage("test", highlightings=[Highlighting(0, 4)]),
-                True,
-            ),
-            (Passage("no match"), "test", Passage("no match"), False),
-            (
-                Passage("one test match"),
-                "test",
-                Passage("one test match", highlightings=[Highlighting(0, 4)]),
-                True,
-            ),
-            (
-                Passage("one test another test match"),
-                "test",
-                Passage(
-                    "one test another test match",
-                    highlightings=[Highlighting(4, 8), Highlighting(17, 21)],
-                ),
-                True,
-            ),
-        ],
-    )
-    def test_add_highlightings(self, passage, token, expected_passage, expected_result):
-        assert passage.add_highlightings(token) == expected_result
-        assert passage == expected_passage
 
     @pytest.mark.parametrize(
         "text,window_size,window_overlap,expected",
@@ -68,79 +91,6 @@ class TestPassage:
             )
             == expected
         )
-
-    @pytest.mark.parametrize(
-        "passage,labels,expected,exception_context",
-        [
-            (Passage("test text"), [], [Passage("test text")], does_not_raise()),
-            (
-                Passage("test text"),
-                [1],
-                [Passage("test text")],
-                pytest.raises(ValueError),
-            ),
-            (
-                Passage("test text", highlightings=[Highlighting(0, 4)]),
-                [1],
-                [Passage("test text", highlightings=[Highlighting(0, 4)])],
-                does_not_raise(),
-            ),
-            (
-                Passage(
-                    "test text", highlightings=[Highlighting(0, 4), Highlighting(6, 10)]
-                ),
-                [1, 2],
-                [
-                    Passage("test text", highlightings=[Highlighting(0, 4)]),
-                    Passage("test text", highlightings=[Highlighting(6, 10)]),
-                ],
-                does_not_raise(),
-            ),
-        ],
-    )
-    def test_split_highlightings(self, passage, labels, expected, exception_context):
-        with exception_context:
-            assert list(passage.split_highlightings(labels)) == expected
-
-    @pytest.mark.parametrize(
-        ["passage", "expected"],
-        [
-            (Passage("test"), [Passage("test")]),
-            (Passage("test"), [Passage("test")]),
-            (
-                Passage("test", highlightings=[Highlighting(0, 4)]),
-                [Passage("test", highlightings=[Highlighting(0, 4)])],
-            ),
-            (
-                Passage(
-                    "test text", highlightings=[Highlighting(0, 4), Highlighting(5, 9)]
-                ),
-                [
-                    Passage("test text", highlightings=[Highlighting(0, 4)]),
-                    Passage("test text", highlightings=[Highlighting(5, 9)]),
-                ],
-            ),
-        ],
-    )
-    def test_split(self, passage, expected):
-        assert list(passage.split()) == expected
-
-    @pytest.mark.parametrize(
-        "passage,key,strict,expected,expected_exception",
-        [
-            (Passage("test text", metadata={}), "test key", False, None, None),
-            (Passage("test text", metadata={}), "test key", True, None, KeyError),
-            (Passage("text", metadata={"key": 1}), "key", False, 1, None),
-        ],
-    )
-    def test_get_metadata(
-        self, passage, key, strict, expected, expected_exception
-    ):  # pylint: disable=too-many-arguments
-        if expected_exception is None:
-            assert passage.get_metadata(key, strict=strict) == expected
-        else:
-            with pytest.raises(expected_exception):
-                passage.get_metadata(key, strict=strict)
 
     @pytest.mark.parametrize("passage,expected", [(Passage("test"), ["test"])])
     @pytest.mark.skip(reason="Not implemented")

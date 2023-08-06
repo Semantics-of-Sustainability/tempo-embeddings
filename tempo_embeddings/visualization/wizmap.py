@@ -83,7 +83,7 @@ class WizmapVisualizer(Visualizer):
         if self._corpus.has_metadata("year"):
             metadata_fields.append("year")
 
-            years = list(self._corpus.get_highlighting_metadatas("year"))
+            years = list(self._corpus.get_metadatas("year"))
             assert len(years) == len(xs)
 
             data_list_args["times"] = years
@@ -138,7 +138,6 @@ class WizmapVisualizer(Visualizer):
 
     def __del__(self):
         self.cleanup()
-
 
     class WizmapRequestHandler(SimpleHTTPRequestHandler):
         """A HTTP handler serving the Wizmap data files."""
