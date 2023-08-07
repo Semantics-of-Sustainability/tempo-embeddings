@@ -97,7 +97,7 @@ class Passage:
         if self.highlighting is None:
             raise ValueError("No highlighting set.")
         if self.highlighting.token_embedding is None:
-            self._model.compute_token_embedding(self, self.highlighting)
+            self._model.compute_token_embedding(self)
         return self.highlighting.token_embedding
 
     def set_metadata(self, key: str, value: Any) -> None:

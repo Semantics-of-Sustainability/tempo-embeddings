@@ -1,4 +1,3 @@
-from contextlib import nullcontext as does_not_raise
 import pytest
 from tempo_embeddings.text.corpus import Corpus
 from tempo_embeddings.text.highlighting import Highlighting

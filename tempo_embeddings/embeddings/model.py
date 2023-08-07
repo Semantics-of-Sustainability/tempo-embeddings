@@ -33,7 +33,7 @@ class TransformerModelWrapper(abc.ABC):
     @torch.no_grad()
     def compute_passage_embeddings(self, passage: "Passage") -> None:
         """Adds the embeddings for the given passage."""
-        if passage.has_embeddings():
+        if passage.embedding:
             raise ValueError("Passage already has embeddings")
 
         embeddings = self._pipeline([passage.text])
@@ -82,7 +82,7 @@ class TransformerModelWrapper(abc.ABC):
             )
 
         if passage.embedding is None:
-            self._model.compute_passage_embeddings(passage)
+            self.compute_passage_embeddings(passage)
 
         first_token, last_token = passage.token_span(
             highlighting.start, highlighting.end

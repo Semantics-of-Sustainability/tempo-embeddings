@@ -58,6 +58,14 @@ class Corpus:
     def passages(self) -> list[Passage]:
         return self._passages
 
+    @property
+    def label(self) -> Optional[str]:
+        return self._label
+
+    @label.setter
+    def label(self, value: str):
+        self._label = value
+
     def texts(self):
         return [passage.text for passage in self._passages]
 
@@ -119,7 +127,7 @@ class Corpus:
             # batch-compute embeddings for all passages in corpus.
             self.compute_embeddings()
 
-        return [passage.token_embedding for passage in self.passages]
+        return [passage.token_embedding() for passage in self.passages]
 
     def has_embeddings(self, validate=False) -> bool:
         """Returns True embeddings have been computed for the corpus.
