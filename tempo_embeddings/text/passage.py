@@ -5,7 +5,6 @@ from typing import Optional
 from numpy.typing import ArrayLike
 from scipy.spatial.distance import euclidean
 from tokenizers import Encoding
-from ..embeddings.model import TransformerModelWrapper
 from .highlighting import Highlighting
 
 
@@ -16,12 +15,10 @@ class Passage:
         self,
         text: str,
         metadata: dict = None,
-        model: Optional[TransformerModelWrapper] = None,
         highlighting: Optional[Highlighting] = None,
     ) -> None:
         self._text = text.strip()
         self._metadata = metadata or {}
-        self._model = model
         self._highlighting = highlighting
 
         self._embedding: Optional[ArrayLike] = None
@@ -38,14 +35,6 @@ class Passage:
     @property
     def highlighting(self) -> Optional[Highlighting]:
         return self._highlighting
-
-    @property
-    def model(self) -> Optional[TransformerModelWrapper]:
-        return self._model
-
-    @model.setter
-    def model(self, value: TransformerModelWrapper) -> None:
-        self._model = value
 
     @property
     def embedding(self) -> Optional[ArrayLike]:
@@ -95,9 +84,9 @@ class Passage:
 
     def token_embedding(self) -> ArrayLike:
         if self.highlighting is None:
-            raise ValueError("No highlighting set.")
+            raise RuntimeError("No highlighting set.")
         if self.highlighting.token_embedding is None:
-            self._model.compute_token_embedding(self)
+            raise RuntimeError("No embeddings computed for passage.")
         return self.highlighting.token_embedding
 
     def set_metadata(self, key: str, value: Any) -> None:
@@ -109,12 +98,6 @@ class Passage:
         """
         self._metadata[key] = value
 
-    def tokenize(self) -> None:
-        if self._model is None:
-            raise ValueError("No model set.")
-
-        self._model.tokenize_passage(self)
-
     def token_span(self, start, end) -> tuple[int, int]:
         """Returns the start and end index of the token in the passage."""
         return (
@@ -123,10 +106,10 @@ class Passage:
         )
 
     def word_span(self, start, end) -> tuple[int, int]:
-        if not self.tokenization and self._model:
-            self._model.tokenize_passage(self)
+        if not self.tokenization:
+            raise RuntimeError("Passage has no tokenization.")
         if self.tokenization is None:
-            raise ValueError("Passage has no tokenization.")
+            raise RuntimeError("Passage has no tokenization.")
 
         word_index = self.tokenization.char_to_word(start)
         assert (
@@ -205,13 +188,7 @@ class Passage:
         if token in text:  # quick check
             ### Tokenize if needed
             if self.tokenization is None:
-                if self._model:
-                    self._model.tokenize_passage(self)
-                else:
-                    raise RuntimeError(
-                        "Passage has no tokenization and no model. "
-                        "Cannot match exact tokens."
-                    )
+                raise RuntimeError("Passage has no tokenization.")
 
             ### Search for full tokens
             for word_index in self.tokenization.words:
@@ -265,7 +242,7 @@ class Passage:
             A new passage with the given highlighting.
         """
         if self.highlighting is not None:
-            raise ValueError("Passage already has a highlighting.")
+            raise RuntimeError("Passage already has a highlighting.")
         return Passage(
             self._text,
             self._metadata,
@@ -277,7 +254,6 @@ class Passage:
     def from_text(
         cls,
         text: str,
-        model: Optional[TransformerModelWrapper] = None,
         *,
         window_size: int = None,
         window_overlap: int = None,
@@ -289,11 +265,11 @@ class Passage:
         # TODO: use window_size on tokens instead of characters
 
         if window_size is None:
-            # Single "window" of the entire text
-            yield cls(text, metadata, model)
+            # Single window comprising the entire text
+            yield cls(text, metadata)
         else:
             if window_overlap is None:
                 window_overlap = int(window_size / 10)
 
             for start in range(0, len(text), window_size - window_overlap):
-                yield cls(text[start : start + window_size], metadata, model)
+                yield cls(text[start : start + window_size], metadata)

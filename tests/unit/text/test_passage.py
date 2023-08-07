@@ -11,27 +11,16 @@ class TestPassage:
     @pytest.mark.parametrize(
         "passage, metadata_fields, max_context_length, expected",
         [
+            (Passage("test", highlighting=Highlighting(0, 4)), [], 200, "<b>test</b>"),
             (
-                Passage("test", model=model, highlighting=Highlighting(0, 4)),
-                [],
-                200,
-                "<b>test</b>",
-            ),
-            (
-                Passage(
-                    "this is a test text",
-                    model=model,
-                    highlighting=Highlighting(10, 14),
-                ),
+                Passage("this is a test text", highlighting=Highlighting(10, 14)),
                 [],
                 200,
                 "this is a <b>test</b> text",
             ),
             (
                 Passage(
-                    "this is a test text in context",
-                    model=model,
-                    highlighting=Highlighting(10, 14),
+                    "this is a test text in context", highlighting=Highlighting(10, 14)
                 ),
                 [],
                 5,
@@ -39,10 +28,7 @@ class TestPassage:
             ),
             (
                 Passage(
-                    "test",
-                    metadata={"key": "value"},
-                    model=model,
-                    highlighting=Highlighting(0, 4),
+                    "test", metadata={"key": "value"}, highlighting=Highlighting(0, 4)
                 ),
                 ["key"],
                 200,
@@ -53,6 +39,9 @@ class TestPassage:
     def test_highlighted_text(
         self, passage, metadata_fields, max_context_length, expected
     ):
+        self.model.compute_passage_embeddings(passage)
+        self.model.tokenize_passage(passage)
+
         assert (
             passage.highlighted_text(
                 metadata_fields, max_context_length=max_context_length

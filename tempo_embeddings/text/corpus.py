@@ -340,7 +340,7 @@ class Corpus:
                 passage
                 for line in f
                 for passage in Passage.from_text(
-                    line, model, metadata=metadata, window_size=window_size
+                    line, metadata=metadata, window_size=window_size
                 )
             ],
             model=model,
@@ -402,7 +402,6 @@ class Corpus:
                 passages.extend(
                     Passage.from_text(
                         text=row[text_column],
-                        model=model,
                         metadata=metadata,
                         window_size=window_size,
                         window_overlap=window_overlap,
