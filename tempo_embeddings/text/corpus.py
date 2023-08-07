@@ -49,7 +49,7 @@ class Corpus:
         return len(self._passages)
 
     def __repr__(self) -> str:
-        return f"Corpus({self._label!r} {self._passages[:10]!r})"
+        return f"Corpus({self._label!r}, {self._passages[:10]!r})"
 
     def __eq__(self, other: object) -> bool:
         return self._model == other._model and other._passages == self._passages
@@ -168,20 +168,28 @@ class Corpus:
         # Dropping unmatched passages
         return Corpus(passages, self._model, self._umap, label=token)
 
-    def nearest_neighbours(self, n: int = 5) -> Iterable[tuple[Passage, float]]:
+    def _distances(self, normalize: bool):
         centroid = self.umap_mean()
 
         distances: ArrayLike = np.array(
             [passage.distance(centroid) for passage in self.passages]
         )
-        if n > len(distances) - 1:
+        return (distances / np.linalg.norm(distances)) if normalize else distances
+
+    def nearest_neighbours(
+        self, n: int = 5, normalize: bool = True
+    ) -> Iterable[tuple[Passage, float]]:
+        distances: ArrayLike = self._distances(normalize)
+
+        if n > len(distances):
             logging.warning(
                 "n (%d) is greater than the number of passages (%d).", n, len(distances)
             )
-            n = len(distances) - 1
+            n = len(distances)
 
-        nearest_highlighting_indices: ArrayLike = np.argpartition(-distances, n)
-        for i in nearest_highlighting_indices[:n]:
+        top_indices: ArrayLike = np.argsort(distances)[:n]
+
+        for i in top_indices:
             yield self.passages[i], distances[i]
 
     def topic_words(self, vectorizer: TfidfVectorizer, n: int = 5) -> list[str]:
@@ -198,11 +206,8 @@ class Corpus:
         ), f"tf_idfs shape ({tf_idfs.shape}) does not match expected shape."
 
         ### Weigh in vector distances
-        centroid = self.umap_mean()
-        distances: ArrayLike = np.array(
-            [passage.distance(centroid) for passage in self.passages]
-        )
-        weights = np.ones(distances.shape[0]) - (distances / np.linalg.norm(distances))
+        distances: ArrayLike = self._distances(normalize=True)
+        weights = np.ones(distances.shape[0]) - distances
 
         assert weights.argmin() == distances.argmax()
         assert weights.argmax() == distances.argmin()
@@ -214,7 +219,9 @@ class Corpus:
         assert weighted_tf_idfs.shape[0] == len(vectorizer.get_feature_names_out())
 
         # pylint: disable=invalid-unary-operand-type
-        top_indices = np.argpartition(-weighted_tf_idfs, n)
+        # TODO: this can be optimized by running np.argparition first and sorting only
+        # the top n arguments.
+        top_indices = np.argsort(-weighted_tf_idfs)
 
         return [vectorizer.get_feature_names_out()[i] for i in top_indices[:n]]
 
@@ -231,20 +238,22 @@ class Corpus:
         clusters: dict[int, list[Passage]] = defaultdict(list)
 
         for label, passage in zip(labels, self.passages):
-            if label == -1:
-                label = "outliers"
-
             clusters[label].append(passage)
 
         return [
-            Corpus(passages=passages, model=self._model, umap=self._umap, label=label)
+            Corpus(
+                passages=passages,
+                model=self._model,
+                umap=self._umap,
+                label=None if label == -1 else label,
+            )
             for label, passages in clusters.items()
         ]
 
     def hover_datas(self, metadata_fields=None) -> list[dict[str, str]]:
         return [
             passage.hover_data(metadata_fields=metadata_fields)
-            | {"corpus label": str(self.label)}
+            | {"corpus": self.label or "---"}
             for passage in self.passages
         ]
 

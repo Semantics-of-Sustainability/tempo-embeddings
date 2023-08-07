@@ -97,10 +97,11 @@ class TestCorpus:
         "corpus,metadata_fields,expected",
         [
             (Corpus(), None, []),
+            (Corpus([Passage("test")]), None, [{"text": "test", "corpus": "---"}]),
             (
-                Corpus([Passage("test")]),
+                Corpus([Passage("test")], label="test label"),
                 None,
-                [{"text": "test", "corpus label": "None"}],
+                [{"text": "test", "corpus": "test label"}],
             ),
         ],
     )
