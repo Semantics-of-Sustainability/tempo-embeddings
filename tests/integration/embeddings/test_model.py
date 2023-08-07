@@ -33,4 +33,4 @@ class TestRobertaModelWrapper:
     def test_compute_embeddings(self, model_name, corpus):
         RobertaModelWrapper.from_pretrained(model_name).compute_embeddings(corpus)
         for passage in corpus.passages:
-            assert passage.embeddings is not None
+            assert passage.embedding is not None

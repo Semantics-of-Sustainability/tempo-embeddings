@@ -251,7 +251,7 @@ class Corpus:
 
     def tfidf_vectorizer(self, **kwargs) -> TfidfVectorizer:
         def tokenizer(passage: Passage) -> list[str]:
-            return [word.casefold() for word in passage.words()]
+            return [word.casefold() for word in passage.words(use_tokenizer=False)]
 
         vectorizer = TfidfVectorizer(
             tokenizer=tokenizer, preprocessor=lambda x: x, **kwargs
@@ -301,9 +301,12 @@ class Corpus:
         assert len(embeddings) == len(self.highlightings)
         return embeddings
 
-    def highlighted_texts(self, metadata_fields: Iterable[str] = None) -> list[str]:
+    def highlighted_texts(self, metadata_fields: list[str] = None) -> list[str]:
         """Returns an iterable over all highlightings."""
-        texts = [passage.highlighted_text(metadata_fields) for passage in self.passages]
+        texts = [
+            passage.highlighted_text(metadata_fields=metadata_fields)
+            for passage in self.passages
+        ]
 
         # TODO: remove assertion
         assert all(text.strip() for text in texts), "Empty text."

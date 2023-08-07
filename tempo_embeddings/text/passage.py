@@ -1,4 +1,4 @@
-import logging
+import string
 from typing import Any
 from typing import Iterable
 from typing import Optional
@@ -110,13 +110,6 @@ class Passage:
         """
         self._metadata[key] = value
 
-    def token_span(self, start, end) -> tuple[int, int]:
-        """Returns the start and end index of the token in the passage."""
-        return (
-            self._tokenization.char_to_token(start),
-            self._tokenization.char_to_token(end - 1),
-        )
-
     def word_span(self, start, end) -> tuple[int, int]:
         if not self.tokenization:
             raise RuntimeError("Passage has no tokenization.")
@@ -151,11 +144,16 @@ class Passage:
             An iterable of words in the passage.
         """
 
-        if not use_tokenizer and self.tokenization is None:
-            logging.warning("Passage has no tokenization. Using whitespace splitting.")
-            yield from self._text.split()
+        if not use_tokenizer:
+            tokens = [
+                token.strip(string.punctuation).strip() for token in self._text.split()
+            ]
+            for token in tokens:
+                if len(token) > 1:
+                    yield token
         else:
-            self.tokenize()
+            if self.tokenization is None:
+                raise RuntimeError("Passage has no tokenization.")
 
             for i in self.tokenization.words:
                 if i is not None:

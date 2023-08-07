@@ -54,7 +54,7 @@ class TransformerModelWrapper(abc.ABC):
         passages = corpus.passages_unembeddened()
         embeddings = self._pipeline([passage.text for passage in passages])
         for passage, embedding in zip(passages, embeddings, strict=True):
-            passage.embeddings = embedding[0]
+            passage.embedding = embedding[0]
 
         self.tokenize(corpus)
 
@@ -70,23 +70,23 @@ class TransformerModelWrapper(abc.ABC):
                     raise ValueError(f"Passage {passage} already has a tokenization")
                 passage.tokenization = tokenizations[i]
 
+                if passage.highlighting:
+                    self.compute_token_embedding(passage)
+
     def compute_token_embedding(self, passage: "Passage") -> None:
         """Returns the token embedding for the given char span in the given passage."""
-        highlighting = passage.highlighting
 
-        if highlighting is None:
+        if passage.highlighting is None:
             raise ValueError(f"Passage {passage} does not have a highlighting")
-        if highlighting.token_embedding is not None:
+        if passage.highlighting.token_embedding is not None:
             raise ValueError(
-                f"Highlighting already has a token embedding: {highlighting}"
+                f"Highlighting already has a token embedding: {passage.highlighting}"
             )
-
         if passage.embedding is None:
-            self.compute_passage_embeddings(passage)
+            raise ValueError("Passage does not have embeddings")
 
-        first_token, last_token = passage.token_span(
-            highlighting.start, highlighting.end
-        )
+        first_token = passage.tokenization.char_to_token(passage.highlighting.start)
+        last_token = passage.tokenization.char_to_token(passage.highlighting.end - 1)
 
         if first_token == last_token:
             token_embedding = passage.embedding[first_token]
@@ -95,7 +95,7 @@ class TransformerModelWrapper(abc.ABC):
             token_embeddings = passage.embedding[first_token : last_token + 1]
             token_embedding = np.mean(token_embeddings, axis=0)
 
-        highlighting.token_embedding = token_embedding
+        passage.highlighting.token_embedding = token_embedding
 
     @torch.no_grad()
     def _tokenize(self, texts):

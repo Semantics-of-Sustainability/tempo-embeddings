@@ -81,7 +81,13 @@ class TestPassage:
             == expected
         )
 
-    @pytest.mark.parametrize("passage,expected", [(Passage("test"), ["test"])])
-    @pytest.mark.skip(reason="Not implemented")
-    def test_words(self, passage, expected):
-        assert list(passage.words()) == expected
+    # TODO: test with use_tokenizer=True, mock model
+    @pytest.mark.parametrize(
+        "passage,use_tokenizer,expected",
+        [
+            (Passage("test"), False, ["test"]),
+            (Passage("test, token"), False, ["test", "token"]),
+        ],
+    )
+    def test_words(self, passage, use_tokenizer, expected):
+        assert list(passage.words(use_tokenizer)) == expected
