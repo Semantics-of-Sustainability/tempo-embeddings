@@ -44,7 +44,7 @@ class TestPassage:
 
         assert (
             passage.highlighted_text(
-                metadata_fields, max_context_length=max_context_length
+                metadata_fields=metadata_fields, max_context_length=max_context_length
             )
             == expected
         )

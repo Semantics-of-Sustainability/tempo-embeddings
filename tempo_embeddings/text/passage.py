@@ -57,10 +57,19 @@ class Passage:
 
     def highlighted_text(
         self,
-        metadata_fields: list[str],
         *,
+        metadata_fields: Optional[list[str]] = None,
         max_context_length: int = 200,
     ) -> str:
+        """Returns the text with the highlighted word in bold.
+
+        Args:
+            metadata_fields (Optional[list[str]]): A list of metadata keys to include in the text.
+            max_context_length (int): The maximum number of characters to include before and after the highlighted word.
+
+        Returns (str):
+            The text with the highlighted word in bold.
+        """
         word_start, word_end = self.word_span(
             self.highlighting.start, self.highlighting.end
         )
@@ -83,7 +92,7 @@ class Passage:
         else:
             metadata = {key: self.metadata.get(key) for key in metadata_keys}
 
-        return {"text": self.highlighting.text(self)} | metadata
+        return {"text": self.highlighted_text()} | metadata
 
     def token_embedding(self) -> ArrayLike:
         if self.highlighting is None:
