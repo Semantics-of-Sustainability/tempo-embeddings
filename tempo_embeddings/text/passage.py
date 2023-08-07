@@ -16,13 +16,16 @@ class Passage:
         text: str,
         metadata: dict = None,
         highlighting: Optional[Highlighting] = None,
+        *,
+        embedding: Optional[ArrayLike] = None,
+        tokenization: Optional[Encoding] = None,
     ) -> None:
         self._text = text.strip()
         self._metadata = metadata or {}
         self._highlighting = highlighting
 
-        self._embedding: Optional[ArrayLike] = None
-        self._tokenization: Optional[Encoding] = None
+        self._embedding: Optional[ArrayLike] = embedding
+        self._tokenization: Optional[Encoding] = tokenization
 
     @property
     def text(self) -> str:
@@ -233,21 +236,22 @@ class Passage:
                 ]
 
     def with_highlighting(self, highlighting: Highlighting) -> "Passage":
-        """Returns a new passage with the given highlighting.
+        """Returns a new Passage object with the given highlighting.
 
         Args:
             highlighting: The highlighting to add.
 
         Returns:
-            A new passage with the given highlighting.
+            A new Passage object with the given highlighting.
         """
         if self.highlighting is not None:
             raise RuntimeError("Passage already has a highlighting.")
         return Passage(
             self._text,
             self._metadata,
-            self.tokenization,
             highlighting=highlighting,
+            embedding=self.embedding,
+            tokenization=self.tokenization,
         )
 
     @classmethod
