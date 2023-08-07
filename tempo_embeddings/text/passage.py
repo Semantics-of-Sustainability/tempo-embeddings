@@ -11,12 +11,12 @@ from .highlighting import Highlighting
 class Passage:
     """A text passage with optional metadata and highlighting."""
 
+    # pylint: disable=too-many-arguments
     def __init__(
         self,
         text: str,
         metadata: dict = None,
         highlighting: Optional[Highlighting] = None,
-        *,
         embedding: Optional[ArrayLike] = None,
         tokenization: Optional[Encoding] = None,
     ) -> None:
