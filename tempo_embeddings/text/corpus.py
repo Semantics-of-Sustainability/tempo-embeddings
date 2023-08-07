@@ -95,7 +95,7 @@ class Corpus:
             strict: If True, returns True only if all passages have the key.
         """
         condition = all if strict else any
-        return condition(passage.has_metadata(key) for passage in self.passages)
+        return condition(key in passage.metadata for passage in self.passages)
 
     def get_metadatas(self, key: str) -> list[Any]:
         """Returns all metadata values for a key."""
