@@ -50,6 +50,27 @@ class TestPassage:
         )
 
     @pytest.mark.parametrize(
+        "passage, metadata_fields, expected",
+        [
+            (Passage("test text"), [], {"text": "test text"}),
+            (
+                Passage("test text", metadata={"key": "value"}),
+                ["key"],
+                {"text": "test text", "key": "value"},
+            ),
+            (
+                Passage("test text", highlighting=Highlighting(0, 4)),
+                [],
+                {"text": "<b>test</b> text"},
+            ),
+        ],
+    )
+    def test_hover_data(self, passage, metadata_fields, expected):
+        if passage.highlighting is not None:
+            pytest.skip("Testing with highlighted text not implemented.")
+        assert passage.hover_data(metadata_fields=metadata_fields) == expected
+
+    @pytest.mark.parametrize(
         "text,metadata,expected",
         [
             ("", None, Passage("", {})),

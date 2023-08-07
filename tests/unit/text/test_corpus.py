@@ -94,6 +94,20 @@ class TestCorpus:
         assert corpus.subcorpus(token, exact_match=False, **metadata) == expected
 
     @pytest.mark.parametrize(
+        "corpus,metadata_fields,expected",
+        [
+            (Corpus(), None, []),
+            (
+                Corpus([Passage("test")]),
+                None,
+                [{"text": "test", "corpus label": "None"}],
+            ),
+        ],
+    )
+    def test_hover_datas(self, corpus, metadata_fields, expected):
+        assert corpus.hover_datas(metadata_fields=metadata_fields) == expected
+
+    @pytest.mark.parametrize(
         "corpus,key,expected",
         [
             (Corpus(), "test key", []),

@@ -70,6 +70,8 @@ class Passage:
         Returns (str):
             The text with the highlighted word in bold.
         """
+        if not self.highlighting:
+            raise ValueError(f"Passage does not have a highlighting: {str(self)}")
         word_start, word_end = self.word_span(
             self.highlighting.start, self.highlighting.end
         )
@@ -86,13 +88,14 @@ class Passage:
             text += f"<br>{metadata}"
         return text
 
-    def hover_data(self, metadata_keys: Optional[list[str]] = None) -> dict[str, Any]:
-        if metadata_keys is None:
+    def hover_data(self, metadata_fields: Optional[list[str]] = None) -> dict[str, Any]:
+        if metadata_fields is None:
             metadata = self.metadata
         else:
-            metadata = {key: self.metadata.get(key) for key in metadata_keys}
+            metadata = {key: str(self.metadata.get(key)) for key in metadata_fields}
 
-        return {"text": self.highlighted_text()} | metadata
+        text = self.highlighted_text() if self.highlighting else self.text
+        return {"text": text} | metadata
 
     def token_embedding(self) -> ArrayLike:
         if self.highlighting is None:

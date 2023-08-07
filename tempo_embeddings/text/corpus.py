@@ -32,7 +32,7 @@ class Corpus:
         self._model: Optional[TransformerModelWrapper] = model
 
         self._umap: Optional[UMAP] = umap
-        self._label: str = str(label) or ""
+        self._label: Optional[str] = label
 
     def __add__(self, other: "Corpus") -> "Corpus":
         # TODO: does model.__eq__() work?
@@ -235,18 +235,17 @@ class Corpus:
                 label = "outliers"
 
             clusters[label].append(passage)
-            clusters[label].extend(passage.split_highlightings([label]))
 
         return [
             Corpus(passages=passages, model=self._model, umap=self._umap, label=label)
             for label, passages in clusters.items()
         ]
 
-    def hover_datas(self, metadata_keys=None) -> list[dict[str, Any]]:
+    def hover_datas(self, metadata_fields=None) -> list[dict[str, str]]:
         return [
-            hover_data | {"label": self._label}
+            passage.hover_data(metadata_fields=metadata_fields)
+            | {"corpus label": str(self.label)}
             for passage in self.passages
-            for hover_data in passage.hover_data(metadata_keys=metadata_keys)
         ]
 
     def tfidf_vectorizer(self, **kwargs) -> TfidfVectorizer:
