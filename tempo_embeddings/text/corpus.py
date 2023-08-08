@@ -292,10 +292,10 @@ class Corpus:
         """The mean for all passage embeddings."""
         return np.array(self.umap_embeddings()).mean(axis=0)
 
-    def clusters(self, **kwargs) -> Iterable["Corpus"]:
+    def clusters(self, clusterer=HDBSCAN, **kwargs) -> Iterable["Corpus"]:
         """Clusters the corpus using HDBSCAN and returns a list of subcorpora."""
         labels: list[int] = (
-            HDBSCAN(**kwargs).fit_predict(self.umap_embeddings()).astype(int).tolist()
+            clusterer(**kwargs).fit_predict(self.umap_embeddings()).astype(int).tolist()
         )
 
         clusters: dict[int, list[Passage]] = defaultdict(list)
