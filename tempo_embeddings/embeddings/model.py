@@ -56,8 +56,6 @@ class TransformerModelWrapper(abc.ABC):
         for passage, embedding in zip(passages, embeddings, strict=True):
             passage.embedding = embedding[0]
 
-        self.tokenize(corpus)
-
     def tokenize_passage(self, passage: "Passage") -> None:
         passage.tokenization = self._tokenize([passage.text])[0]
 
@@ -72,6 +70,11 @@ class TransformerModelWrapper(abc.ABC):
 
                 if passage.highlighting:
                     self.compute_token_embedding(passage)
+
+    def compute_token_embeddings(self, corpus: "Corpus") -> None:
+        for passage in corpus.passages:
+            if passage.highlighting and passage.highlighting.token_embedding is None:
+                self.compute_token_embedding(passage)
 
     def compute_token_embedding(self, passage: "Passage") -> None:
         """Returns the token embedding for the given char span in the given passage."""

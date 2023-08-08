@@ -21,6 +21,8 @@ from .passage import Passage
 
 
 class Corpus:
+    OUTLIERS_LABEL = "outliers"
+
     def __init__(
         self,
         passages: list[Passage] = None,
@@ -34,13 +36,17 @@ class Corpus:
         self._umap: Optional[UMAP] = umap
         self._label: Optional[str] = label
 
-    def __add__(self, other: "Corpus") -> "Corpus":
-        # TODO: does model.__eq__() work?
+    def __add__(self, other: "Corpus", drop_umap: bool = True) -> "Corpus":
         if self._model != other._model:
             raise ValueError("Cannot add two corpora with different embeddings models")
 
-        # Dropping previously computed UMAP embeddings
-        return Corpus(passages=self._passages + other._passages, model=self._model)
+        passages = self._passages + other._passages
+        if drop_umap:
+            for passage in passages:
+                if passage.highlighting:
+                    passage.highlighting.umap = None
+
+        return Corpus(passages, self._model)
 
     def __contains__(self, passage: Passage) -> bool:
         return passage in self._passages
@@ -117,6 +123,8 @@ class Corpus:
         if self._model is None:
             logging.warning("Corpus does not have a model.")
         self._model.compute_embeddings(self)
+        self._model.tokenize(self)
+        self._model.compute_token_embeddings(self)
 
     def _token_embeddings(self) -> list[ArrayLike]:
         if not self.highlightings:
@@ -245,7 +253,7 @@ class Corpus:
                 passages=passages,
                 model=self._model,
                 umap=self._umap,
-                label=None if label == -1 else label,
+                label=Corpus.OUTLIERS_LABEL if label == -1 else label,
             )
             for label, passages in clusters.items()
         ]
