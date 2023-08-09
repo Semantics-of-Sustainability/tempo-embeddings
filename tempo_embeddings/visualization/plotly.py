@@ -1,3 +1,4 @@
+from typing import Iterable
 import pandas as pd
 import plotly.express as px
 from dash import Dash
@@ -8,8 +9,8 @@ from .visualizer import Visualizer
 
 
 class PlotlyVisualizer(Visualizer):
-    def __init__(self, corpus: Corpus):
-        self._corpus = corpus
+    def __init__(self, *corpora: Iterable[Corpus]):
+        self._corpora = corpora
         self._app = Dash(__name__)
 
     def visualize(self, metadata_fields: list[str] = None):
@@ -25,9 +26,19 @@ class PlotlyVisualizer(Visualizer):
             lines.append(line)
             return "<br>".join(lines)
 
-        embeddings = pd.DataFrame(self._corpus.umap_embeddings(), columns=["x", "y"])
+        embeddings = pd.concat(
+            [
+                pd.DataFrame(corpus.umap_embeddings(), columns=["x", "y"])
+                for corpus in self._corpora
+            ]
+        )
 
-        hover_datas = pd.DataFrame(self._corpus.hover_datas(metadata_fields))
+        hover_datas = pd.concat(
+            [
+                pd.DataFrame(corpus.hover_datas(metadata_fields))
+                for corpus in self._corpora
+            ]
+        )
         hover_datas.text = hover_datas.text.apply(_break_lines)
 
         fig = px.scatter(
