@@ -2,6 +2,7 @@ import csv
 import gzip
 import logging
 from collections import defaultdict
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 from typing import Iterable
@@ -229,7 +230,6 @@ class Corpus:
         exclude_word: str = "",
         exact_match: bool = True,
         n: int = 1,
-        vocabulary=None,
     ) -> None:
         """Set the label of the corpus to the top word(s) in the corpus.
 
@@ -240,7 +240,6 @@ class Corpus:
                 e.g. the search term used for composing this corpus
             exact_match: if False, exclude all words that contain the `exclude_word`.
             n: concatenate the top n words in the corpus as the label.
-            vocabulary: the vocabulary to pass to Corpus.topic_words().
         """
 
         def filter_word(word: str) -> bool:
@@ -253,15 +252,11 @@ class Corpus:
         if self.label != Corpus.OUTLIERS_LABEL:
             _n = n + 1 if exact_match else n * 10
             top_words: list[str] = [
-                word
-                for word in self.topic_words(vectorizer, n=_n, vocabulary=vocabulary)
-                if filter_word(word)
+                word for word in self.topic_words(vectorizer, n=_n) if filter_word(word)
             ]
             self._label = "_".join(top_words[:n])
 
-    def topic_words(
-        self, vectorizer: TfidfVectorizer, *, n: int = None, vocabulary=None
-    ) -> list[str]:
+    def topic_words(self, vectorizer: TfidfVectorizer, n: int = None) -> list[str]:
         """The most characteristic words in the corpus.
 
         Each word is scored by multiplying its tf-idf score for each passage
@@ -278,15 +273,13 @@ class Corpus:
         """
         tf_idfs: csr_matrix = self.tf_idf(vectorizer)
 
-        vocab = vectorizer.get_feature_names_out() if vocabulary is None else vocabulary
-
         assert all(
             passage.highlighting for passage in self.passages
         ), "Passages must have highlightings"
 
         assert tf_idfs.shape == (
             len(self.passages),
-            len(vocab),
+            len(Corpus.get_vocabulary(vectorizer)),
         ), f"tf_idfs shape ({tf_idfs.shape}) does not match expected shape."
 
         ### Weigh in vector distances
@@ -300,14 +293,12 @@ class Corpus:
         ), f"distances shape ({weights.shape}) does not match expected shape."
 
         weighted_tf_idfs = np.average(tf_idfs.toarray(), weights=weights, axis=0)
-        assert weighted_tf_idfs.shape[0] == len(vocab)
+        assert weighted_tf_idfs.shape[0] == len(Corpus.get_vocabulary(vectorizer))
 
         # pylint: disable=invalid-unary-operand-type
-        # TODO: this can be optimized by running np.argparition first and sorting only
-        # the top n arguments.
         top_indices = np.argsort(-weighted_tf_idfs)[:n]
 
-        return [vocab[i] for i in top_indices]
+        return [Corpus.get_vocabulary(vectorizer)[i] for i in top_indices]
 
     def umap_mean(self) -> ArrayLike:
         """The mean for all passage embeddings."""
@@ -503,3 +494,9 @@ class Corpus:
                     )
                 )
         return Corpus(passages, model=model)
+
+    @staticmethod
+    @lru_cache
+    def get_vocabulary(vectorizer: TfidfVectorizer) -> list[str]:
+        """Returns the vocabulary of a vectorizer."""
+        return vectorizer.get_feature_names_out()
