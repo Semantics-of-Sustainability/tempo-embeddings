@@ -41,15 +41,11 @@ class Corpus:
         self._umap: Optional[UMAP] = umap
         self._label: Optional[str] = label
 
-    def __add__(self, other: "Corpus", drop_umap: bool = True) -> "Corpus":
+    def __add__(self, other: "Corpus") -> "Corpus":
         if self._model != other._model:
             raise ValueError("Cannot add two corpora with different embeddings models")
 
         passages = self._passages + other._passages
-        if drop_umap:
-            for passage in passages:
-                if passage.highlighting:
-                    passage.highlighting.umap = None
 
         return Corpus(passages, self._model)
 
