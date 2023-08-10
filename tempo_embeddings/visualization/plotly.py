@@ -138,9 +138,12 @@ class PlotlyVisualizer(Visualizer):
         app = Dash(__name__)
 
         data = self._create_data(metadata_fields)
-        fig = self._create_scatter(
-            data, columns=PlotlyVisualizer._STANDARD_COLUMNS + metadata_fields
-        )
+
+        columns = PlotlyVisualizer._STANDARD_COLUMNS
+        if metadata_fields:
+            columns.extend(metadata_fields)
+
+        fig = self._create_scatter(data, columns=columns)
 
         div = [dcc.Graph(figure=fig, id=PlotlyVisualizer._SCATTER_ID)]
 
