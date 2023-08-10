@@ -1,11 +1,15 @@
 import logging
 from collections import defaultdict
+from functools import reduce
+from operator import add
 from typing import Iterable
 from typing import Optional
 import numpy as np
 from sklearn.cluster import HDBSCAN
 from sklearn.feature_extraction.text import TfidfVectorizer
 from ..settings import OUTLIERS_LABEL
+from ..visualization.clusters import ClusterVisualizer
+from ..visualization.plotly import PlotlyVisualizer
 from .corpus import Corpus
 from .passage import Passage
 
@@ -147,3 +151,23 @@ class Cluster:
 
         self._subcorpora.remove(child)
         self._subcorpora.extend(sub_clusters)
+
+    def merge(self, *labels):
+        corpora = list(self.select_corpora(*labels))
+        if len(corpora) < 2:
+            raise ValueError(f"Need at least two corpora to merge, got {len(corpora)}")
+        merged: Corpus = reduce(add, corpora)
+
+        for corpus in corpora:
+            self._subcorpora.remove(corpus)
+        self._subcorpora.append(merged)
+
+    def visualize(self, metadata_fields: Optional[list[str]] = None):
+        visualizer = PlotlyVisualizer(*self._subcorpora or self._parent)
+        visualizer.visualize(
+            metadata_fields=metadata_fields or list(self._parent.metadata_fields())
+        )
+
+    def scatter_plot(self):
+        visualizer = ClusterVisualizer(self._subcorpora or self._parent)
+        visualizer.visualize()

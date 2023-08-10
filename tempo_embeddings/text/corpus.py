@@ -100,6 +100,11 @@ class Corpus:
     def highlightings(self) -> list[Highlighting]:
         return [passage.highlighting for passage in self.passages]
 
+    def metadata_fields(self) -> set[str]:
+        """Returns all metadata fields in the corpus."""
+
+        return {key for passage in self.passages for key in passage.metadata}
+
     def has_metadata(self, key: str, strict=False) -> bool:
         """Returns True if the corpus has a metadata key.
 

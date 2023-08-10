@@ -183,6 +183,7 @@ class TestCorpus:
         assert list(corpus.get_metadatas(key)) == expected
 
     def test_load_save(self, tmp_path):
+        # TODO: test/handle model (de)serialization
         filepath = tmp_path / "corpus"
         corpus = Corpus(
             [
@@ -191,7 +192,6 @@ class TestCorpus:
             ],
             [Highlighting(0, 4)],
         )
-        corpus.model = None
         corpus.save(filepath)
 
         assert filepath.is_file()

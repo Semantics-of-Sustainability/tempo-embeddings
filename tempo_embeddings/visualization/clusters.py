@@ -47,11 +47,6 @@ class ClusterVisualizer(Visualizer):
         rows = []
 
         for cluster in self._clusters:
-            print("-------------------------------")
-            print(cluster.label)
-            for passage, distance in cluster.nearest_neighbours():
-                print(distance, passage)
-
             for embedding in cluster.umap_embeddings():
                 rows.append(
                     {
