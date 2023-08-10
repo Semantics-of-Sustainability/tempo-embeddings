@@ -1,7 +1,6 @@
 import csv
 import gzip
 import logging
-from collections import defaultdict
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -12,7 +11,6 @@ import joblib
 import numpy as np
 from numpy.typing import ArrayLike
 from scipy.sparse import csr_matrix
-from sklearn.cluster import HDBSCAN
 from sklearn.feature_extraction.text import TfidfVectorizer
 from umap import UMAP
 from ..embeddings.model import TransformerModelWrapper
@@ -22,8 +20,6 @@ from .passage import Passage
 
 
 class Corpus:
-    OUTLIERS_LABEL = "outliers"
-
     def __init__(
         self,
         passages: list[Passage] = None,
@@ -64,6 +60,16 @@ class Corpus:
     @property
     def passages(self) -> list[Passage]:
         return self._passages
+
+    @property
+    def model(self) -> Optional[TransformerModelWrapper]:
+        return self._model
+
+    @property
+    def umap(self):
+        if self._umap is None:
+            self._compute_umap()
+        return self._umap
 
     @property
     def label(self) -> Optional[str]:
@@ -174,7 +180,12 @@ class Corpus:
                 ]
             )
 
-        # Dropping unmatched passages
+        if self._label is not None:
+            logging.warning(
+                "Parent corpus had label '%s', new subcorpus will have '%s'.",
+                self.label,
+                token,
+            )
         return Corpus(passages, self._model, self._umap, label=token)
 
     def _distances(self, normalize: bool):
@@ -245,12 +256,11 @@ class Corpus:
                 else exclude_word.casefold() not in word.casefold()
             )
 
-        if self.label != Corpus.OUTLIERS_LABEL:
-            _n = n + 1 if exact_match else n * 10
-            top_words: list[str] = [
-                word for word in self.topic_words(vectorizer, n=_n) if filter_word(word)
-            ]
-            self._label = "_".join(top_words[:n])
+        _n = n + 1 if exact_match else n * 10
+        top_words: list[str] = [
+            word for word in self.topic_words(vectorizer, n=_n) if filter_word(word)
+        ]
+        self._label = "_".join(top_words[:n])
 
     def topic_words(self, vectorizer: TfidfVectorizer, n: int = None) -> list[str]:
         """The most characteristic words in the corpus.
@@ -300,31 +310,10 @@ class Corpus:
         """The mean for all passage embeddings."""
         return np.array(self.umap_embeddings()).mean(axis=0)
 
-    def clusters(self, clusterer=HDBSCAN, **kwargs) -> Iterable["Corpus"]:
-        """Clusters the corpus using HDBSCAN and returns a list of subcorpora."""
-        labels: list[int] = (
-            clusterer(**kwargs).fit_predict(self.umap_embeddings()).astype(int).tolist()
-        )
-
-        clusters: dict[int, list[Passage]] = defaultdict(list)
-
-        for label, passage in zip(labels, self.passages):
-            clusters[label].append(passage)
-
-        return [
-            Corpus(
-                passages=passages,
-                model=self._model,
-                umap=self._umap,
-                label=Corpus.OUTLIERS_LABEL if label == -1 else label,
-            )
-            for label, passages in clusters.items()
-        ]
-
     def hover_datas(self, metadata_fields=None) -> list[dict[str, str]]:
         return [
             passage.hover_data(metadata_fields=metadata_fields)
-            | {"corpus": self.label or "---"}
+            | {"corpus": str(self.label)}
             for passage in self.passages
         ]
 
@@ -348,12 +337,6 @@ class Corpus:
             ArrayLike: a sparse matrix of n_passages x n_words
         """
         return vectorizer.transform(self.passages)
-
-    @property
-    def umap(self):
-        if self._umap is None:
-            self._compute_umap()
-        return self._umap
 
     def _compute_umap(self) -> list[ArrayLike]:
         assert self._umap is None, "UMAP has already been computed."

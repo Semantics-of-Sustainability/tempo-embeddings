@@ -5,6 +5,7 @@ from bokeh.palettes import Category10_10
 from bokeh.palettes import Category20_20
 from bokeh.plotting import Figure
 from bokeh.plotting import figure
+from ..settings import OUTLIERS_LABEL
 from ..text.corpus import Corpus
 from .visualizer import Visualizer
 
@@ -61,7 +62,7 @@ class ClusterVisualizer(Visualizer):
                     }
                 )
 
-            if cluster.label != Corpus.OUTLIERS_LABEL:
+            if cluster.label != OUTLIERS_LABEL:
                 # Add point for centroid
                 centroid = cluster.umap_mean()
                 rows.append(
@@ -100,7 +101,7 @@ class ClusterVisualizer(Visualizer):
         p: Figure = figure()
 
         for i, cluster in enumerate(self._clusters):
-            if cluster.label != Corpus.OUTLIERS_LABEL:
+            if cluster.label != OUTLIERS_LABEL:
                 centroid = cluster.umap_mean()
 
                 # FIXME: fill in or remove empty hover data
