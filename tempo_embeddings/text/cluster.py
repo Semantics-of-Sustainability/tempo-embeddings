@@ -18,10 +18,15 @@ class Cluster:
     """A container with helper functions for multiple corpora."""
 
     def __init__(
-        self, parent_corpus: Corpus, *, vectorizer: Optional[TfidfVectorizer] = None
+        self,
+        parent_corpus: Corpus,
+        *,
+        vectorizer: Optional[TfidfVectorizer] = None,
+        n_topic_words: int = 1,
     ) -> None:
         self._parent = parent_corpus
         self._vectorizer = vectorizer
+        self._n_topic_words = n_topic_words
 
         self._subcorpora: list[Corpus] = []
 
@@ -71,10 +76,10 @@ class Cluster:
         else:
             yield self._parent
 
-    def set_topic_labels(
-        self, *corpora, n: int = 1, exclude_word: Optional[str] = None
-    ) -> None:
+    def set_topic_labels(self, *corpora, exclude_word: Optional[str] = None) -> None:
         """Sets the topic labels for all subcorpora."""
+        if not self._n_topic_words:
+            raise RuntimeError(f"Number of topic words set to {self._n_topic_words}")
 
         for corpus in corpora:
             if corpus.label == -1:
@@ -82,7 +87,7 @@ class Cluster:
             else:
                 corpus.set_topic_label(
                     self.vectorizer,
-                    n=n,
+                    n=self._n_topic_words,
                     exclude_word=exclude_word or self._parent.label,
                 )
 
@@ -124,7 +129,7 @@ class Cluster:
             for label, passages in clusters.items()
         ]
 
-    def cluster(self, set_topic_labels: int = 1, **kwargs) -> None:
+    def cluster(self, **kwargs) -> None:
         """Clusters the parent corpus and creates initial subcorpora."""
 
         if self._subcorpora:
@@ -132,18 +137,19 @@ class Cluster:
 
         self._subcorpora = self._cluster(**kwargs)
 
-        if set_topic_labels > 0:
-            self.set_topic_labels(*self._subcorpora, n=set_topic_labels)
+        if self._n_topic_words:
+            self.set_topic_labels(*self._subcorpora)
 
-    def cluster_child(self, label, set_topic_labels: int = 1, **kwargs):
+    # TODO: rename to cluster_subcorpus
+    def cluster_child(self, label, **kwargs):
         child = self._get_corpus_by_label(label)
         if child is None:
             raise ValueError(f"No child corpus with label '{label}'")
 
         sub_clusters: list[Corpus] = self._cluster(child.umap_embeddings(), **kwargs)
 
-        if set_topic_labels > 0:
-            self.set_topic_labels(*sub_clusters, n=set_topic_labels)
+        if self._n_topic_words:
+            self.set_topic_labels(*sub_clusters)
 
         if len(set(self.labels()) < len(self.labels())):
             # TODO: merge subclusters with same label; only for outliers?
@@ -157,6 +163,9 @@ class Cluster:
         if len(corpora) < 2:
             raise ValueError(f"Need at least two corpora to merge, got {len(corpora)}")
         merged: Corpus = reduce(add, corpora)
+
+        if self._n_topic_words:
+            self.set_topic_labels(merged)
 
         for corpus in corpora:
             self._subcorpora.remove(corpus)
