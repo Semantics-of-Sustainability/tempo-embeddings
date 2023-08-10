@@ -1,4 +1,5 @@
 from typing import Iterable
+from typing import Optional
 import pandas as pd
 import plotly.express as px
 from dash import Dash
@@ -15,6 +16,8 @@ from .visualizer import Visualizer
 class PlotlyVisualizer(Visualizer):
     _SCATTER_ID: str = "scatter"
     _STANDARD_COLUMNS = ["text", "corpus"]
+    _MARGIN_X = 0.5
+    _MARGIN_Y = 0.5
 
     def __init__(self, *corpora: Iterable[Corpus]):
         self._corpora = corpora
@@ -43,7 +46,14 @@ class PlotlyVisualizer(Visualizer):
 
         return data
 
-    def _create_scatter(self, data: pd.DataFrame, columns: list[str]) -> Figure:
+    def _create_scatter(
+        self,
+        data: pd.DataFrame,
+        columns: list[str],
+        *,
+        scale_x: Optional[tuple[float, float]] = None,
+        scale_y: Optional[tuple[float, float]] = None,
+    ) -> Figure:
         fig = px.scatter(
             data,
             x="x",
@@ -55,11 +65,13 @@ class PlotlyVisualizer(Visualizer):
                 "y": False,
             }
             | {column: True for column in columns},
-            # animation_frame="decade",
-            # animation_group="corpus",
         )
-        fig.update_yaxes(scaleanchor="x", scaleratio=1)
-        # TODO: remove axis labels
+        fig.update_xaxes(visible=False)
+        fig.update_yaxes(visible=False)
+        if scale_x is not None:
+            fig.update_xaxes(range=scale_x)
+        if scale_y is not None:
+            fig.update_yaxes(range=scale_y)
 
         return fig
 
@@ -92,11 +104,19 @@ class PlotlyVisualizer(Visualizer):
             # FIXME: do we need to re-create the dataframe here?
             data = self._create_data(metadata_fields)
 
-            fig = self._create_scatter(
+            fig: Figure = self._create_scatter(
                 data[data[filter_field].between(*selected_range)],
                 columns=PlotlyVisualizer._STANDARD_COLUMNS + metadata_fields,
+                scale_x=(
+                    data.x.min() - PlotlyVisualizer._MARGIN_X,
+                    data.x.max() + PlotlyVisualizer._MARGIN_X,
+                ),
+                scale_y=(
+                    data.y.min() - PlotlyVisualizer._MARGIN_Y,
+                    data.y.max() + PlotlyVisualizer._MARGIN_Y,
+                ),
             )
-            fig.update_layout(transition_duration=500)
+            fig.update_layout()
             return fig
 
         return slider
