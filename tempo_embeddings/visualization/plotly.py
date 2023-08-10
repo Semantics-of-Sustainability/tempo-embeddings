@@ -13,6 +13,9 @@ from .visualizer import Visualizer
 
 
 class PlotlyVisualizer(Visualizer):
+    _SCATTER_ID: str = "scatter"
+    _STANDARD_COLUMNS = ["text", "corpus"]
+
     def __init__(self, *corpora: Iterable[Corpus]):
         self._corpora = corpora
 
@@ -35,13 +38,13 @@ class PlotlyVisualizer(Visualizer):
             axis=1,
         )
         data.text = data.text.apply(PlotlyVisualizer._break_lines)
-        data.year = data.year.astype(int)
-        data["decade"] = (data.year / 10).astype(int) * 10
+        if "year" in data.columns:
+            data.year = data.year.astype(int)
 
         return data
 
     def _create_scatter(self, data: pd.DataFrame, columns: list[str]) -> Figure:
-        return px.scatter(
+        fig = px.scatter(
             data,
             x="x",
             y="y",
@@ -55,6 +58,48 @@ class PlotlyVisualizer(Visualizer):
             # animation_frame="decade",
             # animation_group="corpus",
         )
+        fig.update_yaxes(scaleanchor="x", scaleratio=1)
+        # TODO: remove axis labels
+
+        return fig
+
+    def _add_slider(
+        self, data: pd.DataFrame, metadata_fields: list[str], filter_field: str = "year"
+    ):
+        slider_id = f"crossfilter-{filter_field}--slider"
+        start = data[filter_field].min()
+        end = data[filter_field].max()
+        marks = {
+            str(value): str(value)
+            for value in data[filter_field].unique()
+            if value in (start, end) or value % 5 == 0
+        }
+
+        slider = dcc.RangeSlider(
+            min=start,
+            max=end,
+            step=1,
+            marks=marks,
+            id=slider_id,
+            value=[start, end],
+            tooltip={},
+        )
+
+        @callback(
+            Output(PlotlyVisualizer._SCATTER_ID, "figure"), Input(slider_id, "value")
+        )
+        def update_figure(selected_range):
+            # FIXME: do we need to re-create the dataframe here?
+            data = self._create_data(metadata_fields)
+
+            fig = self._create_scatter(
+                data[data[filter_field].between(*selected_range)],
+                columns=PlotlyVisualizer._STANDARD_COLUMNS + metadata_fields,
+            )
+            fig.update_layout(transition_duration=500)
+            return fig
+
+        return slider
 
     @staticmethod
     def _break_lines(text: str, max_line_length: int = 50) -> str:
@@ -73,40 +118,15 @@ class PlotlyVisualizer(Visualizer):
         app = Dash(__name__)
 
         data = self._create_data(metadata_fields)
+        fig = self._create_scatter(
+            data, columns=PlotlyVisualizer._STANDARD_COLUMNS + metadata_fields
+        )
 
-        hover_columns = ["text", "corpus"] + metadata_fields
-        fig = self._create_scatter(data, columns=hover_columns)
-        fig.update_yaxes(scaleanchor="x", scaleratio=1)
-        # TODO: remove axis labels
-
-        div = [dcc.Graph(figure=fig, id="scatter")]
+        div = [dcc.Graph(figure=fig, id=PlotlyVisualizer._SCATTER_ID)]
 
         if "year" in data.columns:
-            div.append(
-                dcc.Slider(
-                    min=data.year.min(),
-                    max=data.year.max(),
-                    marks={str(year): str(year) for year in data.decade.unique()},
-                    id="crossfilter-year--slider",
-                )
-            )
-            div.append(html.Div(id="output-container-range-slider"))
-
-            @callback(
-                Output("scatter", "figure"),
-                Input("crossfilter-year--slider", "value"),
-            )
-            def update_figure(selected_year):
-                data = self._create_data(metadata_fields)
-
-                if selected_year is not None:
-                    decade = int(selected_year / 10) * 10
-                    data = data[data.decade == decade]
-                fig = self._create_scatter(data, columns=hover_columns)
-
-                fig.update_layout(transition_duration=500)
-
-                return fig
+            # Add range slider for filtering by year
+            div.append(self._add_slider(data, metadata_fields, filter_field="year"))
 
         app.layout = html.Div(div)
 
