@@ -289,11 +289,12 @@ class Cluster:
         return merged.label
 
     def visualize(self, metadata_fields: Optional[list[str]] = None):
-        visualizer = PlotlyVisualizer(*self._subcorpora or self._parent)
+        corpora = self._subcorpora or [self._parent]
+        visualizer = PlotlyVisualizer(*corpora)
         visualizer.visualize(
             metadata_fields=metadata_fields or list(self._parent.metadata_fields())
         )
 
     def scatter_plot(self):
-        visualizer = ClusterVisualizer(self._subcorpora or self._parent)
+        visualizer = ClusterVisualizer(self._subcorpora or [self._parent])
         visualizer.visualize()
