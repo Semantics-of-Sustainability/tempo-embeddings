@@ -22,7 +22,16 @@ class PlotlyVisualizer(Visualizer):
     def __init__(self, *corpora: Iterable[Corpus]):
         self._corpora = corpora
 
-    def _create_data(self, metadata_fields):
+    def _create_data(self, metadata_fields) -> pd.DataFrame:
+        """Create a dataframe with the UMAP embeddings and metadata fields.
+
+        Args:
+            metadata_fields: The metadata fields to include in the dataframe.
+
+        Returns:
+            A dataframe with the UMAP embeddings and metadata fields from all corpora.
+        """
+
         data = pd.concat(
             (
                 pd.concat(
@@ -54,6 +63,17 @@ class PlotlyVisualizer(Visualizer):
         scale_x: Optional[tuple[float, float]] = None,
         scale_y: Optional[tuple[float, float]] = None,
     ) -> Figure:
+        """Creates a scatter plot with the UMAP embeddings.
+
+        Args:
+            data: The dataframe with the UMAP embeddings and metadata fields.
+            columns: The metadata fields to include in the hover data.
+            scale_x: The range of the x-axis.
+            scale_y: The range of the y-axis.
+
+        Returns:
+            A Figure object with the scatter plot.
+        """
         fig = px.scatter(
             data,
             x="x",
@@ -76,15 +96,31 @@ class PlotlyVisualizer(Visualizer):
         return fig
 
     def _add_slider(
-        self, data: pd.DataFrame, metadata_fields: list[str], filter_field: str = "year"
-    ):
+        self,
+        data: pd.DataFrame,
+        metadata_fields: list[str],
+        filter_field: str = "year",
+        interval: int = 5,
+    ) -> dcc.RangeSlider:
+        """Generates a range slider for the a field.
+
+        Args:
+            data: The dataframe with the UMAP embeddings and metadata fields.
+            metadata_fields: The metadata fields to include in the hover data.
+            filter_field: The field to filter on. Needs to be numeric.
+            interval: The interval between the marks on the slider. Defaults to 5.
+
+        Returns:
+            A RangeSlider object.
+        """
+
         slider_id = f"crossfilter-{filter_field}--slider"
         start = data[filter_field].min()
         end = data[filter_field].max()
         marks = {
             str(value): str(value)
             for value in data[filter_field].unique()
-            if value in (start, end) or value % 5 == 0
+            if value in (start, end) or value % interval == 0
         }
 
         slider = dcc.RangeSlider(
@@ -122,7 +158,18 @@ class PlotlyVisualizer(Visualizer):
         return slider
 
     @staticmethod
-    def _break_lines(text: str, max_line_length: int = 50) -> str:
+    def _break_lines(
+        text: str, max_line_length: int = 50, linebreak: str = "<br>"
+    ) -> str:
+        """Breaks a text into lines with a maximum length.
+
+        Args:
+            text: The text to break into lines.
+            max_line_length: The maximum length of a line. Defaults to 50.
+
+        Returns:
+            The text with line breaks.
+        """
         words = text.split()
         lines = []
         line = ""
@@ -132,9 +179,15 @@ class PlotlyVisualizer(Visualizer):
                 line = ""
             line += f" {word}"
         lines.append(line)
-        return "<br>".join(lines)
+
+        return linebreak.join(lines)
 
     def visualize(self, metadata_fields: list[str] = None):
+        """Visualizes the UMAP embeddings.
+
+        Args:
+            metadata_fields: The metadata fields to include in the hover data.
+        """
         app = Dash(__name__)
 
         data = self._create_data(metadata_fields)
@@ -145,12 +198,14 @@ class PlotlyVisualizer(Visualizer):
 
         fig = self._create_scatter(data, columns=columns)
 
-        div = [dcc.Graph(figure=fig, id=PlotlyVisualizer._SCATTER_ID)]
+        children = [dcc.Graph(figure=fig, id=PlotlyVisualizer._SCATTER_ID)]
 
         if "year" in data.columns:
             # Add range slider for filtering by year
-            div.append(self._add_slider(data, metadata_fields, filter_field="year"))
+            children.append(
+                self._add_slider(data, metadata_fields, filter_field="year")
+            )
 
-        app.layout = html.Div(div)
+        app.layout = html.Div(children)
 
         app.run(debug=True)

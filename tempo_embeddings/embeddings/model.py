@@ -14,7 +14,15 @@ if TYPE_CHECKING:
 
 
 class TransformerModelWrapper(abc.ABC):
+    """A Wrapper around a transformer model."""
+
     def __init__(self, model, tokenizer):
+        """Constructor.
+
+        Args:
+            model: The transformer model to use (name or transformer.model object)
+            tokenizer: The tokenizer to use (name or transformer.tokenizer object)
+        """
         self._model = model
         self._tokenizer = tokenizer
         self._pipeline = pipeline(
@@ -32,7 +40,8 @@ class TransformerModelWrapper(abc.ABC):
 
     @torch.no_grad()
     def compute_passage_embeddings(self, passage: "Passage") -> None:
-        """Adds the embeddings for the given passage."""
+        """Computes the embeddings for a passage in-place."""
+
         if passage.embedding:
             raise ValueError("Passage already has embeddings")
 
@@ -41,7 +50,7 @@ class TransformerModelWrapper(abc.ABC):
 
     @torch.no_grad()
     def compute_embeddings(self, corpus: "Corpus"):
-        """Adds the embeddings for all passages in the given corpus."""
+        """Computes the embeddings for all passages in a corpus."""
 
         if corpus.has_embeddings(validate=False):
             logging.warning("Corpus already has embeddings")
@@ -50,6 +59,7 @@ class TransformerModelWrapper(abc.ABC):
             logging.warning("Corpus does not have any highlighted tokens.")
 
         # TODO: implement for other hidden layers but last one
+        # https://github.com/Semantics-of-Sustainability/tempo-embeddings/issues/15
 
         passages = corpus.passages_unembeddened()
         embeddings = self._pipeline([passage.text for passage in passages])
@@ -57,9 +67,21 @@ class TransformerModelWrapper(abc.ABC):
             passage.embedding = embedding[0]
 
     def tokenize_passage(self, passage: "Passage") -> None:
+        """Tokenizes a passage in-place.
+
+        Args:
+            passage: The passage to tokenize
+        """
+
         passage.tokenization = self._tokenize([passage.text])[0]
 
     def tokenize(self, corpus: "Corpus") -> None:
+        """Tokenizes all passages in a corpus.
+
+        Args:
+            corpus: The corpus to tokenize
+        """
+
         passages = corpus.passages_untokenized()
         if passages:
             tokenizations = self._tokenize([passage.text for passage in passages])
@@ -72,12 +94,22 @@ class TransformerModelWrapper(abc.ABC):
                     self.compute_token_embedding(passage)
 
     def compute_token_embeddings(self, corpus: "Corpus") -> None:
+        """Computes the embeddings for highlightings in all passages in a corpus.
+
+        Args:
+            corpus: The corpus to compute token embeddings for
+        """
+
         for passage in corpus.passages:
             if passage.highlighting and passage.highlighting.token_embedding is None:
                 self.compute_token_embedding(passage)
 
     def compute_token_embedding(self, passage: "Passage") -> None:
-        """Returns the token embedding for the given char span in the given passage."""
+        """Computes the token embedding for the highlighting in a passage.
+
+        Args:
+            passage: The passage to compute the token embedding for
+        """
 
         if passage.highlighting is None:
             raise ValueError(f"Passage {passage} does not have a highlighting")
