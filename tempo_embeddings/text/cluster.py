@@ -24,6 +24,15 @@ class Cluster:
         vectorizer: Optional[TfidfVectorizer] = None,
         n_topic_words: int = 1,
     ) -> None:
+        """Create a new cluster.
+
+        Args:
+            parent_corpus: The parent corpus of the cluster
+            vectorizer: The Tf-IDF vectorizer to use for the cluster;
+                used for extracting topic words and sub-corpus labels
+            n_topic_words: The number of topic words used for setting sub-corpus labels.
+                Defaults to 1
+        """
         self._parent = parent_corpus
         self._vectorizer = vectorizer
         self._n_topic_words = n_topic_words
@@ -34,12 +43,16 @@ class Cluster:
         return f"Cluster({self._parent!r}, {self._subcorpora!r})"
 
     def labels(self) -> list[str]:
-        """Returns the labels of the corpora."""
+        """Returns the labels of the sub-corpora."""
         return [corpus.label for corpus in self._subcorpora]
 
     @property
     def vectorizer(self) -> TfidfVectorizer:
-        """The vectorizer used to create the corpus."""
+        """The vectorizer used to create the corpus.
+
+        If no vectorizer was provided, a default vectorizer is created
+        based on the parent corpus, and cached for re-use.
+        """
         if self._vectorizer is None:
             if self._stopwords:
                 stop_words = self._stopwords
@@ -53,31 +66,69 @@ class Cluster:
 
         return self._vectorizer
 
-    def _get_corpus_by_label(self, label: str) -> Optional[Corpus]:
-        """Returns the corpus with the given label."""
+    def _get_corpora_by_label(self, label: str) -> list[Corpus]:
+        """Returns the corpora with the given label.
+
+        Args:
+            label: The label of the corpora to return.
+
+        Returns:
+            A list of corpora with the given label.
+            Should be a list of length 0 or 1; a warning is issued if there are multiple
+        """
         if self._subcorpora is None:
             raise ValueError("No subcorpora available")
 
-        return [corpus for corpus in self._subcorpora if corpus.label == label]
+        matches = [corpus for corpus in self._subcorpora if corpus.label == label]
 
-    def select_corpora(self, *labels: str) -> Iterable[Corpus]:
-        """Selects the corpora with the given labels."""
-        if labels:
-            for label in labels:
-                match self._get_corpus_by_label(label):
-                    case []:
-                        raise ValueError(f"No corpus with label '{label}'")
-                    case [corpus]:
-                        yield corpus
-                    case [*corpora]:
-                        raise ValueError(
-                            f"{len(corpora)} corpora found  with label '{label}'."
-                        )
-        else:
-            yield self._parent
+        if len(matches) > 1:
+            logging.warning("Found multiple corpora with label '%s'.", label)
 
-    def set_topic_labels(self, *corpora, exclude_word: Optional[str] = None) -> None:
-        """Sets the topic labels for all subcorpora."""
+        return matches
+
+    def select_subcorpora(self, *labels: str) -> Iterable[Corpus]:
+        """Selects the corpora with the given labels.
+
+        Args:
+            *labels: The labels of the corpora to select.
+
+        Returns:
+            The corpora with the given labels.
+
+        Raises:
+            ValueError: If no corpus with the given label is found.
+            RuntimeError: If multiple corpora with the given label are found.
+
+        """
+        for label in labels:
+            match self._get_corpora_by_label(label):
+                case []:
+                    raise ValueError(f"No corpus with label '{label}'")
+                case [corpus]:
+                    yield corpus
+                case [*corpora]:
+                    raise RuntimeError(
+                        f"{len(corpora)} corpora found  with label '{label}'."
+                    )
+
+    def set_topic_labels(
+        self,
+        *corpora: Iterable[Corpus],
+        exclude_word: Optional[str] = None,
+        exact_match: bool = False,
+    ) -> Iterable[str]:
+        """Sets the topic labels for all subcorpora.
+
+        Args:
+            *corpora: The corpora to set the topic labels for.
+            exclude_word: a word to exclude from the topic labels.
+            exact_match: whether to use exact matching for the exclude word.
+                Defaults to False
+
+        Returns:
+            The topic labels of the corpora.
+
+        """
         if not self._n_topic_words:
             raise RuntimeError(f"Number of topic words set to {self._n_topic_words}")
 
@@ -89,34 +140,61 @@ class Cluster:
                     self.vectorizer,
                     n=self._n_topic_words,
                     exclude_word=exclude_word or self._parent.label,
+                    exact_match=exact_match,
                 )
+            yield corpus.label
 
     def umap_embeddings(self, *child_labels) -> np.ndarray:
-        return np.array(
-            [
+        """Returns the UMAP embeddings of the parent corpus or the given sub-corpora.
+
+        Args:
+            *child_labels: The labels of the sub-corpora to return the embeddings from.
+
+        Returns:
+            The UMAP embeddings of the parent corpus or the given sub-corpora.
+        """
+        if child_labels:
+            embeddings = [
                 embeddings
-                for corpus in self.select_corpora(*child_labels)
+                for corpus in self.select_subcorpora(*child_labels)
                 for embeddings in corpus.umap_embeddings()
             ]
-        )
+        else:
+            embeddings = self._parent.umap_embeddings()
+        return np.array(embeddings)
 
     def passages(self, *child_labels) -> list[Passage]:
-        return [
-            passage
-            for corpus in self.select_corpora(*child_labels)
-            for passage in corpus.passages
-        ]
+        """Returns the passages of the parent corpus or the given sub-corpora.
 
-    def _cluster(self, *corpora, **kwargs) -> list[Corpus]:
-        labels: list[int] = (
+        Args:
+            *child_labels: The labels of the sub-corpora to return the passages from.
+                If empty, the passages of the parent corpus are returned.
+
+        Returns:
+            The passages of the parent corpus or the given sub-corpora.
+        """
+        if child_labels:
+            passages = [
+                passage
+                for corpus in self.select_subcorpora(*child_labels)
+                for passage in corpus.passages
+            ]
+        else:
+            passages = self._parent.passages
+        return passages
+
+    def _cluster(self, *corpus_labels, **kwargs) -> list[Corpus]:
+        cluster_labels: list[int] = (
             HDBSCAN(**kwargs)
-            .fit_predict(self.umap_embeddings(*corpora))
+            .fit_predict(self.umap_embeddings(*corpus_labels))
             .astype(int)
             .tolist()
         )
 
         clusters: dict[int, list[Passage]] = defaultdict(list)
-        for label, passage in zip(labels, self.passages(*corpora), strict=True):
+        for label, passage in zip(
+            cluster_labels, self.passages(*corpus_labels), strict=True
+        ):
             clusters[label].append(passage)
 
         return [
@@ -129,39 +207,76 @@ class Cluster:
             for label, passages in clusters.items()
         ]
 
-    def cluster(self, **kwargs) -> None:
-        """Clusters the parent corpus and creates initial subcorpora."""
+    def cluster(self, **kwargs) -> list[str]:
+        """Clusters the parent corpus and creates initial subcorpora.
+
+        Args:
+            **kwargs: Keyword arguments passed to the clustering algorithm.
+
+        Returns:
+            the labels of the new sub-corpora
+
+        Raises:
+            RuntimeError: If the parent corpus is already clustered.
+        """
 
         if self._subcorpora:
-            raise ValueError("Parent corpus already clustered")
+            raise RuntimeError("Parent corpus is already clustered")
 
         self._subcorpora = self._cluster(**kwargs)
 
         if self._n_topic_words:
-            self.set_topic_labels(*self._subcorpora)
+            labels = self.set_topic_labels(*self._subcorpora)
+            assert len(set(labels)) == len(self._subcorpora)
 
-    # TODO: rename to cluster_subcorpus
-    def cluster_child(self, label, **kwargs):
-        child = self._get_corpus_by_label(label)
-        if child is None:
-            raise ValueError(f"No child corpus with label '{label}'")
+        return self.labels()
 
-        sub_clusters: list[Corpus] = self._cluster(child.umap_embeddings(), **kwargs)
+    def cluster_subcorpus(self, label, **kwargs) -> list[str]:
+        """Split a sub-corpus into clusters.
+
+        Args:
+            label: The label of the sub-corpus to split.
+
+        Returns:
+            the labels of the new sub-corpora
+        """
+
+        subcorpora = self._get_corpora_by_label(label)
+        if len(subcorpora) != 1:
+            raise ValueError(
+                f"Found {len(subcorpora)} subcorpora with label '{label}'."
+            )
+
+        # FIXME: this calls self._get_corpus_by_label again downstream
+        sub_clusters: list[Corpus] = self._cluster(label, **kwargs)
 
         if self._n_topic_words:
-            self.set_topic_labels(*sub_clusters)
+            new_labels = list(self.set_topic_labels(*sub_clusters))
+        else:
+            new_labels = [corpus.label for corpus in sub_clusters]
 
-        if len(set(self.labels()) < len(self.labels())):
+        if len(set(self.labels())) < len(self.labels()):
             # TODO: merge subclusters with same label; only for outliers?
-            raise ValueError("Duplicate labels in subcorpora")
+            logging.debug("Duplicate labels in subcorpora")
 
-        self._subcorpora.remove(child)
+        self._subcorpora.remove(subcorpora[0])
         self._subcorpora.extend(sub_clusters)
 
-    def merge(self, *labels):
-        corpora = list(self.select_corpora(*labels))
-        if len(corpora) < 2:
-            raise ValueError(f"Need at least two corpora to merge, got {len(corpora)}")
+        return new_labels
+
+    def merge(self, label1: str, label2: str, *labels) -> str:
+        """Merge sub-corpora with the given labels.
+
+        Args:
+            label1: The label of the first corpus.
+            label2: The label of the second corpus.
+            *labels: The labels of the remaining corpora.
+
+        Returns: the label of the merged sub-corpus
+
+        """
+        corpora = list(self.select_subcorpora(label1, label2, *labels))
+
         merged: Corpus = reduce(add, corpora)
 
         if self._n_topic_words:
@@ -170,6 +285,8 @@ class Cluster:
         for corpus in corpora:
             self._subcorpora.remove(corpus)
         self._subcorpora.append(merged)
+
+        return merged.label
 
     def visualize(self, metadata_fields: Optional[list[str]] = None):
         visualizer = PlotlyVisualizer(*self._subcorpora or self._parent)

@@ -1,8 +1,7 @@
 import pandas as pd
 import seaborn as sns
 from bokeh.models.tools import HoverTool
-from bokeh.palettes import Category10_10
-from bokeh.palettes import Category20_20
+from bokeh.palettes import turbo
 from bokeh.plotting import Figure
 from bokeh.plotting import figure
 from ..settings import OUTLIERS_LABEL
@@ -11,22 +10,11 @@ from .visualizer import Visualizer
 
 
 class ClusterVisualizer(Visualizer):
-    _palettes = {10: Category10_10, 20: Category20_20}
-
     def __init__(self, clusters: list[Corpus]):
         self._clusters = clusters
 
     def _select_palette(self):
-        try:
-            return next(
-                palette
-                for size, palette in ClusterVisualizer._palettes.items()
-                if size >= len(self._clusters)
-            )
-        except StopIteration as e:
-            raise ValueError(
-                f"Too many clusters ({len(self._clusters)}) for available palettes."
-            ) from e
+        return turbo(len(self._clusters))
 
     def visualize(self, palette=None, point_size: int = 10):
         """Create a Scatter plot of the clusters.

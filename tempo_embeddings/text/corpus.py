@@ -240,7 +240,7 @@ class Corpus:
         vectorizer: TfidfVectorizer,
         *,
         exclude_word: str = "",
-        exact_match: bool = True,
+        exact_match: bool = False,
         n: int = 1,
     ) -> None:
         """Set the label of the corpus to the top word(s) in the corpus.
