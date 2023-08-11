@@ -210,7 +210,7 @@ class Corpus:
         )
         return (distances / np.linalg.norm(distances)) if normalize else distances
 
-    def nearest_neighbours(
+    def _nearest_neighbours(
         self, n: int = 5, normalize: bool = False
     ) -> Iterable[tuple[Passage, float]]:
         """Get the passages that are closest to the centroid of the corpus.
@@ -266,6 +266,8 @@ class Corpus:
             word for word in self.topic_words(vectorizer, n=_n) if filter_word(word)
         ]
         self._label = "_".join(top_words[:n])
+
+        return self._label
 
     def topic_words(self, vectorizer: TfidfVectorizer, n: int = None) -> list[str]:
         """The most characteristic words in the corpus.
@@ -482,5 +484,5 @@ class Corpus:
     @staticmethod
     @lru_cache
     def get_vocabulary(vectorizer: TfidfVectorizer) -> list[str]:
-        """Returns the vocabulary of a vectorizer."""
+        """Caching wrapper for getting the vocabulary of a vectorizer."""
         return vectorizer.get_feature_names_out()

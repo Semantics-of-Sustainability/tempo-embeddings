@@ -257,7 +257,7 @@ class Cluster:
 
         if len(set(self.labels())) < len(self.labels()):
             # TODO: merge subclusters with same label; only for outliers?
-            logging.debug("Duplicate labels in subcorpora")
+            logging.warning("Duplicate labels in subcorpora")
 
         self._subcorpora.remove(subcorpora[0])
         self._subcorpora.extend(sub_clusters)
