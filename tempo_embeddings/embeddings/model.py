@@ -6,6 +6,7 @@ import torch
 from transformers import AutoModelForMaskedLM
 from transformers import AutoTokenizer
 from transformers import RobertaModel
+from transformers import XmodModel
 from transformers import pipeline
 
 
@@ -152,3 +153,21 @@ class TransformerModelWrapper(abc.ABC):
 
 class RobertaModelWrapper(TransformerModelWrapper):
     _MODEL_CLASS = RobertaModel
+
+
+class XModModelWrapper(TransformerModelWrapper):
+    _MODEL_CLASS = XmodModel
+
+    @classmethod
+    def from_pretrained(
+        cls,
+        model_name_or_path: str,
+        default_language: str = "en_XX",
+        tokenizer_name_or_path: str = "xlm-roberta-base",
+    ):
+        model = XmodModel.from_pretrained(model_name_or_path)
+        model.set_default_language(default_language)
+
+        tokenizer = AutoTokenizer.from_pretrained(tokenizer_name_or_path)
+
+        return cls(model, tokenizer)
