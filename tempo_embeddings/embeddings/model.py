@@ -3,6 +3,7 @@ import logging
 from typing import TYPE_CHECKING
 import numpy as np
 import torch
+from transformers import AutoModelForMaskedLM
 from transformers import AutoTokenizer
 from transformers import RobertaModel
 from transformers import pipeline
@@ -15,6 +16,11 @@ if TYPE_CHECKING:
 
 class TransformerModelWrapper(abc.ABC):
     """A Wrapper around a transformer model."""
+
+    _MODEL_CLASS = AutoModelForMaskedLM
+    """Overwrite in subclasses for other model types."""
+    _TOKENIZER_CLASS = AutoTokenizer
+    """Overwrite in subclasses for other tokenizer types."""
 
     def __init__(self, model, tokenizer):
         """Constructor.
@@ -137,15 +143,12 @@ class TransformerModelWrapper(abc.ABC):
         return self._tokenizer(texts)
 
     @classmethod
-    @abc.abstractmethod
     def from_pretrained(cls, model_name_or_path: str):
-        return NotImplemented
+        return cls(
+            cls._MODEL_CLASS.from_pretrained(model_name_or_path),
+            cls._TOKENIZER_CLASS.from_pretrained(model_name_or_path),
+        )
 
 
 class RobertaModelWrapper(TransformerModelWrapper):
-    @classmethod
-    def from_pretrained(cls, model_name_or_path: str):
-        return cls(
-            RobertaModel.from_pretrained(model_name_or_path),
-            AutoTokenizer.from_pretrained(model_name_or_path),
-        )
+    _MODEL_CLASS = RobertaModel
