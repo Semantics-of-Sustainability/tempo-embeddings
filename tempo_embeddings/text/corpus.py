@@ -250,8 +250,8 @@ class Corpus:
         vectorizer: TfidfVectorizer,
         *,
         exclude_word: str = "",
-        exact_match: bool = False,
         n: int = 1,
+        exact_match: bool,
     ) -> None:
         """Set the label of the corpus to the top word(s) in the corpus.
 
@@ -260,8 +260,8 @@ class Corpus:
                 see Corpus.tfidf_vectorizer() and Corpus.topic_words().
             exclude_word: The word to exclude from the label,
                 e.g. the search term used for composing this corpus
-            exact_match: if False, exclude all words that contain the `exclude_word`.
             n: concatenate the top n words in the corpus as the label.
+            exact_match: if False, exclude all words that contain the `exclude_word`.
         """
 
         def filter_word(word: str) -> bool:
@@ -394,7 +394,7 @@ class Corpus:
         embeddings = [passage.highlighting.umap_embedding for passage in self.passages]
 
         if any(embedding is None for embedding in embeddings):
-            logging.warning("UMAP embeddings have not been computed.")
+            logging.warning("UMAP embeddings have not been computed. Computing now...")
             # FIXME: this will raise an error for newly added passages
             embeddings = self._compute_umap()
 

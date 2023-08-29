@@ -115,7 +115,7 @@ class Cluster:
         self,
         *corpora: Iterable[Corpus],
         exclude_word: Optional[str] = None,
-        exact_match: bool = False,
+        exact_match: bool = True,
     ) -> Iterable[str]:
         """Sets the topic labels for all subcorpora.
 
@@ -123,7 +123,7 @@ class Cluster:
             *corpora: The corpora to set the topic labels for.
             exclude_word: a word to exclude from the topic labels.
             exact_match: whether to use exact matching for the exclude word.
-                Defaults to False
+                Defaults to True
 
         Returns:
             The topic labels of the corpora.
@@ -149,6 +149,7 @@ class Cluster:
 
         Args:
             *child_labels: The labels of the sub-corpora to return the embeddings from.
+                If empty, the embeddings of the parent corpus are returned.
 
         Returns:
             The UMAP embeddings of the parent corpus or the given sub-corpora.
@@ -226,8 +227,11 @@ class Cluster:
         self._subcorpora = self._cluster(**kwargs)
 
         if self._n_topic_words:
-            labels = self.set_topic_labels(*self._subcorpora)
-            assert len(set(labels)) == len(self._subcorpora)
+            labels = list(self.set_topic_labels(*self._subcorpora))
+
+            assert len(labels) == len(self._subcorpora)
+            if len(set(labels)) != len(self._subcorpora):
+                logging.warning("Labels are not unique: %s", str(labels))
 
         return self.labels()
 
