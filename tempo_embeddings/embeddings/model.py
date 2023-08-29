@@ -1,11 +1,9 @@
 import abc
 import logging
-from pathlib import Path
 from typing import TYPE_CHECKING
 import numpy as np
 import torch
-from accelerate import init_empty_weights
-from accelerate import load_checkpoint_and_dispatch
+from accelerate import Accelerator
 from transformers import AutoModelForMaskedLM
 from transformers import AutoTokenizer
 from transformers import RobertaModel
@@ -21,12 +19,7 @@ if TYPE_CHECKING:
 class TransformerModelWrapper(abc.ABC):
     """A Wrapper around a transformer model."""
 
-    _MODEL_CLASS = AutoModelForMaskedLM
-    """Overwrite in subclasses for other model types."""
-    _TOKENIZER_CLASS = AutoTokenizer
-    """Overwrite in subclasses for other tokenizer types."""
-
-    def __init__(self, model, tokenizer):
+    def __init__(self, model, tokenizer, accelerate: bool = True):
         """Constructor.
 
         Args:
@@ -35,8 +28,16 @@ class TransformerModelWrapper(abc.ABC):
         """
         self._model = model
         self._tokenizer = tokenizer
+
+        if accelerate:
+            accelerator = Accelerator()
+            accelerator.prepare(self._model)
+
         self._pipeline = pipeline(
-            "feature-extraction", model=self._model, tokenizer=self._tokenizer
+            "feature-extraction",
+            model=self._model,
+            tokenizer=self._tokenizer,
+            device=model.device,
         )
 
     @property
@@ -147,74 +148,53 @@ class TransformerModelWrapper(abc.ABC):
         return self._tokenizer(texts)
 
     @classmethod
-    def _load_model(cls, model_name_or_path: str):
-        with init_empty_weights():
-            model = cls._MODEL_CLASS.from_pretrained(model_name_or_path)
-        model.tie_weights()
-
-        checkpoint = cls.get_model_file(model)
-        if not checkpoint.is_file():
-            raise ValueError(f"Checkpoint file does not exist: {checkpoint}")
-
-        try:
-            model = load_checkpoint_and_dispatch(
-                model, checkpoint=str(checkpoint), device_map="auto"
-            )
-        except AttributeError as e:
-            logging.error("Could not accelerate model: %s", str(e))
-            model = cls._MODEL_CLASS.from_pretrained(model_name_or_path)
-        return model
-
-    @classmethod
-    def from_pretrained(cls, model_name_or_path: str):
-        model = cls._load_model(model_name_or_path)
-        return cls(model, cls._TOKENIZER_CLASS.from_pretrained(model_name_or_path))
-
-    @staticmethod
-    def get_model_file(model) -> Path:
-        """Returns the path to the model file.
-
-        Args:
-            model_name: The name of the model
-
-        Returns:
-            The path to the model file
-        """
-
-        return (
-            Path.home()
-            / ".cache"
-            / "huggingface"
-            / "hub"
-            / f"models--{model.config.name_or_path.replace('/', '--')}"
-            / "snapshots"
-            / model.config._commit_hash  # pylint: disable=protected-access
-            / "pytorch_model.bin"
-        ).absolute()
+    def from_pretrained(
+        cls,
+        model_name_or_path: str,
+        tokenizer_name_or_path: str = None,
+        model_class=AutoModelForMaskedLM,
+    ):
+        return cls(
+            model_class.from_pretrained(model_name_or_path),
+            AutoTokenizer.from_pretrained(tokenizer_name_or_path or model_name_or_path),
+        )
 
 
 class RobertaModelWrapper(TransformerModelWrapper):
-    _MODEL_CLASS = RobertaModel
-
-
-class XModModelWrapper(TransformerModelWrapper):
-    _MODEL_CLASS = XmodModel
-
     @classmethod
     def from_pretrained(
         cls,
         model_name_or_path: str,
-        default_language: str = "en_XX",
-        tokenizer_name_or_path: str = "xlm-roberta-base",
+        tokenizer_name_or_path: str = None,
+        model_class=RobertaModel,
     ):
-        model = cls._load_model(model_name_or_path)
+        # TODO: this should return a RobertaModelWrapper object
+        return TransformerModelWrapper.from_pretrained(
+            model_name_or_path, tokenizer_name_or_path, model_class
+        )
 
-        if default_language in model.config.languages:
-            model.set_default_language(default_language)
+
+class XModModelWrapper(TransformerModelWrapper):
+    @classmethod
+    def from_pretrained(
+        cls,
+        model_name_or_path: str,
+        tokenizer_name_or_path: str = "xlm-roberta-base",
+        model_class=XmodModel,
+        default_language: str = "en_XX",
+    ):
+        # TODO: this should return a XModModelWrapper object
+        model = TransformerModelWrapper.from_pretrained(
+            model_name_or_path, tokenizer_name_or_path, model_class
+        )
+
+        _model = model._model  # pylint: disable=protected-access
+        if default_language in _model.config.languages:
+            _model.set_default_language(default_language)
         else:
             raise ValueError(
                 f"Default language '{default_language}' not in model languages. "
-                f"Valid languages are: {str(model.config.languages)}"
+                f"Valid languages are: {str(_model.config.languages)}"
             )
 
-        return cls(model, AutoTokenizer.from_pretrained(tokenizer_name_or_path))
+        return model
