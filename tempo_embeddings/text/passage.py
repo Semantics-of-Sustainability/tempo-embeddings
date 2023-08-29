@@ -88,11 +88,15 @@ class Passage:
             text += f"<br>{metadata}"
         return text
 
-    def hover_data(self, metadata_fields: Optional[list[str]] = None) -> dict[str, Any]:
+    def hover_data(
+        self, metadata_fields: Optional[list[str]] = None, max_length: int = 100
+    ) -> dict[str, Any]:
         if metadata_fields is None:
             metadata = self.metadata
         else:
-            metadata = {key: str(self.metadata.get(key)) for key in metadata_fields}
+            metadata = {
+                key: str(self.metadata.get(key))[:max_length] for key in metadata_fields
+            }
 
         text = self.highlighted_text() if self.highlighting else self.text
         return {"text": text} | metadata
