@@ -1,8 +1,11 @@
 import abc
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING
 import numpy as np
 import torch
+from accelerate import init_empty_weights
+from accelerate import load_checkpoint_and_dispatch
 from transformers import AutoModelForMaskedLM
 from transformers import AutoTokenizer
 from transformers import RobertaModel
@@ -144,11 +147,50 @@ class TransformerModelWrapper(abc.ABC):
         return self._tokenizer(texts)
 
     @classmethod
+    def _load_model(cls, model_name_or_path: str):
+        with init_empty_weights():
+            model = cls._MODEL_CLASS.from_pretrained(model_name_or_path)
+        model.tie_weights()
+
+        checkpoint = cls.get_model_file(model)
+        if not checkpoint.is_file():
+            raise ValueError(f"Checkpoint file does not exist: {checkpoint}")
+
+        try:
+            model = load_checkpoint_and_dispatch(
+                model, checkpoint=str(checkpoint), device_map="auto"
+            )
+        except AttributeError as e:
+            logging.error("Could not accelerate model: %s", str(e))
+            model = cls._MODEL_CLASS.from_pretrained(model_name_or_path)
+        return model
+
+    @classmethod
     def from_pretrained(cls, model_name_or_path: str):
-        return cls(
-            cls._MODEL_CLASS.from_pretrained(model_name_or_path),
-            cls._TOKENIZER_CLASS.from_pretrained(model_name_or_path),
-        )
+        model = cls._load_model(model_name_or_path)
+        return cls(model, cls._TOKENIZER_CLASS.from_pretrained(model_name_or_path))
+
+    @staticmethod
+    def get_model_file(model) -> Path:
+        """Returns the path to the model file.
+
+        Args:
+            model_name: The name of the model
+
+        Returns:
+            The path to the model file
+        """
+
+        return (
+            Path.home()
+            / ".cache"
+            / "huggingface"
+            / "hub"
+            / f"models--{model.config.name_or_path.replace('/', '--')}"
+            / "snapshots"
+            / model.config._commit_hash  # pylint: disable=protected-access
+            / "pytorch_model.bin"
+        ).absolute()
 
 
 class RobertaModelWrapper(TransformerModelWrapper):
@@ -165,9 +207,14 @@ class XModModelWrapper(TransformerModelWrapper):
         default_language: str = "en_XX",
         tokenizer_name_or_path: str = "xlm-roberta-base",
     ):
-        model = XmodModel.from_pretrained(model_name_or_path)
-        model.set_default_language(default_language)
+        model = cls._load_model(model_name_or_path)
 
-        tokenizer = AutoTokenizer.from_pretrained(tokenizer_name_or_path)
+        if default_language in model.config.languages:
+            model.set_default_language(default_language)
+        else:
+            raise ValueError(
+                f"Default language '{default_language}' not in model languages. "
+                f"Valid languages are: {str(model.config.languages)}"
+            )
 
-        return cls(model, tokenizer)
+        return cls(model, AutoTokenizer.from_pretrained(tokenizer_name_or_path))
