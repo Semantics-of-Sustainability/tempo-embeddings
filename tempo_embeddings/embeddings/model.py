@@ -1,9 +1,9 @@
 import abc
 import logging
 from typing import TYPE_CHECKING
-import numpy as np
 import torch
 from accelerate import Accelerator
+from tqdm import tqdm
 from transformers import AutoModelForMaskedLM
 from transformers import AutoTokenizer
 from transformers import RobertaModel
@@ -18,12 +18,23 @@ if TYPE_CHECKING:
 class TransformerModelWrapper(abc.ABC):
     """A Wrapper around a transformer model."""
 
-    def __init__(self, model, tokenizer, accelerate: bool = True, layer: int = -1):
+    def __init__(
+        self,
+        model,
+        tokenizer,
+        *,
+        accelerate: bool = True,
+        layer: int = -1,
+        batch_size: int = 128,
+    ):
         """Constructor.
 
         Args:
             model: The transformer model to use (name or transformer.model object)
             tokenizer: The tokenizer to use (name or transformer.tokenizer object)
+            accelerate: if True, use the accelerate library to speed up computations
+            layer: The hidden layer in the model to use for embeddings
+            batch_size: The batch size to use for computing embeddings
         """
         if not model.config.output_hidden_states:
             raise ValueError(
@@ -40,6 +51,7 @@ class TransformerModelWrapper(abc.ABC):
         self._model = model
         self._tokenizer = tokenizer
         self._layer = layer
+        self._batch_size = batch_size
 
         if accelerate:
             accelerator = Accelerator()
@@ -53,6 +65,14 @@ class TransformerModelWrapper(abc.ABC):
     @property
     def device(self) -> torch.device:
         return self._model.device
+
+    @property
+    def batch_size(self) -> int:
+        return self._batch_size
+
+    @batch_size.setter
+    def batch_size(self, batch_size: int) -> None:
+        self._batch_size = batch_size
 
     @property
     def layer(self) -> int:
@@ -70,20 +90,29 @@ class TransformerModelWrapper(abc.ABC):
     def _compute_embeddings(self, passages: list["Passage"]) -> torch.Tensor:
         """Computes the embeddings for a list of passages."""
 
-        encodings = self._tokenizer(
-            [passage.text for passage in passages],
-            return_tensors="pt",
-            padding=True,
-            truncation=True,
-        ).to(self.device)
+        for batch_start in tqdm(
+            range(0, len(passages), self.batch_size),
+            desc="Embeddings",
+            unit="batch",
+            total=len(passages) // self.batch_size,
+        ):
+            end: int = min(batch_start + self.batch_size, len(passages))
+            batch: list[Passage] = passages[batch_start:end]
 
-        for passage, encoding in zip(passages, encodings["input_ids"], strict=True):
-            # Storing tokenizations for each passage
-            passage.tokenization = encoding
+            encodings = self._tokenizer(
+                [passage.text for passage in batch],
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+            ).to(self.device)
 
-        embeddings = self._model(**encodings)
+            for i, passage in enumerate(batch):
+                # Store tokenizations for each passage
+                passage.tokenization = encodings[i]
 
-        return embeddings.hidden_states[self.layer]
+            embeddings = self._model(**encodings)
+
+            yield embeddings.hidden_states[self.layer]
 
     def compute_embeddings(self, corpus: "Corpus") -> None:
         """Computes the embeddings for highlightings in all passages in a corpus.
@@ -93,25 +122,25 @@ class TransformerModelWrapper(abc.ABC):
         """
 
         if passages := corpus.passages_with_highlighting():
-            # TODO: optionally split into batches
-            embeddings = self._compute_embeddings(passages)
+            passages_iter = iter(passages)
+            for embeddings_batch in self._compute_embeddings(passages):
+                for embedding in embeddings_batch:
+                    passage = next(passages_iter)
+                    first_token = passage.tokenization.char_to_token(
+                        passage.highlighting.start
+                    )
+                    last_token = passage.tokenization.char_to_token(
+                        passage.highlighting.end - 1
+                    )
 
-            for embedding, passage in zip(embeddings, passages):
-                first_token = passage.tokenization.char_to_token(
-                    passage.highlighting.start
-                )
-                last_token = passage.tokenization.char_to_token(
-                    passage.highlighting.end - 1
-                )
+                    if first_token == last_token:
+                        token_embedding = embedding[first_token]
+                    else:
+                        # highlighting spans across multiple tokens
+                        token_embeddings = embedding[first_token : last_token + 1]
+                        token_embedding = torch.mean(token_embeddings, axis=0)
 
-                if first_token == last_token:
-                    token_embedding = embedding[first_token]
-                else:
-                    # highlighting spans across multiple tokens
-                    token_embeddings = embedding[first_token : last_token + 1]
-                    token_embedding = np.mean(token_embeddings, axis=0)
-
-                passage.highlighting.token_embedding = token_embedding
+                    passage.highlighting.token_embedding = token_embedding.detach()
         else:
             logging.error("No passages with highlighting found.")
 

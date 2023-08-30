@@ -151,7 +151,7 @@ class Corpus:
             # batch-compute embeddings for all passages in corpus.
             self.compute_embeddings()
 
-        return [passage.token_embedding() for passage in self.passages]
+        return [passage.token_embedding().cpu().numpy() for passage in self.passages]
 
     def has_embeddings(self, validate=False) -> bool:
         """Returns True embeddings have been computed for the corpus.
