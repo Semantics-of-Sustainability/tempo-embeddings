@@ -67,30 +67,9 @@ class TransformerModelWrapper(abc.ABC):
         return self._model.config._name_or_path  # pylint: disable=protected-access
 
     @torch.no_grad()
-    def compute_passage_embeddings(self, passage: "Passage") -> None:
-        """Computes the embeddings for a passage in-place."""
+    def _compute_embeddings(self, passages: list["Passage"]) -> torch.Tensor:
+        """Computes the embeddings for a list of passages."""
 
-        if passage.embedding:
-            raise ValueError("Passage already has embeddings")
-
-        encoding = self._tokenizer(passage.text, return_tensors="pt").to(self.device)
-        embeddings = self._model(**encoding).hidden_states[self.layer]
-        passage.embedding = embeddings[0]
-
-    @torch.no_grad()
-    def compute_embeddings(self, corpus: "Corpus"):
-        """Computes the embeddings for all passages in a corpus."""
-
-        if corpus.has_embeddings(validate=False):
-            logging.warning("Corpus already has embeddings")
-
-        if not corpus.highlightings:
-            logging.warning("Corpus does not have any highlighted tokens.")
-
-        # TODO: implement for other hidden layers but last one
-        # https://github.com/Semantics-of-Sustainability/tempo-embeddings/issues/15
-
-        passages = corpus.passages_unembeddened()
         encodings = self._tokenizer(
             [passage.text for passage in passages],
             return_tensors="pt",
@@ -98,72 +77,43 @@ class TransformerModelWrapper(abc.ABC):
             truncation=True,
         ).to(self.device)
 
-        embeddings = self._model(**encodings).hidden_states[self.layer]
+        for passage, encoding in zip(passages, encodings["input_ids"], strict=True):
+            # Storing tokenizations for each passage
+            passage.tokenization = encoding
 
-        for passage, embedding in zip(passages, embeddings, strict=True):
-            passage.embedding = embedding[0]
+        embeddings = self._model(**encodings)
 
-    def tokenize(self, corpus: "Corpus") -> None:
-        """Tokenizes all passages in a corpus.
+        return embeddings.hidden_states[self.layer]
 
-        Args:
-            corpus: The corpus to tokenize
-        """
-
-        passages = corpus.passages_untokenized()
-        if passages:
-            tokenizations = self._tokenizer(
-                [passage.text for passage in passages],
-                return_tensors="pt",
-                padding=True,
-                truncation=True,
-            )
-            for i, passage in enumerate(passages):
-                if passage.tokenization is not None:
-                    raise ValueError(f"Passage {passage} already has a tokenization")
-                passage.tokenization = tokenizations[i]
-
-                if passage.highlighting:
-                    self.compute_token_embedding(passage)
-
-    def compute_token_embeddings(self, corpus: "Corpus") -> None:
+    def compute_embeddings(self, corpus: "Corpus") -> None:
         """Computes the embeddings for highlightings in all passages in a corpus.
 
         Args:
             corpus: The corpus to compute token embeddings for
         """
 
-        for passage in corpus.passages:
-            if passage.highlighting and passage.highlighting.token_embedding is None:
-                self.compute_token_embedding(passage)
+        if passages := corpus.passages_with_highlighting():
+            # TODO: optionally split into batches
+            embeddings = self._compute_embeddings(passages)
 
-    def compute_token_embedding(self, passage: "Passage") -> None:
-        """Computes the token embedding for the highlighting in a passage.
+            for embedding, passage in zip(embeddings, passages):
+                first_token = passage.tokenization.char_to_token(
+                    passage.highlighting.start
+                )
+                last_token = passage.tokenization.char_to_token(
+                    passage.highlighting.end - 1
+                )
 
-        Args:
-            passage: The passage to compute the token embedding for
-        """
+                if first_token == last_token:
+                    token_embedding = embedding[first_token]
+                else:
+                    # highlighting spans across multiple tokens
+                    token_embeddings = embedding[first_token : last_token + 1]
+                    token_embedding = np.mean(token_embeddings, axis=0)
 
-        if passage.highlighting is None:
-            raise ValueError(f"Passage {passage} does not have a highlighting")
-        if passage.highlighting.token_embedding is not None:
-            raise ValueError(
-                f"Highlighting already has a token embedding: {passage.highlighting}"
-            )
-        if passage.embedding is None:
-            raise ValueError("Passage does not have embeddings")
-
-        first_token = passage.tokenization.char_to_token(passage.highlighting.start)
-        last_token = passage.tokenization.char_to_token(passage.highlighting.end - 1)
-
-        if first_token == last_token:
-            token_embedding = passage.embedding[first_token]
+                passage.highlighting.token_embedding = token_embedding
         else:
-            # highlighting spans multiple tokens
-            token_embeddings = passage.embedding[first_token : last_token + 1]
-            token_embedding = np.mean(token_embeddings, axis=0)
-
-        passage.highlighting.token_embedding = token_embedding
+            logging.error("No passages with highlighting found.")
 
     @classmethod
     def from_pretrained(
@@ -175,10 +125,9 @@ class TransformerModelWrapper(abc.ABC):
         **kwargs,
     ):
         return cls(
-            model_class.from_pretrained(
-                model_name_or_path, output_hidden_states=True, layer=layer
-            ),
+            model_class.from_pretrained(model_name_or_path, output_hidden_states=True),
             AutoTokenizer.from_pretrained(tokenizer_name_or_path or model_name_or_path),
+            layer=layer,
             **kwargs,
         )
 

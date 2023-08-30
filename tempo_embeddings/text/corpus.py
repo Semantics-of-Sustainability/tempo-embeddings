@@ -61,6 +61,11 @@ class Corpus:
     def passages(self) -> list[Passage]:
         return self._passages
 
+    def passages_with_highlighting(self) -> list[Passage]:
+        return [
+            passage for passage in self._passages if passage.highlighting is not None
+        ]
+
     @property
     def model(self) -> Optional[TransformerModelWrapper]:
         return self._model
@@ -81,12 +86,6 @@ class Corpus:
 
     def texts(self):
         return [passage.text for passage in self._passages]
-
-    def passages_untokenized(self) -> list[Passage]:
-        return [passage for passage in self._passages if passage.tokenization is None]
-
-    def passages_unembeddened(self) -> list[Passage]:
-        return [passage for passage in self._passages if passage.embedding is None]
 
     @property
     def embeddings_model(self) -> Optional[TransformerModelWrapper]:
@@ -139,10 +138,9 @@ class Corpus:
         """
 
         if self._model is None:
-            logging.warning("Corpus does not have a model.")
-        self._model.compute_embeddings(self)
-        self._model.tokenize(self)
-        self._model.compute_token_embeddings(self)
+            logging.error("Corpus does not have a model.")
+        else:
+            self._model.compute_embeddings(self)
 
     def _token_embeddings(self) -> list[ArrayLike]:
         if not self.highlightings:
@@ -165,7 +163,7 @@ class Corpus:
             True if embeddings have been computed
         """
         func = all if validate else any
-        return func(passage.embedding is not None for passage in self.passages)
+        return func(passage.has_embedding() is not None for passage in self.passages)
 
     def has_tokenizations(self, validate: bool = False) -> bool:
         func = all if validate else any
@@ -379,14 +377,14 @@ class Corpus:
 
         logging.info("Computing UMAP...")
         umap = UMAP(metric="cosine")
-        embeddings = umap.fit_transform(np.array(self._token_embeddings()))
+        umap_embeddings = umap.fit_transform(np.array(self._token_embeddings()))
 
         # TODO: this becomes invalid when highlightings are changes
-        for embedding, passage in zip(embeddings, self.passages):
+        for embedding, passage in zip(umap_embeddings, self.passages):
             passage.highlighting.umap_embedding = embedding
 
         self._umap = umap
-        return embeddings
+        return umap_embeddings
 
     def umap_embeddings(self) -> list[ArrayLike]:
         """Returns a list of UMAP embeddings for all passages in the corpus."""

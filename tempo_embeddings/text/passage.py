@@ -11,20 +11,16 @@ from .highlighting import Highlighting
 class Passage:
     """A text passage with optional metadata and highlighting."""
 
-    # pylint: disable=too-many-arguments
     def __init__(
         self,
         text: str,
         metadata: dict = None,
         highlighting: Optional[Highlighting] = None,
-        embedding: Optional[ArrayLike] = None,
         tokenization: Optional[Encoding] = None,
     ) -> None:
         self._text = text.strip()
         self._metadata = metadata or {}
         self._highlighting = highlighting
-
-        self._embedding: Optional[ArrayLike] = embedding
         self._tokenization: Optional[Encoding] = tokenization
 
     @property
@@ -40,20 +36,17 @@ class Passage:
         return self._highlighting
 
     @property
-    def embedding(self) -> Optional[ArrayLike]:
-        return self._embedding
-
-    @embedding.setter
-    def embedding(self, value: Any):
-        self._embedding = value
-
-    @property
     def tokenization(self) -> Optional[Encoding]:
         return self._tokenization
 
     @tokenization.setter
     def tokenization(self, value: Encoding):
         self._tokenization = value
+
+    def has_embedding(self) -> bool:
+        return (
+            self.highlighting is None or self.highlighting.token_embedding is not None
+        )
 
     def highlighted_text(
         self,
@@ -264,7 +257,6 @@ class Passage:
             self._text,
             self._metadata,
             highlighting=highlighting,
-            embedding=self.embedding,
             tokenization=self.tokenization,
         )
 
