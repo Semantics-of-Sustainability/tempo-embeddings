@@ -8,7 +8,6 @@ from transformers import AutoModelForMaskedLM
 from transformers import AutoTokenizer
 from transformers import RobertaModel
 from transformers import XmodModel
-from transformers import pipeline
 
 
 if TYPE_CHECKING:
@@ -19,31 +18,49 @@ if TYPE_CHECKING:
 class TransformerModelWrapper(abc.ABC):
     """A Wrapper around a transformer model."""
 
-    def __init__(self, model, tokenizer, accelerate: bool = True):
+    def __init__(self, model, tokenizer, accelerate: bool = True, layer: int = -1):
         """Constructor.
 
         Args:
             model: The transformer model to use (name or transformer.model object)
             tokenizer: The tokenizer to use (name or transformer.tokenizer object)
         """
+        if not model.config.output_hidden_states:
+            raise ValueError(
+                "Model must output hidden states. "
+                "Please set output_hidden_states=True when initializing the model."
+            )
+
+        if abs(layer) > model.config.num_hidden_layers:
+            raise ValueError(
+                f"Layer {layer} does not exist. "
+                f"Model only has {model.config.num_hidden_layers} layers."
+            )
+
         self._model = model
         self._tokenizer = tokenizer
+        self._layer = layer
 
         if accelerate:
             accelerator = Accelerator()
             accelerator.prepare(self._model)
 
-        self._pipeline = pipeline(
-            "feature-extraction",
-            model=self._model,
-            tokenizer=self._tokenizer,
-            device=model.device,
-        )
-
     @property
     def dimensionality(self) -> int:
         """Returns the dimensionality of the embeddings"""
         return self._model.embeddings.word_embeddings.embedding_dim
+
+    @property
+    def device(self) -> torch.device:
+        return self._model.device
+
+    @property
+    def layer(self) -> int:
+        return self._layer
+
+    @layer.setter
+    def layer(self, layer: int) -> None:
+        self._layer = layer
 
     @property
     def name(self) -> str:
@@ -56,8 +73,9 @@ class TransformerModelWrapper(abc.ABC):
         if passage.embedding:
             raise ValueError("Passage already has embeddings")
 
-        embeddings = self._pipeline([passage.text])
-        passage.embedding = embeddings[0][0]
+        encoding = self._tokenizer(passage.text, return_tensors="pt").to(self.device)
+        embeddings = self._model(**encoding).hidden_states[self.layer]
+        passage.embedding = embeddings[0]
 
     @torch.no_grad()
     def compute_embeddings(self, corpus: "Corpus"):
@@ -73,18 +91,17 @@ class TransformerModelWrapper(abc.ABC):
         # https://github.com/Semantics-of-Sustainability/tempo-embeddings/issues/15
 
         passages = corpus.passages_unembeddened()
-        embeddings = self._pipeline([passage.text for passage in passages])
+        encodings = self._tokenizer(
+            [passage.text for passage in passages],
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+        ).to(self.device)
+
+        embeddings = self._model(**encodings).hidden_states[self.layer]
+
         for passage, embedding in zip(passages, embeddings, strict=True):
             passage.embedding = embedding[0]
-
-    def tokenize_passage(self, passage: "Passage") -> None:
-        """Tokenizes a passage in-place.
-
-        Args:
-            passage: The passage to tokenize
-        """
-
-        passage.tokenization = self._tokenize([passage.text])[0]
 
     def tokenize(self, corpus: "Corpus") -> None:
         """Tokenizes all passages in a corpus.
@@ -95,7 +112,12 @@ class TransformerModelWrapper(abc.ABC):
 
         passages = corpus.passages_untokenized()
         if passages:
-            tokenizations = self._tokenize([passage.text for passage in passages])
+            tokenizations = self._tokenizer(
+                [passage.text for passage in passages],
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+            )
             for i, passage in enumerate(passages):
                 if passage.tokenization is not None:
                     raise ValueError(f"Passage {passage} already has a tokenization")
@@ -143,34 +165,38 @@ class TransformerModelWrapper(abc.ABC):
 
         passage.highlighting.token_embedding = token_embedding
 
-    @torch.no_grad()
-    def _tokenize(self, texts):
-        return self._tokenizer(texts)
-
     @classmethod
     def from_pretrained(
         cls,
         model_name_or_path: str,
         tokenizer_name_or_path: str = None,
         model_class=AutoModelForMaskedLM,
+        layer: int = -1,
+        **kwargs,
     ):
         return cls(
-            model_class.from_pretrained(model_name_or_path),
+            model_class.from_pretrained(
+                model_name_or_path, output_hidden_states=True, layer=layer
+            ),
             AutoTokenizer.from_pretrained(tokenizer_name_or_path or model_name_or_path),
+            **kwargs,
         )
 
 
 class RobertaModelWrapper(TransformerModelWrapper):
+    # TODO: Is this subclass necessary, or can I use AutoModelForMaskedLM?
     @classmethod
     def from_pretrained(
         cls,
         model_name_or_path: str,
         tokenizer_name_or_path: str = None,
         model_class=RobertaModel,
+        layer: int = -1,
+        **kwargs,
     ):
         # TODO: this should return a RobertaModelWrapper object
         return TransformerModelWrapper.from_pretrained(
-            model_name_or_path, tokenizer_name_or_path, model_class
+            model_name_or_path, tokenizer_name_or_path, model_class, layer, **kwargs
         )
 
 
@@ -181,11 +207,14 @@ class XModModelWrapper(TransformerModelWrapper):
         model_name_or_path: str,
         tokenizer_name_or_path: str = "xlm-roberta-base",
         model_class=XmodModel,
+        layer: int = -1,
+        *,
         default_language: str = "en_XX",
+        **kwargs,
     ):
         # TODO: this should return a XModModelWrapper object
         model = TransformerModelWrapper.from_pretrained(
-            model_name_or_path, tokenizer_name_or_path, model_class
+            model_name_or_path, tokenizer_name_or_path, model_class, layer, **kwargs
         )
 
         _model = model._model  # pylint: disable=protected-access
