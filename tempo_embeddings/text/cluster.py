@@ -48,22 +48,6 @@ class Cluster:
 
     @property
     def vectorizer(self) -> TfidfVectorizer:
-        """The vectorizer used to create the corpus.
-
-        If no vectorizer was provided, a default vectorizer is created
-        based on the parent corpus, and cached for re-use.
-        """
-        if self._vectorizer is None:
-            if self._stopwords:
-                stop_words = self._stopwords
-            else:
-                stop_words = "english"
-                logging.warning(
-                    "No stopwords provided, using default '(%s').", stop_words
-                )
-
-            self._vectorizer = self._parent.tfidf_vectorizer(stop_words=stop_words)
-
         return self._vectorizer
 
     def _get_corpora_by_label(self, label: str) -> list[Corpus]:
@@ -116,6 +100,7 @@ class Cluster:
         *corpora: Iterable[Corpus],
         exclude_word: Optional[str] = None,
         exact_match: bool = True,
+        stopwords: set[str] = None,
     ) -> Iterable[str]:
         """Sets the topic labels for all subcorpora.
 
@@ -124,6 +109,7 @@ class Cluster:
             exclude_word: a word to exclude from the topic labels.
             exact_match: whether to use exact matching for the exclude word.
                 Defaults to True
+            stopwords: words to exclude
 
         Returns:
             The topic labels of the corpora.
@@ -141,6 +127,7 @@ class Cluster:
                     n=self._n_topic_words,
                     exclude_word=exclude_word or self._parent.label,
                     exact_match=exact_match,
+                    stopwords=stopwords,
                 )
             yield corpus.label
 
@@ -208,10 +195,11 @@ class Cluster:
             for label, passages in clusters.items()
         ]
 
-    def cluster(self, **kwargs) -> list[str]:
+    def cluster(self, stopwords: set[str] = None, **kwargs) -> list[str]:
         """Clusters the parent corpus and creates initial subcorpora.
 
         Args:
+            stopwords: if given, use stopwords for filtering topic labels.
             **kwargs: Keyword arguments passed to the clustering algorithm.
 
         Returns:
@@ -227,7 +215,7 @@ class Cluster:
         self._subcorpora = self._cluster(**kwargs)
 
         if self._n_topic_words:
-            labels = list(self.set_topic_labels(*self._subcorpora))
+            labels = list(self.set_topic_labels(*self._subcorpora, stopwords=stopwords))
 
             assert len(labels) == len(self._subcorpora)
             if len(set(labels)) != len(self._subcorpora):

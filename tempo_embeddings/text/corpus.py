@@ -1,6 +1,7 @@
 import csv
 import gzip
 import logging
+from collections import Counter
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -255,40 +256,52 @@ class Corpus:
 
     def set_topic_label(
         self,
-        vectorizer: TfidfVectorizer,
+        vectorizer: Optional[TfidfVectorizer],
         *,
         exclude_word: str = "",
         n: int = 1,
         exact_match: bool,
+        stopwords: set[str] = None,
     ) -> None:
         """Set the label of the corpus to the top word(s) in the corpus.
 
         Args:
             vectorizer: The vectorizer to use for tf-idf scoring;
                 see Corpus.tfidf_vectorizer() and Corpus.topic_words().
+                If None, uses most words with largest document frequency.
             exclude_word: The word to exclude from the label,
                 e.g. the search term used for composing this corpus
             n: concatenate the top n words in the corpus as the label.
             exact_match: if False, exclude all words that contain the `exclude_word`.
+            stopwords: if given, exclude these words
         """
+        # TODO: merge exclude_word and stopwords?
+
+        if stopwords is None:
+            stopwords = set()
 
         def filter_word(word: str) -> bool:
             return (
-                word != exclude_word
+                word != exclude_word and word.casefold() not in stopwords
                 if exact_match
                 else exclude_word.casefold() not in word.casefold()
             )
 
-        _n = n + 1 if exact_match else n * 10
-        top_words: list[str] = [
-            word for word in self.topic_words(vectorizer, n=_n) if filter_word(word)
-        ]
+        _n = n * 1000
+
+        if vectorizer:
+            words = self._tf_idf_words(vectorizer, n=_n)
+        else:
+            words = self._document_frequencies(_n)
+
+        top_words: list[str] = [word for word in words if filter_word(word)]
+
         self._label = "; ".join(top_words[:n])
 
         return self._label
 
-    def topic_words(self, vectorizer: TfidfVectorizer, n: int = None) -> list[str]:
-        """The most characteristic words in the corpus.
+    def _tf_idf_words(self, vectorizer: TfidfVectorizer, n: int = None) -> list[str]:
+        """The most significant words in the corpus by <tf-idf> x <distance to centroid>.
 
         Each word is scored by multiplying its tf-idf score for each passage
         with the passage's distance to the centroid, using UMAP embeddings.
@@ -381,6 +394,12 @@ class Corpus:
             ArrayLike: a sparse matrix of n_passages x n_words
         """
         return vectorizer.transform(self.passages)
+
+    def _document_frequencies(self, n: int) -> list[str]:
+        counter = Counter()
+        for passage in self.passages:
+            counter.update({word.casefold().strip(".,;") for word in passage.words()})
+        return [word for word, freq in counter.most_common(n)]
 
     def _compute_umap(self) -> list[ArrayLike]:
         assert self._umap is None, "UMAP has already been computed."
