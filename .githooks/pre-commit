@@ -2,6 +2,8 @@
 
 echo "Script $0 triggered ..."
 
+PATH=.venv/bin:$PATH
+
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 echo "Starting prospector analysis using configuration from .prospector.yml..."
 
