@@ -52,7 +52,7 @@ class Passage:
         self,
         *,
         metadata_fields: Optional[list[str]] = None,
-        max_context_length: int = 200,
+        max_context_length: int = 1000,
     ) -> str:
         """Returns the text with the highlighted word in bold.
 
@@ -282,4 +282,15 @@ class Passage:
                 window_overlap = int(window_size / 10)
 
             for start in range(0, len(text), window_size - window_overlap):
-                yield cls(text[start : start + window_size], metadata)
+                try:
+                    # Expand window to first preceeding whitespace
+                    _start = text.rindex(" ", 0, start) + 1
+                except ValueError:
+                    _start = start
+                try:
+                    # Expand window to next succeeding whitespace
+                    _end = text.index(" ", _start + window_size)
+                except ValueError:
+                    _end = _start + window_size
+
+                yield cls(text[_start:_end], metadata)
