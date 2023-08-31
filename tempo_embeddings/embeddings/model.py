@@ -1,5 +1,7 @@
 import abc
 import logging
+from enum import Enum
+from enum import auto
 from typing import TYPE_CHECKING
 import torch
 from accelerate import Accelerator
@@ -15,6 +17,17 @@ if TYPE_CHECKING:
     from ..text.passage import Passage
 
 
+class EmbeddingsMethod(Enum):
+    """Enum for the different methods to compute embeddings."""
+
+    CLS = auto()
+    """Use the embedding of the [CLS] token"""
+    TOKEN = auto()
+    """Use the embedding of the highlighted token"""
+    MEAN = auto()
+    """Use the mean of the embeddings of the highlighted tokens"""
+
+
 class TransformerModelWrapper(abc.ABC):
     """A Wrapper around a transformer model."""
 
@@ -26,6 +39,7 @@ class TransformerModelWrapper(abc.ABC):
         accelerate: bool = True,
         layer: int = -1,
         batch_size: int = 128,
+        embeddings_method: EmbeddingsMethod = EmbeddingsMethod.TOKEN,
     ):
         """Constructor.
 
@@ -52,6 +66,7 @@ class TransformerModelWrapper(abc.ABC):
         self._tokenizer = tokenizer
         self._layer = layer
         self._batch_size = batch_size
+        self._embeddings_method = embeddings_method
 
         if accelerate:
             accelerator = Accelerator()
@@ -75,6 +90,14 @@ class TransformerModelWrapper(abc.ABC):
         self._batch_size = batch_size
 
     @property
+    def embeddings_method(self) -> EmbeddingsMethod:
+        return self._embeddings_method
+
+    @embeddings_method.setter
+    def embeddings_method(self, embeddings_method: EmbeddingsMethod) -> None:
+        self._embeddings_method = embeddings_method
+
+    @property
     def layer(self) -> int:
         return self._layer
 
@@ -94,7 +117,7 @@ class TransformerModelWrapper(abc.ABC):
             range(0, len(passages), self.batch_size),
             desc="Embeddings",
             unit="batch",
-            total=len(passages) // self.batch_size,
+            total=len(passages) // self.batch_size + 1,
         ):
             end: int = min(batch_start + self.batch_size, len(passages))
             batch: list[Passage] = passages[batch_start:end]
@@ -114,6 +137,20 @@ class TransformerModelWrapper(abc.ABC):
 
             yield embeddings.hidden_states[self.layer]
 
+    def _token_embedding(self, passage, embedding):
+        tokenization = passage.tokenization
+
+        first_token = tokenization.char_to_token(passage.highlighting.start)
+        last_token = tokenization.char_to_token(passage.highlighting.end - 1)
+
+        if first_token == last_token:
+            token_embedding = embedding[first_token]
+        else:
+            # highlighting spans across multiple tokens
+            token_embeddings = embedding[first_token : last_token + 1]
+            token_embedding = torch.mean(token_embeddings, axis=0)
+        return token_embedding
+
     def compute_embeddings(self, corpus: "Corpus") -> None:
         """Computes the embeddings for highlightings in all passages in a corpus.
 
@@ -126,19 +163,13 @@ class TransformerModelWrapper(abc.ABC):
             for embeddings_batch in self._compute_embeddings(passages):
                 for embedding in embeddings_batch:
                     passage = next(passages_iter)
-                    first_token = passage.tokenization.char_to_token(
-                        passage.highlighting.start
-                    )
-                    last_token = passage.tokenization.char_to_token(
-                        passage.highlighting.end - 1
-                    )
 
-                    if first_token == last_token:
-                        token_embedding = embedding[first_token]
-                    else:
-                        # highlighting spans across multiple tokens
-                        token_embeddings = embedding[first_token : last_token + 1]
-                        token_embedding = torch.mean(token_embeddings, axis=0)
+                    if self.embeddings_method == EmbeddingsMethod.CLS:
+                        token_embedding = embedding[0]
+                    elif self.embeddings_method == EmbeddingsMethod.TOKEN:
+                        token_embedding = self._token_embedding(passage, embedding)
+                    elif self.embeddings_method == EmbeddingsMethod.MEAN:
+                        token_embedding = torch.mean(embedding, axis=0)
 
                     passage.highlighting.token_embedding = token_embedding.detach()
         else:
