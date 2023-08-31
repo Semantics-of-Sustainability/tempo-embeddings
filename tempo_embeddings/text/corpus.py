@@ -143,6 +143,13 @@ class Corpus:
             self._model.compute_embeddings(self)
 
     def _token_embeddings(self) -> list[ArrayLike]:
+        """Returns a list of token embeddings for all passages in the corpus.
+
+        Converts the tensors into Numpy arrays and copies to the CPU.
+
+        Returns:
+            a list of Numpy arrays for all passages in the corpus.
+        """
         if not self.highlightings:
             logging.warning("Corpus has no highlightings")
             return []
@@ -151,7 +158,10 @@ class Corpus:
             # batch-compute embeddings for all passages in corpus.
             self.compute_embeddings()
 
-        return [passage.token_embedding().cpu().numpy() for passage in self.passages]
+        return [
+            passage.token_embedding().cpu().numpy()
+            for passage in self.passages_with_highlighting()
+        ]
 
     def has_embeddings(self, validate=False) -> bool:
         """Returns True embeddings have been computed for the corpus.
@@ -273,7 +283,7 @@ class Corpus:
         top_words: list[str] = [
             word for word in self.topic_words(vectorizer, n=_n) if filter_word(word)
         ]
-        self._label = "_".join(top_words[:n])
+        self._label = "; ".join(top_words[:n])
 
         return self._label
 
@@ -378,9 +388,10 @@ class Corpus:
         logging.info("Computing UMAP...")
         umap = UMAP(metric="cosine")
         umap_embeddings = umap.fit_transform(np.array(self._token_embeddings()))
+        passages = self.passages_with_highlighting()
 
         # TODO: this becomes invalid when highlightings are changes
-        for embedding, passage in zip(umap_embeddings, self.passages):
+        for embedding, passage in zip(umap_embeddings, passages):
             passage.highlighting.umap_embedding = embedding
 
         self._umap = umap
@@ -389,7 +400,10 @@ class Corpus:
     def umap_embeddings(self) -> list[ArrayLike]:
         """Returns a list of UMAP embeddings for all passages in the corpus."""
 
-        embeddings = [passage.highlighting.umap_embedding for passage in self.passages]
+        embeddings = [
+            passage.highlighting.umap_embedding
+            for passage in self.passages_with_highlighting()
+        ]
 
         if any(embedding is None for embedding in embeddings):
             logging.warning("UMAP embeddings have not been computed. Computing now...")
