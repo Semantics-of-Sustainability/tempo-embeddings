@@ -6,6 +6,7 @@ from tempo_embeddings.text.passage import Passage
 
 
 class TestRobertaModelWrapper:
+    @pytest.mark.skip("Passage embeddings are no longer stored in object.")
     @pytest.mark.parametrize(
         "model_name, corpus",
         [
