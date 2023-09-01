@@ -212,7 +212,7 @@ class Corpus:
             )
         return Corpus(passages, self._model, self._umap, label=token)
 
-    def _distances(self, normalize: bool):
+    def distances(self, normalize: bool) -> ArrayLike:
         """Compute the distances between the passages and the centroid of the corpus.
 
         Uses Euclidian distance and UMAP embeddings.
@@ -241,7 +241,7 @@ class Corpus:
         Returns:
             Iterable[tuple[Passage, float]]: n tuples of Passage and distance
         """
-        distances: ArrayLike[float] = self._distances(normalize)
+        distances: ArrayLike[float] = self.distances(normalize)
 
         if n > len(distances):
             logging.warning(
@@ -327,7 +327,7 @@ class Corpus:
         ), f"tf_idfs shape ({tf_idfs.shape}) does not match expected shape."
 
         ### Weigh in vector distances
-        distances: ArrayLike = self._distances(normalize=True)
+        distances: ArrayLike = self.distances(normalize=True)
         weights = np.ones(distances.shape[0]) - distances
 
         assert weights.argmin() == distances.argmax()
