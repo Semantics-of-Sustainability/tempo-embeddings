@@ -223,7 +223,9 @@ class Cluster:
 
         return self.labels()
 
-    def cluster_subcorpus(self, label, **kwargs) -> list[str]:
+    def cluster_subcorpus(
+        self, label, *, stopwords=Iterable[str], **kwargs
+    ) -> list[str]:
         """Split a sub-corpus into clusters.
 
         Args:
@@ -243,7 +245,7 @@ class Cluster:
         sub_clusters: list[Corpus] = self._cluster(label, **kwargs)
 
         if self._n_topic_words:
-            new_labels = list(self.set_topic_labels(*sub_clusters))
+            new_labels = list(self.set_topic_labels(*sub_clusters, stopwords=stopwords))
         else:
             new_labels = [corpus.label for corpus in sub_clusters]
 
