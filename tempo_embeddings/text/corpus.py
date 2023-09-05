@@ -143,6 +143,11 @@ class Corpus:
         else:
             self._model.compute_embeddings(self)
 
+            if any(passage.has_umap_embedding() for passage in self.passages):
+                logging.warning("Removing existing UMAP embeddings.")
+                for passage in self.passages:
+                    passage.highlighting.umap_embedding = None
+
     def _token_embeddings(self) -> list[ArrayLike]:
         """Returns a list of token embeddings for all passages in the corpus.
 
@@ -211,6 +216,11 @@ class Corpus:
                 token,
             )
         return Corpus(passages, self._model, self._umap, label=token)
+
+    def sliding_window(
+        self, metadata_key: str, window_size: int, stride: int
+    ) -> list["Corpus"]:
+        raise NotImplementedError()
 
     def distances(self, normalize: bool) -> ArrayLike:
         """Compute the distances between the passages and the centroid of the corpus.
@@ -476,6 +486,8 @@ class Corpus:
     def from_lines(
         cls,
         f: TextIO,
+        *,
+        filter_terms: list[str] = None,
         metadata: dict = None,
         model: Optional[TransformerModelWrapper] = None,
         window_size: Optional[int] = None,
@@ -489,6 +501,7 @@ class Corpus:
                 for passage in Passage.from_text(
                     line, metadata=metadata, window_size=window_size
                 )
+                if passage.contains_any(filter_terms)
             ],
             model=model,
         )
@@ -497,13 +510,15 @@ class Corpus:
     def from_lines_file(
         cls,
         filepath: Path,
+        *,
+        filter_terms: list[str] = None,
         encoding=DEFAULT_ENCODING,
         model: Optional[TransformerModelWrapper] = None,
     ):
         """Read input data from a file, one sequence per line."""
 
         with open(filepath, "rt", encoding=encoding) as f:
-            return Corpus.from_lines(f, model=model)
+            return Corpus.from_lines(f, filter_terms=filter_terms, model=model)
 
     @classmethod
     def from_csv_file(
@@ -512,6 +527,7 @@ class Corpus:
         text_columns: list[str],
         model: Optional[TransformerModelWrapper] = None,
         *,
+        filter_terms: list[str] = None,
         encoding=DEFAULT_ENCODING,
         compression: Optional[str] = None,
         **kwargs,
@@ -521,7 +537,9 @@ class Corpus:
         open_func = gzip.open if compression == "gzip" else open
 
         with open_func(filepath, "rt", encoding=encoding) as f:
-            return cls.from_csv_stream(f, text_columns, model, **kwargs)
+            return cls.from_csv_stream(
+                f, text_columns, model, filter_terms=filter_terms, **kwargs
+            )
 
     @classmethod
     def from_csv_stream(
@@ -530,6 +548,7 @@ class Corpus:
         text_columns: list[str],
         model: Optional[TransformerModelWrapper] = None,
         *,
+        filter_terms: list[str] = None,
         window_size: int = 1000,
         window_overlap: int = 0,
         **kwargs,
@@ -548,14 +567,25 @@ class Corpus:
             }
 
             for text_column in text_columns:
+                text = row[text_column]
+                if not any(term.casefold() in text.casefold() for term in filter_terms):
+                    # skip document
+                    continue
                 passages.extend(
-                    Passage.from_text(
-                        text=row[text_column],
-                        metadata=metadata,
-                        window_size=window_size,
-                        window_overlap=window_overlap,
+                    (
+                        window
+                        for window in Passage.from_text(
+                            text=text,
+                            metadata=metadata,
+                            window_size=window_size,
+                            window_overlap=window_overlap,
+                        )
+                        # FIXME: this check is redundant if the window comprises
+                        # the entire document
+                        if window.contains_any(filter_terms)
                     )
                 )
+
         return Corpus(passages, model=model)
 
     @staticmethod

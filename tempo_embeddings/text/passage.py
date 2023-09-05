@@ -44,8 +44,24 @@ class Passage:
         self._tokenization = value
 
     def has_embedding(self) -> bool:
-        return (
-            self.highlighting is None or self.highlighting.token_embedding is not None
+        return self.highlighting and self.highlighting.token_embedding
+
+    def has_umap_embedding(self) -> bool:
+        return self.highlighting and self.highlighting.umap_embedding
+
+    def contains_any(self, tokens: Iterable[str]) -> bool:
+        """Returns True if any of the tokens are contained in the passage.
+
+        Checks for case-insensitive matches.
+
+        Args:
+            tokens: The tokens to check.
+
+        Returns (bool):
+            True if any of the tokens are contained in the passage.
+        """
+        return tokens is None or any(
+            token.casefold() in self._text.casefold() for token in tokens
         )
 
     def highlighted_text(
