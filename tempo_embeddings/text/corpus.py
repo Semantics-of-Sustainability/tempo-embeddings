@@ -488,18 +488,32 @@ class Corpus:
         window_size: Optional[int] = None,
     ):
         """Read input data from an open file handler, one sequence per line."""
+        if filter_terms and len(filter_terms) > 1:
+            raise NotImplementedError(
+                "Highlighting/embedding multiple filter terms not yet implemented."
+            )
 
-        return Corpus(
-            passages=[
-                passage
-                for line in f
-                for passage in Passage.from_text(
-                    line, metadata=metadata, window_size=window_size
-                )
-                if passage.contains_any(filter_terms)
-            ],
-            model=model,
+        windows: Iterable[Passage] = (
+            passage
+            for line in f
+            for passage in Passage.from_text(
+                line, metadata=metadata, window_size=window_size
+            )
+            if passage.contains_any(filter_terms)
         )
+
+        if filter_terms:
+            passages = [
+                highlighted
+                for window in windows
+                for term in filter_terms
+                for highlighted in window.highlight(term, exact_match=False)
+            ]
+        else:
+            logging.warning("No filter terms defined, hence no highlighting.")
+            passages = list(windows)
+
+        return Corpus(passages, model=model)
 
     @classmethod
     def from_lines_file(
