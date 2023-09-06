@@ -233,7 +233,8 @@ class Passage:
         Args:
             token: The token to match.
             case_sensitive: If True, matches tokens with same capitalization only.
-            partial_match: If True, matches tokens that are part of a word.
+            exact_match: If True, only matches tokens that are a complete word (no substrings).
+                Requires tokenization.
 
         Returns:
             A Passage for each match. Empty if there is no match

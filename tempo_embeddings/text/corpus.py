@@ -217,11 +217,6 @@ class Corpus:
             )
         return Corpus(passages, self._model, self._umap, label=token)
 
-    def sliding_window(
-        self, metadata_key: str, window_size: int, stride: int
-    ) -> list["Corpus"]:
-        raise NotImplementedError()
-
     def distances(self, normalize: bool) -> ArrayLike:
         """Compute the distances between the passages and the centroid of the corpus.
 
@@ -553,6 +548,11 @@ class Corpus:
         window_overlap: int = 0,
         **kwargs,
     ):
+        if filter_terms and len(filter_terms) > 1:
+            raise NotImplementedError(
+                "Highlighting/embedding multiple filter terms not yet implemented."
+            )
+
         reader = csv.DictReader(file_handler, **kwargs)
         if not all(column in reader.fieldnames for column in text_columns):
             raise ValueError("Not all text columns found in CSV file.")
@@ -567,24 +567,24 @@ class Corpus:
             }
 
             for text_column in text_columns:
-                text = row[text_column]
-                if not any(term.casefold() in text.casefold() for term in filter_terms):
-                    # skip document
+                if filter_terms and not any(
+                    term.casefold() in row[text_column].casefold()
+                    for term in filter_terms
+                ):
+                    # skip document early, before creating Passage objects
                     continue
-                passages.extend(
-                    (
-                        window
-                        for window in Passage.from_text(
-                            text=text,
-                            metadata=metadata,
-                            window_size=window_size,
-                            window_overlap=window_overlap,
-                        )
-                        # FIXME: this check is redundant if the window comprises
-                        # the entire document
-                        if window.contains_any(filter_terms)
-                    )
-                )
+
+                for window in Passage.from_text(
+                    text=row[text_column],
+                    metadata=metadata,
+                    window_size=window_size,
+                    window_overlap=window_overlap,
+                ):
+                    if filter_terms and window.contains_any(filter_terms):
+                        for term in filter_terms:
+                            passages.extend(window.highlight(term, exact_match=False))
+                    else:
+                        logging.error("No filter terms defined, hence no highlighting.")
 
         return Corpus(passages, model=model)
 
