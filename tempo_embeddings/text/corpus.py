@@ -597,8 +597,6 @@ class Corpus:
                     if filter_terms and window.contains_any(filter_terms):
                         for term in filter_terms:
                             passages.extend(window.highlight(term, exact_match=False))
-                    else:
-                        logging.error("No filter terms defined, hence no highlighting.")
 
         return Corpus(passages, model=model)
 
