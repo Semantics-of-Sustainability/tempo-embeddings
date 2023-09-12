@@ -127,13 +127,13 @@ class TransformerModelWrapper(abc.ABC):
                 return_tensors="pt",
                 padding=True,
                 truncation=True,
-            ).to(self.device)
+            )
 
             for i, passage in enumerate(batch):
                 # Store tokenizations for each passage
                 passage.tokenization = encodings[i]
 
-            embeddings = self._model(**encodings)
+            embeddings = self._model(**encodings.to(self.device))
 
             yield embeddings.hidden_states[self.layer]
 
