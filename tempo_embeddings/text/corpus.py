@@ -33,7 +33,7 @@ class Corpus(AbstractCorpus):
             case (None, None):
                 embeddings = None
             case _:
-                raise NotImplementedError()
+                return NotImplemented
 
         return Corpus(self._passages + other._passages, new_label, embeddings)
 

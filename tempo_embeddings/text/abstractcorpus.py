@@ -241,7 +241,7 @@ class AbstractCorpus(ABC):
         """
         return vectorizer.transform(self.passages)
 
-    def _document_frequencies(self, n: int) -> list[str]:
+    def _document_frequencies(self, n: Optional[int]) -> list[str]:
         counter = Counter()
         for passage in self.passages:
             counter.update({word.casefold().strip(".,;") for word in passage.words()})
