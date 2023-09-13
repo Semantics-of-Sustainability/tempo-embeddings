@@ -2,8 +2,6 @@ import string
 from typing import Any
 from typing import Iterable
 from typing import Optional
-from numpy.typing import ArrayLike
-from scipy.spatial.distance import euclidean
 from tokenizers import Encoding
 from .highlighting import Highlighting
 
@@ -42,12 +40,6 @@ class Passage:
     @tokenization.setter
     def tokenization(self, value: Encoding):
         self._tokenization = value
-
-    def has_embedding(self) -> bool:
-        return self.highlighting and self.highlighting.token_embedding
-
-    def has_umap_embedding(self) -> bool:
-        return self.highlighting and self.highlighting.umap_embedding
 
     def contains_any(self, tokens: Iterable[str]) -> bool:
         """Returns True if any of the tokens are contained in the passage.
@@ -110,13 +102,6 @@ class Passage:
         text = self.highlighted_text() if self.highlighting else self.text
         return {"text": text} | metadata
 
-    def token_embedding(self) -> ArrayLike:
-        if self.highlighting is None:
-            raise RuntimeError("No highlighting set.")
-        if self.highlighting.token_embedding is None:
-            raise RuntimeError("No embeddings computed for passage.")
-        return self.highlighting.token_embedding
-
     def set_metadata(self, key: str, value: Any) -> None:
         """Sets a metadata key to a value.
 
@@ -138,16 +123,6 @@ class Passage:
         ), "Token spans multiple words"
 
         return self.tokenization.word_to_chars(word_index)
-
-    def distance(self, vector: ArrayLike) -> float:
-        """Returns the distance for UMAP embedding of highlighting to a vector.
-
-        Args:
-            vector: The vector to compute the distance to.
-        Returns (float):
-            The distance between the UMAP embedding of the highlighting and the vector.
-        """
-        return euclidean(self.highlighting.umap_embedding, vector)
 
     def words(self, use_tokenizer: bool = True) -> Iterable[str]:
         """Returns the words in the passage.

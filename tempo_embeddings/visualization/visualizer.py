@@ -1,9 +1,9 @@
 import abc
-from ..text.corpus import Corpus
+from ..text.abstractcorpus import AbstractCorpus
 
 
 class Visualizer(abc.ABC):
-    def __init__(self, corpus: Corpus):
+    def __init__(self, corpus: AbstractCorpus):
         self._corpus = corpus
 
     @abc.abstractmethod
