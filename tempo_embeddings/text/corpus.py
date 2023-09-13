@@ -106,7 +106,7 @@ class Corpus(AbstractCorpus):
             logging.warning("No filter terms defined, hence no highlighting.")
             passages = list(windows)
 
-        return Corpus(passages)
+        return Corpus(passages, label="; ".join(filter_terms) if filter_terms else None)
 
     @classmethod
     def from_lines_file(

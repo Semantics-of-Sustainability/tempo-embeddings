@@ -42,7 +42,7 @@ class TransformerModelWrapper(abc.ABC):
         accelerate: bool = True,
         layer: int = -1,
         batch_size: int = 128,
-        embeddings_method: EmbeddingsMethod = EmbeddingsMethod.TOKEN,
+        embeddings_method: EmbeddingsMethod = EmbeddingsMethod.CLS,
     ):
         """Constructor.
 
@@ -140,15 +140,17 @@ class TransformerModelWrapper(abc.ABC):
             layer_output = embeddings.hidden_states[self.layer]
 
             if self.embeddings_method == EmbeddingsMethod.CLS:
-                embeddings = layer_output[:, 0, :]
+                passage_embeddings = layer_output[:, 0, :]
             elif self.embeddings_method == EmbeddingsMethod.TOKEN:
                 # TODO: call _token_embedding()
-                raise NotImplementedError()
+                raise NotImplementedError(EmbeddingsMethod.TOKEN)
             elif self.embeddings_method == EmbeddingsMethod.MEAN:
                 # TODO: test if this is the correct axis
-                embeddings = layer_output.mean(axis=1)
+                passage_embeddings = layer_output.mean(axis=1)
+            else:
+                raise RuntimeError(self.embeddings_method)
 
-            yield embeddings
+            yield passage_embeddings
 
     def _token_embedding(self, passage, embedding):
         tokenization = passage.tokenization

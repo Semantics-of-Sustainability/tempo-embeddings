@@ -155,7 +155,9 @@ class AbstractCorpus(ABC):
             words = self._document_frequencies(n=None)
 
         top_words: list[str] = [
-            word for word in words if word.casefold() not in exclude_words
+            word
+            for word in words
+            if word.strip() and word.casefold() not in exclude_words
         ]
 
         self._label = "; ".join(top_words[:n])
