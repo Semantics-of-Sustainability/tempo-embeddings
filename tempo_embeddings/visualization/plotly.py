@@ -182,13 +182,15 @@ class PlotlyVisualizer(Visualizer):
 
         return linebreak.join(lines)
 
-    def visualize(self, metadata_fields: list[str] = None):
+    def visualize(self, metadata_fields: Iterable[str] = None):
         """Visualizes the UMAP embeddings.
 
         Args:
             metadata_fields: The metadata fields to include in the hover data.
         """
         app = Dash(__name__)
+
+        metadata_fields = list(metadata_fields)
 
         data = self._create_data(metadata_fields)
 
