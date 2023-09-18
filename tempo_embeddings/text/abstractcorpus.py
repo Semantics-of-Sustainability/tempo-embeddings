@@ -131,6 +131,7 @@ class AbstractCorpus(ABC):
         *,
         vectorizer: Optional[TfidfVectorizer] = None,
         exclude_words: list[str] = None,
+        min_word_length: int = 3,
         n: int = 1,
     ) -> None:
         """Set the label of the corpus to the top word(s) in the corpus.
@@ -144,11 +145,10 @@ class AbstractCorpus(ABC):
             n: concatenate the top n words in the corpus as the label.
             stopwords: if given, exclude these words
         """
-        # TODO: merge exclude_word and stopwords?
 
         if exclude_words is None:
             exclude_words = set()
-        exclude_words = [word.casefold() for word in exclude_words]
+        exclude_words = {word.casefold() for word in exclude_words}
 
         if self.label == -1:
             words = [OUTLIERS_LABEL]
@@ -157,10 +157,12 @@ class AbstractCorpus(ABC):
         else:
             words = self._document_frequencies(n=None)
 
+        # filter words
         top_words: list[str] = [
             word
             for word in words
-            if word.strip() and word.casefold() not in exclude_words
+            if len(word.strip()) >= min_word_length
+            and word.casefold() not in exclude_words
         ]
 
         self._label = "; ".join(top_words[:n])
