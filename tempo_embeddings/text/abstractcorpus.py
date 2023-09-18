@@ -11,6 +11,7 @@ from numpy.typing import ArrayLike
 from scipy.sparse import csr_matrix
 from sklearn.cluster import HDBSCAN
 from sklearn.feature_extraction.text import TfidfVectorizer
+from ..settings import OUTLIERS_LABEL
 from .highlighting import Highlighting
 from .passage import Passage
 
@@ -149,7 +150,9 @@ class AbstractCorpus(ABC):
             exclude_words = set()
         exclude_words = [word.casefold() for word in exclude_words]
 
-        if vectorizer:
+        if self.label == -1:
+            words = [OUTLIERS_LABEL]
+        elif vectorizer:
             words = self._tf_idf_words(vectorizer, n=n * 2)
         else:
             words = self._document_frequencies(n=None)
