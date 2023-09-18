@@ -29,13 +29,10 @@ class Corpus(AbstractCorpus):
         self._validate_embeddings()
 
     def __add__(self, other: "Corpus", new_label: str = None) -> "Corpus":
-        match (self._embeddings, other._embeddings):
-            case (None, None):
-                embeddings = None
-            case _:
-                return NotImplemented
+        if any(corpus.embeddings is not None for corpus in (self, other)):
+            logging.warning("Removing existing embeddings.")
 
-        return Corpus(self._passages + other._passages, new_label, embeddings)
+        return Corpus(self._passages + other._passages, new_label, embeddings=None)
 
     def __repr__(self) -> str:
         return f"Corpus({self._label!r}, {self._passages[:10]!r})"
