@@ -113,7 +113,7 @@ class TransformerModelWrapper(abc.ABC):
         return self._model.config._name_or_path  # pylint: disable=protected-access
 
     @torch.no_grad()
-    def _compute_embeddings(
+    def _passage_embeddings(
         self, passages: list[Passage], store_tokenizations: bool
     ) -> Iterable[torch.Tensor]:
         for batch_start in tqdm(
@@ -167,7 +167,11 @@ class TransformerModelWrapper(abc.ABC):
         return token_embedding
 
     def compute_embeddings(
-        self, corpus: "Corpus", store_tokenizations: bool = True, **umap_args
+        self,
+        corpus: "Corpus",
+        store_tokenizations: bool = True,
+        umap_verbose: bool = True,
+        **umap_args,
     ) -> ArrayLike:
         # TODO: add relevant UMAP arguments with reasonable defaults
 
@@ -176,14 +180,15 @@ class TransformerModelWrapper(abc.ABC):
         Args:
             corpus: The corpus to compute token embeddings for
             store_tokenizations: if True, passage tokenizations are kept in memory
-            **umap_args: keyword arguments to the UMAP algorithm,
+            umap_verbose: if True (default), print UMAP progress
+            **umap_args: other keyword arguments to the UMAP algorithm,
                 see https://umap-learn.readthedocs.io/en/latest/parameters.html
         """
 
         embeddings: ArrayLike = np.concatenate(
             [
                 tensor.cpu()
-                for tensor in self._compute_embeddings(
+                for tensor in self._passage_embeddings(
                     corpus.passages, store_tokenizations
                 )
             ],
@@ -194,7 +199,7 @@ class TransformerModelWrapper(abc.ABC):
             corpus
         ), f"Embeddings shape is {embeddings.shape}, corpus length is {len(corpus)}."
 
-        umap = UMAP(**umap_args)
+        umap = UMAP(verbose=umap_verbose, **umap_args)
         return umap.fit_transform(embeddings)
 
     @classmethod
