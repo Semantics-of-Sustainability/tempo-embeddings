@@ -20,17 +20,19 @@ class Corpus(AbstractCorpus):
         self,
         passages: list[Passage] = None,
         label: Optional[Any] = None,
-        embeddings=None,
+        embeddings: Optional[ArrayLike] = None,
     ):
         self._passages: list[Passage] = passages or []
         self._label: Optional[str] = label
-        self._embeddings = embeddings
+        self._embeddings: Optional[ArrayLike] = embeddings
 
         self._validate_embeddings()
 
     def __add__(self, other: "Corpus", new_label: str = None) -> "Corpus":
         if any(corpus.embeddings is not None for corpus in (self, other)):
-            logging.warning("Removing existing embeddings.")
+            logging.warning(
+                "Removing existing embeddings to avoid inconsistent vector spaces."
+            )
 
         return Corpus(self._passages + other._passages, new_label, embeddings=None)
 
