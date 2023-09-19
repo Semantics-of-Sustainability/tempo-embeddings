@@ -15,7 +15,7 @@ class Subcorpus(AbstractCorpus):
     def __init__(
         self, parent_corpus: "Corpus", indices: list[int], label: Optional[str] = None
     ) -> None:
-        self._corpus = parent_corpus
+        self._parent_corpus = parent_corpus
         self._indices = indices
         self._label = label
 
@@ -23,22 +23,22 @@ class Subcorpus(AbstractCorpus):
         return f"Subcorpus({self._label!r}, {self._indices[:10]!r})"
 
     def __add__(self, other: "Subcorpus", new_label: Optional[str] = None):
-        if self._corpus == other._corpus:
+        if self._parent_corpus == other._parent_corpus:
             indices = set(self._indices + other._indices)
             label = new_label or "+".join([self._label, other._label])
         else:
             raise ValueError("Cannot merge sub-corpora with different parent corpora.")
 
-        return Subcorpus(self._corpus, list(indices), label)
+        return Subcorpus(self._parent_corpus, list(indices), label)
 
     @property
     def passages(self) -> list[Passage]:
-        return [self._corpus.passages[i] for i in self._indices]
+        return [self._parent_corpus.passages[i] for i in self._indices]
 
     @property
     def embeddings(self) -> ArrayLike:
         return (
             None
-            if self._corpus.embeddings is None
-            else self._corpus.embeddings.take(self._indices, axis=0)
+            if self._parent_corpus.embeddings is None
+            else self._parent_corpus.embeddings.take(self._indices, axis=0)
         )

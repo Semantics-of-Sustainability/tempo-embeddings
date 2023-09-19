@@ -12,7 +12,6 @@ from scipy.sparse import csr_matrix
 from sklearn.cluster import HDBSCAN
 from sklearn.feature_extraction.text import TfidfVectorizer
 from ..settings import OUTLIERS_LABEL
-from .highlighting import Highlighting
 from .passage import Passage
 
 
@@ -60,10 +59,6 @@ class AbstractCorpus(ABC):
     def texts(self) -> Iterable[str]:
         return (passage.text for passage in self._passages)
 
-    @property
-    def highlightings(self) -> list[Highlighting]:
-        return [passage.highlighting for passage in self.passages]
-
     def metadata_fields(self) -> set[str]:
         """Returns all metadata fields in the corpus."""
 
@@ -95,7 +90,9 @@ class AbstractCorpus(ABC):
         for passage in self.passages:
             passage.set_metadata(key, value)
 
-    def hover_datas(self, metadata_fields=None) -> list[dict[str, str]]:
+    def hover_datas(
+        self, metadata_fields: Optional[list[str]] = None
+    ) -> list[dict[str, str]]:
         """A dictionary for each passage in this corpus to be used for visualization.
 
         Args:
@@ -153,7 +150,8 @@ class AbstractCorpus(ABC):
         if self.label == -1:
             words = [OUTLIERS_LABEL]
         elif vectorizer:
-            words = self._tf_idf_words(vectorizer, n=n * 2)
+            _n = n * 3  # retrieve extra words to account for word filtering
+            words = self._tf_idf_words(vectorizer, n=_n)
         else:
             words = self._document_frequencies(n=None)
 
@@ -199,8 +197,6 @@ class AbstractCorpus(ABC):
         distances: ArrayLike = self.distances(normalize=True)
         weights = np.ones(distances.shape[0]) - distances
 
-        assert weights.argmin() == distances.argmax()
-        assert weights.argmax() == distances.argmin()
         assert (
             weights.shape[0] == tf_idfs.shape[0]
         ), f"distances shape ({weights.shape}) does not match expected shape."

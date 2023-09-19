@@ -169,6 +169,8 @@ class TransformerModelWrapper(abc.ABC):
     def compute_embeddings(
         self, corpus: "Corpus", store_tokenizations: bool = True, **umap_args
     ) -> ArrayLike:
+        # TODO: add relevant UMAP arguments with reasonable defaults
+
         """Computes the embeddings for highlightings in all passages in a corpus.
 
         Args:
