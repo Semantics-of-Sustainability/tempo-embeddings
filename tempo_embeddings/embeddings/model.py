@@ -1,20 +1,23 @@
 import abc
-import logging
 from enum import Enum
 from enum import auto
 from typing import TYPE_CHECKING
+from typing import Iterable
+import numpy as np
 import torch
 from accelerate import Accelerator
+from numpy.typing import ArrayLike
 from tqdm import tqdm
 from transformers import AutoModelForMaskedLM
 from transformers import AutoTokenizer
 from transformers import RobertaModel
 from transformers import XmodModel
+from umap.umap_ import UMAP
+from ..text.passage import Passage
 
 
 if TYPE_CHECKING:
     from ..text.corpus import Corpus
-    from ..text.passage import Passage
 
 
 class EmbeddingsMethod(Enum):
@@ -39,7 +42,7 @@ class TransformerModelWrapper(abc.ABC):
         accelerate: bool = True,
         layer: int = -1,
         batch_size: int = 128,
-        embeddings_method: EmbeddingsMethod = EmbeddingsMethod.TOKEN,
+        embeddings_method: EmbeddingsMethod = EmbeddingsMethod.CLS,
     ):
         """Constructor.
 
@@ -110,17 +113,16 @@ class TransformerModelWrapper(abc.ABC):
         return self._model.config._name_or_path  # pylint: disable=protected-access
 
     @torch.no_grad()
-    def _compute_embeddings(self, passages: list["Passage"]) -> torch.Tensor:
-        """Computes the embeddings for a list of passages."""
-
+    def _passage_embeddings(
+        self, passages: list[Passage], store_tokenizations: bool
+    ) -> Iterable[torch.Tensor]:
         for batch_start in tqdm(
             range(0, len(passages), self.batch_size),
             desc="Embeddings",
             unit="batch",
             total=len(passages) // self.batch_size + 1,
         ):
-            end: int = min(batch_start + self.batch_size, len(passages))
-            batch: list[Passage] = passages[batch_start:end]
+            batch: list[Passage] = passages[batch_start : batch_start + self.batch_size]
 
             encodings = self._tokenizer(
                 [passage.text for passage in batch],
@@ -128,14 +130,27 @@ class TransformerModelWrapper(abc.ABC):
                 padding=True,
                 truncation=True,
             )
-
-            for i, passage in enumerate(batch):
-                # Store tokenizations for each passage
-                passage.tokenization = encodings[i]
+            if store_tokenizations:
+                for i, passage in enumerate(batch):
+                    # Store tokenizations for each passage
+                    passage.tokenization = encodings[i]
 
             embeddings = self._model(**encodings.to(self.device))
 
-            yield embeddings.hidden_states[self.layer]
+            layer_output = embeddings.hidden_states[self.layer]
+
+            if self.embeddings_method == EmbeddingsMethod.CLS:
+                passage_embeddings = layer_output[:, 0, :]
+            elif self.embeddings_method == EmbeddingsMethod.TOKEN:
+                # TODO: call _token_embedding()
+                raise NotImplementedError(EmbeddingsMethod.TOKEN)
+            elif self.embeddings_method == EmbeddingsMethod.MEAN:
+                # TODO: test if this is the correct axis
+                passage_embeddings = layer_output.mean(axis=1)
+            else:
+                raise RuntimeError(self.embeddings_method)
+
+            yield passage_embeddings
 
     def _token_embedding(self, passage, embedding):
         tokenization = passage.tokenization
@@ -151,29 +166,41 @@ class TransformerModelWrapper(abc.ABC):
             token_embedding = torch.mean(token_embeddings, axis=0)
         return token_embedding
 
-    def compute_embeddings(self, corpus: "Corpus") -> None:
+    def compute_embeddings(
+        self,
+        corpus: "Corpus",
+        store_tokenizations: bool = True,
+        umap_verbose: bool = True,
+        **umap_args,
+    ) -> ArrayLike:
+        # TODO: add relevant UMAP arguments with reasonable defaults
+
         """Computes the embeddings for highlightings in all passages in a corpus.
 
         Args:
             corpus: The corpus to compute token embeddings for
+            store_tokenizations: if True, passage tokenizations are kept in memory
+            umap_verbose: if True (default), print UMAP progress
+            **umap_args: other keyword arguments to the UMAP algorithm,
+                see https://umap-learn.readthedocs.io/en/latest/parameters.html
         """
 
-        if passages := corpus.passages_with_highlighting():
-            passages_iter = iter(passages)
-            for embeddings_batch in self._compute_embeddings(passages):
-                for embedding in embeddings_batch:
-                    passage = next(passages_iter)
+        embeddings: ArrayLike = np.concatenate(
+            [
+                tensor.cpu()
+                for tensor in self._passage_embeddings(
+                    corpus.passages, store_tokenizations
+                )
+            ],
+            axis=0,
+        )
 
-                    if self.embeddings_method == EmbeddingsMethod.CLS:
-                        token_embedding = embedding[0]
-                    elif self.embeddings_method == EmbeddingsMethod.TOKEN:
-                        token_embedding = self._token_embedding(passage, embedding)
-                    elif self.embeddings_method == EmbeddingsMethod.MEAN:
-                        token_embedding = torch.mean(embedding, axis=0)
+        assert embeddings.shape[0] == len(
+            corpus
+        ), f"Embeddings shape is {embeddings.shape}, corpus length is {len(corpus)}."
 
-                    passage.highlighting.token_embedding = token_embedding.detach()
-        else:
-            logging.error("No passages with highlighting found.")
+        umap = UMAP(verbose=umap_verbose, **umap_args)
+        return umap.fit_transform(embeddings)
 
     @classmethod
     def from_pretrained(

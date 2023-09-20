@@ -5,12 +5,12 @@ from bokeh.palettes import turbo
 from bokeh.plotting import Figure
 from bokeh.plotting import figure
 from ..settings import OUTLIERS_LABEL
-from ..text.corpus import Corpus
+from ..text.abstractcorpus import AbstractCorpus
 from .visualizer import Visualizer
 
 
 class ClusterVisualizer(Visualizer):
-    def __init__(self, clusters: list[Corpus]):
+    def __init__(self, clusters: list[AbstractCorpus]):
         self._clusters = clusters
 
     def _select_palette(self):
@@ -35,7 +35,7 @@ class ClusterVisualizer(Visualizer):
         rows = []
 
         for cluster in self._clusters:
-            for embedding in cluster.umap_embeddings():
+            for embedding in cluster.embeddings:
                 rows.append(
                     {
                         "x": embedding[0],
@@ -47,7 +47,7 @@ class ClusterVisualizer(Visualizer):
 
             if cluster.label != OUTLIERS_LABEL:
                 # Add point for centroid
-                centroid = cluster.umap_mean()
+                centroid = cluster.centroid()
                 rows.append(
                     {
                         "x": centroid[0],
@@ -85,7 +85,7 @@ class ClusterVisualizer(Visualizer):
 
         for i, cluster in enumerate(self._clusters):
             if cluster.label != OUTLIERS_LABEL:
-                centroid = cluster.umap_mean()
+                centroid = cluster.centroid()
 
                 # FIXME: fill in or remove empty hover data
                 p.circle(

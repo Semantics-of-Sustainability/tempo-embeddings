@@ -32,3 +32,4 @@ venv3
 .venv
 
 notebooks/semeval2020_ulscd_eng/*
+notebooks/stopwords-filter-nl.txt

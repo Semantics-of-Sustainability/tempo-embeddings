@@ -9,7 +9,7 @@ from dash import callback
 from dash import dcc
 from dash import html
 from dash.html import Figure
-from ..text.corpus import Corpus
+from ..text.abstractcorpus import AbstractCorpus
 from .visualizer import Visualizer
 
 
@@ -19,7 +19,7 @@ class PlotlyVisualizer(Visualizer):
     _MARGIN_X = 0.5
     _MARGIN_Y = 0.5
 
-    def __init__(self, *corpora: Iterable[Corpus]):
+    def __init__(self, *corpora: Iterable[AbstractCorpus]):
         self._corpora = corpora
 
     def _create_data(self, metadata_fields) -> pd.DataFrame:
@@ -36,7 +36,7 @@ class PlotlyVisualizer(Visualizer):
             (
                 pd.concat(
                     [
-                        pd.DataFrame(corpus.umap_embeddings(), columns=["x", "y"])
+                        pd.DataFrame(corpus.embeddings, columns=["x", "y"])
                         for corpus in self._corpora
                     ]
                 ),
@@ -182,13 +182,15 @@ class PlotlyVisualizer(Visualizer):
 
         return linebreak.join(lines)
 
-    def visualize(self, metadata_fields: list[str] = None):
+    def visualize(self, metadata_fields: Iterable[str] = None):
         """Visualizes the UMAP embeddings.
 
         Args:
             metadata_fields: The metadata fields to include in the hover data.
         """
         app = Dash(__name__)
+
+        metadata_fields = list(metadata_fields)
 
         data = self._create_data(metadata_fields)
 
