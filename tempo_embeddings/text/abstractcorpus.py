@@ -1,3 +1,4 @@
+import string
 from abc import ABC
 from abc import abstractmethod
 from collections import Counter
@@ -9,6 +10,7 @@ from typing import Optional
 import numpy as np
 from numpy.typing import ArrayLike
 from scipy.sparse import csr_matrix
+from scipy.spatial.distance import cosine
 from sklearn.cluster import HDBSCAN
 from sklearn.feature_extraction.text import TfidfVectorizer
 from ..settings import OUTLIERS_LABEL
@@ -118,10 +120,15 @@ class AbstractCorpus(ABC):
         """
         centroid = self.centroid()
 
+        # TODO: can this be vectorized?
         distances: ArrayLike = np.array(
-            [passage.distance(centroid) for passage in self.passages]
+            [cosine(centroid, embedding) for embedding in self.embeddings]
         )
-        return (distances / np.linalg.norm(distances)) if normalize else distances
+
+        if normalize:
+            distances = distances / np.linalg.norm(distances)
+
+        return distances
 
     def set_topic_label(
         self,
@@ -147,19 +154,22 @@ class AbstractCorpus(ABC):
             exclude_words = set()
         exclude_words = {word.casefold() for word in exclude_words}
 
+        # account for word filtering:
+        _n = n + len(exclude_words)
+
         if self.label == -1:
             words = [OUTLIERS_LABEL]
         elif vectorizer:
-            _n = n * 3  # retrieve extra words to account for word filtering
             words = self._tf_idf_words(vectorizer, n=_n)
         else:
-            words = self._document_frequencies(n=None)
+            words = self._document_frequencies(n=_n)
 
         # filter words
         top_words: list[str] = [
             word
             for word in words
             if len(word.strip()) >= min_word_length
+            and not any(char in string.punctuation for char in word)
             and word.casefold() not in exclude_words
         ]
 

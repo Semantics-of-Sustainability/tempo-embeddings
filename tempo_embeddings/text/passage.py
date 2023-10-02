@@ -135,14 +135,7 @@ class Passage:
             An iterable of words in the passage.
         """
 
-        if not use_tokenizer:
-            tokens = [
-                token.strip(string.punctuation).strip() for token in self._text.split()
-            ]
-            for token in tokens:
-                if len(token) > 1:
-                    yield token
-        else:
+        if use_tokenizer:
             if self.tokenization is None:
                 raise RuntimeError("Passage has no tokenization.")
 
@@ -150,7 +143,14 @@ class Passage:
                 if i is not None:
                     start, end = self.tokenization.word_to_chars(i)
                     yield self._text[start:end]
-
+        else:
+            tokens = [
+                token.strip(string.punctuation).strip() for token in self._text.split()
+            ]
+            for token in tokens:
+                if len(token) > 1:
+                    yield token
+        
     def __contains__(self, token: str) -> bool:
         return token in self._text
 

@@ -142,8 +142,12 @@ class TransformerModelWrapper(abc.ABC):
             if self.embeddings_method == EmbeddingsMethod.CLS:
                 passage_embeddings = layer_output[:, 0, :]
             elif self.embeddings_method == EmbeddingsMethod.TOKEN:
-                # TODO: call _token_embedding()
-                raise NotImplementedError(EmbeddingsMethod.TOKEN)
+                passage_embeddings = torch.stack(
+                    [
+                        self._token_embedding(passage, passage_embedding)
+                        for passage, passage_embedding in zip(batch, layer_output)
+                    ]
+                )
             elif self.embeddings_method == EmbeddingsMethod.MEAN:
                 # TODO: test if this is the correct axis
                 passage_embeddings = layer_output.mean(axis=1)
@@ -152,7 +156,7 @@ class TransformerModelWrapper(abc.ABC):
 
             yield passage_embeddings
 
-    def _token_embedding(self, passage, embedding):
+    def _token_embedding(self, passage, embedding) -> torch.Tensor:
         tokenization = passage.tokenization
 
         first_token = tokenization.char_to_token(passage.highlighting.start)
