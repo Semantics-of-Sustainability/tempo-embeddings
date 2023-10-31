@@ -1,4 +1,5 @@
 import abc
+import logging
 from enum import Enum
 from enum import auto
 from typing import TYPE_CHECKING
@@ -8,6 +9,7 @@ import torch
 from accelerate import Accelerator
 from numpy.typing import ArrayLike
 from tqdm import tqdm
+from transformers import AutoModel
 from transformers import AutoModelForMaskedLM
 from transformers import AutoTokenizer
 from transformers import RobertaModel
@@ -112,31 +114,35 @@ class TransformerModelWrapper(abc.ABC):
     def name(self) -> str:
         return self._model.config._name_or_path  # pylint: disable=protected-access
 
-    @torch.no_grad()
-    def _passage_embeddings(
-        self, passages: list[Passage], store_tokenizations: bool
-    ) -> Iterable[torch.Tensor]:
+    def _batches(self, passages: list[Passage]) -> Iterable[list[Passage]]:
         for batch_start in tqdm(
             range(0, len(passages), self.batch_size),
             desc="Embeddings",
             unit="batch",
             total=len(passages) // self.batch_size + 1,
         ):
-            batch: list[Passage] = passages[batch_start : batch_start + self.batch_size]
+            yield passages[batch_start : batch_start + self.batch_size]
 
-            encodings = self._tokenizer(
-                [passage.text for passage in batch],
-                return_tensors="pt",
-                padding=True,
-                truncation=True,
-            )
-            if store_tokenizations:
-                for i, passage in enumerate(batch):
-                    # Store tokenizations for each passage
-                    passage.tokenization = encodings[i]
+    def _encodings(self, passages: list[Passage], store_tokenizations: bool):
+        encodings = self._tokenizer(
+            [passage.text for passage in passages],
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+        )
+        if store_tokenizations:
+            for i, passage in enumerate(passages):
+                # Store tokenizations for each passage
+                passage.tokenization = encodings[i]
+        return encodings
 
+    @torch.no_grad()
+    def _passage_embeddings(
+        self, passages: list[Passage], store_tokenizations: bool
+    ) -> Iterable[torch.Tensor]:
+        for batch in self._batches(passages):
+            encodings = self._encodings(batch, store_tokenizations)
             embeddings = self._model(**encodings.to(self.device))
-
             layer_output = embeddings.hidden_states[self.layer]
 
             if self.embeddings_method == EmbeddingsMethod.CLS:
@@ -267,3 +273,59 @@ class XModModelWrapper(TransformerModelWrapper):
             )
 
         return model
+
+
+class SentenceTransformerModelWrapper(TransformerModelWrapper):
+    @TransformerModelWrapper.embeddings_method.setter
+    def embeddings_method(self, embeddings_method: EmbeddingsMethod) -> None:
+        if embeddings_method != EmbeddingsMethod.MEAN:
+            raise ValueError(
+                "SentenceTransformers do not support other embeddings methods than MEAN."
+            )
+        self._embeddings_method = embeddings_method
+
+    # Mean Pooling - Take attention mask into account for correct averaging
+    # TODO: use this in TransformerModelWrapper._passage_embeddings() too? How
+    @staticmethod
+    def mean_pooling(model_output, attention_mask):
+        # First element of model_output contains all token embeddings
+        token_embeddings = model_output[0]
+        input_mask_expanded = (
+            attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+        )
+        return torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(
+            input_mask_expanded.sum(1), min=1e-9
+        )
+
+    @torch.no_grad()
+    def _passage_embeddings(
+        self, passages: list[Passage], store_tokenizations: bool
+    ) -> Iterable[torch.Tensor]:
+        for batch in self._batches(passages):
+            encodings = self._encodings(batch, store_tokenizations)
+            embeddings = self._model(**encodings.to(self.device))
+            sentence_embeddings = SentenceTransformerModelWrapper.mean_pooling(
+                embeddings, encodings["attention_mask"]
+            )
+            yield sentence_embeddings
+
+    @classmethod
+    def from_pretrained(
+        cls,
+        model_name_or_path: str,
+        tokenizer_name_or_path: str = None,
+        model_class=AutoModel,
+        layer: int = -1,
+        **kwargs,
+    ):
+        if layer != -1:
+            logging.warning(
+                "SentenceTransformerModelWrapper does not support different layers, ignoring."
+            )
+        return cls(
+            model_class.from_pretrained(model_name_or_path, output_hidden_states=True),
+            AutoTokenizer.from_pretrained(tokenizer_name_or_path or model_name_or_path),
+            layer=layer,
+            embeddings_method=EmbeddingsMethod.MEAN,
+            **kwargs,
+        )

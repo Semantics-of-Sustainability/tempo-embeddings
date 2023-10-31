@@ -1,3 +1,4 @@
+import logging
 import string
 from typing import Any
 from typing import Iterable
@@ -118,9 +119,13 @@ class Passage:
             raise RuntimeError("Passage has no tokenization.")
 
         word_index = self.tokenization.char_to_word(start)
-        assert (
-            self.tokenization.char_to_word(end - 1) == word_index
-        ), "Token spans multiple words"
+        if self.tokenization.char_to_word(end - 1) != word_index:
+            logging.warning(
+                "Token spans from %d to %d multiple words in passage '%s'",
+                start,
+                end,
+                self.text,
+            )
 
         return self.tokenization.word_to_chars(word_index)
 
@@ -150,7 +155,7 @@ class Passage:
             for token in tokens:
                 if len(token) > 1:
                     yield token
-        
+
     def __contains__(self, token: str) -> bool:
         return token in self._text
 
