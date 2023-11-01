@@ -120,8 +120,8 @@ class Passage:
 
         word_index = self.tokenization.char_to_word(start)
         if self.tokenization.char_to_word(end - 1) != word_index:
-            logging.warning(
-                "Token spans from %d to %d multiple words in passage '%s'",
+            logging.info(
+                "Token spans from %d to %d over multiple words in passage '%s'",
                 start,
                 end,
                 self.text,
