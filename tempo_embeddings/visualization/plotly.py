@@ -183,7 +183,12 @@ class PlotlyVisualizer(Visualizer):
 
         return linebreak.join(lines)
 
-    def visualize(self, metadata_fields: Iterable[str] = None):
+    def visualize(
+        self,
+        metadata_fields: Iterable[str] = None,
+        dash_host: str = None,
+        dash_port: int = 8051,
+    ):
         """Visualizes the UMAP embeddings.
 
         Args:
@@ -211,4 +216,4 @@ class PlotlyVisualizer(Visualizer):
 
         app.layout = html.Div(children)
 
-        app.run(host=socket.gethostname())
+        app.run(host=dash_host or socket.gethostname(), port=dash_port)
