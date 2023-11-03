@@ -227,17 +227,8 @@ class Passage:
             else list(self._partial_match(token, case_sensitive))
         )
 
-        match highlightings:
-            case []:
-                return []
-            case [highlighting]:
-                self._highlighting = highlighting
-                return [self]
-            case [*highlightings]:
-                return [
-                    self.with_highlighting(highlighting)
-                    for highlighting in highlightings
-                ]
+        # note: this creates a new Passage object even if there is only one highlighting
+        return [self.with_highlighting(highlighting) for highlighting in highlightings]
 
     def with_highlighting(self, highlighting: Highlighting) -> "Passage":
         """Returns a new Passage object with the given highlighting.
