@@ -6,7 +6,7 @@ from tempo_embeddings.text.passage import Passage
 
 class TestPassage:
     # TODO: mock this
-    model = RobertaModelWrapper.from_pretrained("roberta-base")
+    model = RobertaModelWrapper.from_pretrained("roberta-base", accelerate=False)
 
     @pytest.mark.skip("Needs to be updated.")
     @pytest.mark.parametrize(
