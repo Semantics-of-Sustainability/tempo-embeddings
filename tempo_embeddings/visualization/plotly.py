@@ -1,3 +1,4 @@
+import socket
 from typing import Iterable
 from typing import Optional
 import pandas as pd
@@ -210,4 +211,4 @@ class PlotlyVisualizer(Visualizer):
 
         app.layout = html.Div(children)
 
-        app.run(debug=True)
+        app.run(debug=True, host=socket.gethostname())
