@@ -182,7 +182,7 @@ class PlotlyVisualizer(Visualizer):
 
         return linebreak.join(lines)
 
-    def visualize(self, metadata_fields: Iterable[str] = None):
+    def visualize(self, metadata_fields: Iterable[str] = None, jupyter_mode="external"):
         """Visualizes the UMAP embeddings.
 
         Args:
@@ -210,4 +210,4 @@ class PlotlyVisualizer(Visualizer):
 
         app.layout = html.Div(children)
 
-        app.run(debug=True)
+        app.run(jupyter_mode=jupyter_mode)
