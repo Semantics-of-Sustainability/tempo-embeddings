@@ -211,4 +211,4 @@ class PlotlyVisualizer(Visualizer):
 
         app.layout = html.Div(children)
 
-        app.run(debug=True, host=socket.gethostname())
+        app.run(host=socket.gethostname())
