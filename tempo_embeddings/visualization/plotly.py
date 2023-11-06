@@ -1,4 +1,3 @@
-import socket
 from typing import Iterable
 from typing import Optional
 import pandas as pd
@@ -183,16 +182,13 @@ class PlotlyVisualizer(Visualizer):
 
         return linebreak.join(lines)
 
-    def visualize(
-        self,
-        metadata_fields: Iterable[str] = None,
-        dash_host: str = None,
-        dash_port: int = 8051,
-    ):
+    def visualize(self, metadata_fields: Iterable[str] = None, **dash_server_args):
         """Visualizes the UMAP embeddings.
 
         Args:
             metadata_fields: The metadata fields to include in the hover data.
+            dash_server_args: Arguments to pass to the run() method of the Dash app.
+                See https://dash.plotly.com/reference for a full list.
         """
         app = Dash(__name__)
 
@@ -216,4 +212,4 @@ class PlotlyVisualizer(Visualizer):
 
         app.layout = html.Div(children)
 
-        app.run(host=dash_host or socket.gethostname(), port=dash_port)
+        app.run(**dash_server_args)
