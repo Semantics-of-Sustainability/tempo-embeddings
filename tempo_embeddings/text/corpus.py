@@ -177,14 +177,27 @@ class Corpus(AbstractCorpus):
                     # skip document early, before creating Passage objects
                     continue
 
-                for window in Passage.from_text(
+                windows: Iterable[Passage] = Passage.from_text(
                     text=row[text_column],
                     metadata=metadata,
                     window_size=window_size,
                     window_overlap=window_overlap,
-                ):
-                    if filter_terms and window.contains_any(filter_terms):
-                        for term in filter_terms:
-                            passages.extend(window.highlight(term, exact_match=False))
+                )
+
+                if filter_terms:
+                    # Highlight terms in passages
+
+                    passages.extend(
+                        [
+                            passage
+                            for window in windows
+                            if window.contains_any(filter_terms)
+                            for term in filter_terms
+                            for passage in window.highlight(term, exact_match=False)
+                        ]
+                    )
+
+                else:
+                    passages.extend(windows)
 
         return Corpus(passages)
