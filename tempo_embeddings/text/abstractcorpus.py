@@ -8,6 +8,7 @@ from typing import Any
 from typing import Iterable
 from typing import Optional
 import numpy as np
+import pandas as pd
 from numpy.typing import ArrayLike
 from scipy.sparse import csr_matrix
 from scipy.spatial.distance import cosine
@@ -27,6 +28,11 @@ class AbstractCorpus(ABC):
     @abstractmethod
     def embeddings(self) -> Optional[ArrayLike]:
         return NotImplemented
+
+    def embeddings_as_df(self) -> pd.DataFrame:
+        return pd.DataFrame(
+            {"x": [e[0] for e in self.embeddings], "y": [e[1] for e in self.embeddings]}
+        )
 
     @property
     def label(self) -> Optional[str]:

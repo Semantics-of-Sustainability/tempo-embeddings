@@ -1,3 +1,5 @@
+import numpy as np
+import pandas as pd
 import pytest
 from tempo_embeddings.text.corpus import Corpus
 from tempo_embeddings.text.highlighting import Highlighting
@@ -123,3 +125,17 @@ class TestCorpus:
 
         assert filepath.is_file()
         assert Corpus.load(filepath) == corpus
+
+    @pytest.mark.parametrize(
+        "embeddings,expected",
+        [
+            (np.ones((1, 2)), pd.DataFrame({"x": [1], "y": [1]}, dtype=np.float64)),
+            (
+                np.array([[1, 2], [3, 4], [5, 6]], dtype=np.float64),
+                pd.DataFrame({"x": [1, 3, 5], "y": [2, 4, 6]}, dtype=np.float64),
+            ),
+        ],
+    )
+    def test_embeddings_as_df(self, embeddings, expected):
+        corpus = Corpus(embeddings=embeddings, validate_embeddings=False)
+        pd.testing.assert_frame_equal(corpus.embeddings_as_df(), expected)

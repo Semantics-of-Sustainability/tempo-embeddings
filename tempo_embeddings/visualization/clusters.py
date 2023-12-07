@@ -1,37 +1,13 @@
 import pandas as pd
 import seaborn as sns
-from bokeh.models.tools import HoverTool
-from bokeh.palettes import turbo
-from bokeh.plotting import Figure
-from bokeh.plotting import figure
 from ..settings import OUTLIERS_LABEL
-from ..text.abstractcorpus import AbstractCorpus
-from .visualizer import Visualizer
+from .bokeh import BokehVisualizer
 
 
-class ClusterVisualizer(Visualizer):
-    def __init__(self, clusters: list[AbstractCorpus]):
-        self._clusters = clusters
+class ClusterVisualizer(BokehVisualizer):
+    """Visualizer for clusters using Bokeh."""
 
-    def _select_palette(self):
-        return turbo(len(self._clusters))
-
-    def visualize(self, palette=None, point_size: int = 10):
-        """Create a Scatter plot of the clusters.
-
-        Args:
-            palette: The palette to use for the clusters;
-                defaults to a built-in palette suitable for the number of clusters
-            point_size: The size of the points in the plot
-        """
-        palette = palette or self._select_palette()
-
-        if len(self._clusters) > len(palette):
-            raise ValueError(
-                f"Too many clusters ({len(self._clusters)}) "
-                f"for palette ({len(palette)})."
-            )
-
+    def _create_data(self, point_size: int = 10):
         rows = []
 
         for cluster in self._clusters:
@@ -57,21 +33,15 @@ class ClusterVisualizer(Visualizer):
                     }
                 )
 
-        data = pd.DataFrame(rows)
-        # FIXME: remove `size` from legend
-        return sns.scatterplot(
-            data=data, x="x", y="y", hue="cluster", palette=palette, size="size"
-        )
+        return pd.DataFrame(rows)
 
-    def interactive(self, palette=None, size: int = 10) -> Figure:
-        """Generate an interactive plot.
+    def visualize(self, palette=None, point_size: int = 10):
+        """Create a Scatter plot of the clusters.
 
         Args:
             palette: The palette to use for the clusters;
                 defaults to a built-in palette suitable for the number of clusters
             point_size: The size of the points in the plot
-
-        Returns: a Figure object for use with bokeh.plotting.show()
         """
         palette = palette or self._select_palette()
 
@@ -81,36 +51,12 @@ class ClusterVisualizer(Visualizer):
                 f"for palette ({len(palette)})."
             )
 
-        p: Figure = figure()
-
-        for i, cluster in enumerate(self._clusters):
-            if cluster.label != OUTLIERS_LABEL:
-                centroid = cluster.centroid()
-
-                # FIXME: fill in or remove empty hover data
-                p.circle(
-                    x=centroid[0],
-                    y=centroid[1],
-                    size=size * 2,
-                    color=palette[i],
-                    fill_alpha=0.1,
-                )
-
-            _data = pd.DataFrame(cluster.hover_datas())
-            embeddings = cluster.umap_embeddings()
-
-            assert len(_data) == len(embeddings)
-
-            _data["x"] = [e[0] for e in embeddings]
-            _data["y"] = [e[1] for e in embeddings]
-
-            tool_tips = [
-                (column, "@" + column)
-                for column in _data.columns
-                if column not in ("x", "y")
-            ]
-
-            p.add_tools(HoverTool(tooltips=tool_tips))
-            p.circle(source=_data, x="x", y="y", size=size, color=palette[i])
-
-        return p
+        # FIXME: remove `size` from legend
+        return sns.scatterplot(
+            data=self._create_data(point_size=point_size),
+            x="x",
+            y="y",
+            hue="cluster",
+            palette=palette,
+            size="size",
+        )
