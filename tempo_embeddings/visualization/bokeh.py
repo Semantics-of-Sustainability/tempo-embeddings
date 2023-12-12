@@ -103,7 +103,7 @@ class BokehInteractiveVisualizer(BokehVisualizer):
                 x="x",
                 y="y",
                 color=factor_cmap(self._LABEL_FIELD, palette, labels),
-                legend_group=self._LABEL_FIELD,
+                legend_label=cluster.label,
                 view=CDSView(
                     filter=GroupFilter(
                         column_name=self._LABEL_FIELD, group=cluster.label
