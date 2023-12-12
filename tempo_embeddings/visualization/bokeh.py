@@ -115,7 +115,7 @@ class BokehInteractiveVisualizer(BokehVisualizer):
             )
 
             if cluster.label == OUTLIERS_LABEL:
-                glyph.visible = False
+                glyph.muted = True
 
     def _year_slider(self) -> RangeSlider:
         def callback(attr, old, new):  # noqa: unused-argument
@@ -182,7 +182,7 @@ class BokehInteractiveVisualizer(BokehVisualizer):
         When calling from a notebook, use `show(visualizer.create_document)` instead.
 
         """
-        # FIXME: this has not been tested; not required when calling from within a .
+        # FIXME: this has not been tested; not required when calling from within a notebook.
 
         session = push_session(
             document=curdoc(), url="http://localhost:8050/"
