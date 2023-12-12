@@ -3,6 +3,7 @@ import logging
 import pandas as pd
 from bokeh.client import push_session
 from bokeh.layouts import column
+from bokeh.models import Legend
 from bokeh.models.filters import GroupFilter
 from bokeh.models.sources import CDSView
 from bokeh.models.sources import ColumnDataSource
@@ -72,6 +73,8 @@ class BokehInteractiveVisualizer(BokehVisualizer):
 
         self._figure = figure(height=height, width=width, tooltips=tool_tips)
 
+        self._figure.add_layout(Legend(), "right")
+
     def _create_data(self) -> pd.DataFrame:
         return pd.concat(
             (self._create_cluster_data(cluster=cluster) for cluster in self._clusters)
@@ -132,14 +135,21 @@ class BokehInteractiveVisualizer(BokehVisualizer):
         slider.on_change("value_throttled", callback)
         return slider
 
-    def _setup_legend(self, legend_location: str = "right", click_policy: str = "hide"):
+    def _setup_legend(self):
         legend = self._figure.legend[0]
 
-        # TODO: scale legend layout to number of clusters
-        legend.label_text_font_size = "6px"
-        legend.spacing = 0
-        legend.location = legend_location
-        legend.click_policy = click_policy
+        # Does 'auto' always resolve to 1 column?
+        ncols = 1 if legend.ncols == "auto" else legend.ncols
+        while len(self._clusters) * legend.glyph_height / ncols > self._figure.height:
+            ncols += 1
+            logging.warning(
+                "Legend heigt exceeds plot height (%d). Increasing number of columns to %d.",
+                self._figure.height,
+                ncols,
+            )
+        legend.ncols = ncols
+
+        legend.click_policy = "hide"
 
     def _create_layout(self):
         self._add_circles()
