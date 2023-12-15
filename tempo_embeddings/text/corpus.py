@@ -8,6 +8,7 @@ from typing import Optional
 from typing import TextIO
 import joblib
 from numpy.typing import ArrayLike
+from sklearn.feature_extraction.text import TfidfVectorizer
 from ..settings import DEFAULT_ENCODING
 from .abstractcorpus import AbstractCorpus
 from .passage import Passage
@@ -27,6 +28,7 @@ class Corpus(AbstractCorpus):
         self._passages: list[Passage] = passages or []
         self._label: Optional[str] = label
         self._embeddings: Optional[ArrayLike] = embeddings
+        self._vectorizer: TfidfVectorizer = None
 
         if validate_embeddings:
             self._validate_embeddings()
@@ -49,6 +51,12 @@ class Corpus(AbstractCorpus):
     @property
     def embeddings(self):
         return self._embeddings
+
+    @property
+    def vectorizer(self) -> TfidfVectorizer:
+        if self._vectorizer is None:
+            self._vectorizer = AbstractCorpus.tfidf_vectorizer(self.passages)
+        return self._vectorizer
 
     @embeddings.setter
     def embeddings(self, embeddings: ArrayLike):
