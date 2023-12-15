@@ -42,3 +42,7 @@ class Subcorpus(AbstractCorpus):
             if self._parent_corpus.embeddings is None
             else self._parent_corpus.embeddings.take(self._indices, axis=0)
         )
+
+    @property
+    def vectorizer(self):
+        return self._parent_corpus.vectorizer
