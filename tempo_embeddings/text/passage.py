@@ -163,7 +163,12 @@ class Passage:
         return len(self._text)
 
     def __hash__(self) -> int:
-        return hash(self._text)
+        return (
+            hash(self._text)
+            + hash(frozenset(self._metadata.keys()))
+            + hash(frozenset(self._metadata.values()))
+            + hash(self._highlighting)
+        )
 
     def __eq__(self, other: object) -> bool:
         return self._text == other._text and self._metadata == other._metadata

@@ -49,6 +49,9 @@ class AbstractCorpus(ABC):
     def __eq__(self, other: object) -> bool:
         return other._passages == self._passages
 
+    def __hash__(self) -> int:
+        return hash(tuple(self.passages))
+
     def __len__(self) -> int:
         return len(self._passages)
 
@@ -140,18 +143,23 @@ class AbstractCorpus(ABC):
 
         return distances
 
-    def set_topic_label(
-        self, *, exclude_words: list[str] = None, min_word_length: int = 3, n: int = 1
-    ) -> None:
-        """Set the label of the corpus to the top word(s) in the corpus.
+    @lru_cache(maxsize=8)
+    def top_words(
+        self,
+        *,
+        exclude_words: list[str] = None,
+        min_word_length: int = 3,
+        n: int = 5,
+    ):
+        """
+        Extract the top words from the corpus.
 
         Args:
-            exclude_word: The word to exclude from the label,
-                e.g. the search term used for composing this corpus
-            n: concatenate the top n words in the corpus as the label.
+            exclude_words: The word to exclude from the label,
+                e.g. stopwords and the search term used for composing this corpus
             stopwords: if given, exclude these words
+            n:  the number of words to return. Defaults to 5
         """
-
         if exclude_words is None:
             exclude_words = set()
         exclude_words = {word.casefold() for word in exclude_words}
@@ -159,21 +167,31 @@ class AbstractCorpus(ABC):
         # account for word filtering:
         _n = n + len(exclude_words)
 
-        if self.label == -1:
+        if self.label in (-1, OUTLIERS_LABEL):
             words = [OUTLIERS_LABEL]
         else:
             words = self._tf_idf_words(n=_n)
 
         # filter words
-        top_words: list[str] = [
+        return [
             word
             for word in words
             if len(word.strip()) >= min_word_length
             and not any(char in string.punctuation for char in word)
             and word.casefold() not in exclude_words
-        ]
+        ][:n]
 
-        self._label = "; ".join(top_words[:n])
+    def set_topic_label(self, **kwargs) -> None:
+        """Set the label of the corpus to the top word(s) in the corpus.
+
+        Kwargs:
+            exclude_words: The word to exclude from the label,
+                e.g. stopwords and the search term used for composing this corpus
+            n: concatenate the top n words in the corpus as the label.
+            stopwords: if given, exclude these words
+        """
+
+        self._label = "; ".join(self.top_words(**kwargs))
 
         return self._label
 
