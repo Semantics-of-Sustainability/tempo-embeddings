@@ -50,3 +50,7 @@ have a look at the [contribution guidelines](CONTRIBUTING.md).
 ## Credits
 
 This package was created with [Cookiecutter](https://github.com/audreyr/cookiecutter) and the [NLeSC/python-template](https://github.com/NLeSC/python-template).
+
+### Developer Notes
+
+TODO
