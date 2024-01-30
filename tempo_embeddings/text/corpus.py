@@ -7,11 +7,14 @@ from typing import Iterable
 from typing import Optional
 from typing import TextIO
 import joblib
+import numpy as np
 from numpy.typing import ArrayLike
 from sklearn.feature_extraction.text import TfidfVectorizer
 from ..settings import DEFAULT_ENCODING
 from .abstractcorpus import AbstractCorpus
 from .passage import Passage
+from .highlighting import Highlighting
+from ..embeddings.vector_database import VectorDatabaseManagerWrapper, ChromaDatabaseManager
 
 
 class Corpus(AbstractCorpus):
@@ -23,7 +26,7 @@ class Corpus(AbstractCorpus):
         label: Optional[Any] = None,
         embeddings: Optional[ArrayLike] = None,
         *,
-        validate_embeddings: bool = True,
+        validate_embeddings: bool = True
     ):
         self._passages: list[Passage] = passages or []
         self._label: Optional[str] = label
@@ -117,6 +120,45 @@ class Corpus(AbstractCorpus):
             passages = list(windows)
 
         return Corpus(passages, label="; ".join(filter_terms) if filter_terms else None)
+
+    @classmethod
+    def from_chroma_db(
+        cls,
+        db: ChromaDatabaseManager,
+        collection_name: str,
+        filter_terms: list[str] = [],
+    ):
+        """Read input data from an existing ChromaDatabase"""
+
+        collection = db.get_existing_collection(collection_name)
+        if collection is None: return None
+        
+        records = db.get_records(collection, include=["documents", "metadatas"])
+        passages, db_embeddings = [], []
+        for doc, meta in zip(records["documents"], records["metadatas"]):
+            print(doc, type(doc))
+            #TODO: this whole BLOCK is very hacky. Fix tokenization and highlights!
+            if len(filter_terms) > 0:
+                term = filter_terms[0]
+                start = doc.lower().index(term.lower())
+                end = start + len(term)
+                p = Passage(doc, metadata=meta, highlighting=Highlighting(start, end))
+            else:
+                p = Passage(doc, metadata=meta)
+            p.tokenization = db._tokenize(p.text)
+            passages.append(p)
+            if "datapoint_x" in meta:
+                db_embeddings.append([meta["datapoint_x"], meta["datapoint_y"]])
+        
+        if len(db_embeddings) == 0:
+            two_dim_embeddings = db.compress_embeddings(collection)
+        else:
+            two_dim_embeddings = np.array(db_embeddings)
+
+        corpus = Corpus(passages, label="; ".join(filter_terms) if filter_terms else None)
+        corpus.embeddings = two_dim_embeddings
+
+        return corpus
 
     @classmethod
     def from_lines_file(
