@@ -182,8 +182,7 @@ class TransformerModelWrapper(abc.ABC):
         store_tokenizations: bool = True,
         umap_verbose: bool = True,
         **umap_args,
-    #) -> ArrayLike:
-    ) -> Dict[str, ArrayLike]:
+    ) -> dict[str, ArrayLike]:
         # TODO: add relevant UMAP arguments with reasonable defaults
 
         """Computes the embeddings for highlightings in all passages in a corpus.
