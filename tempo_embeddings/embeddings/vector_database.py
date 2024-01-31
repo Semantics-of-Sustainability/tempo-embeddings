@@ -1,15 +1,14 @@
-import os, json
-import shutil
+import os
+import json
+import logging
 from abc import ABC, abstractmethod
 import numpy as np
 from tqdm import tqdm
-from typing import Iterable, Callable, Any, Optional
-from typing import TYPE_CHECKING
+from typing import Iterable, Any, Optional
+# from typing import TYPE_CHECKING
 from numpy.typing import ArrayLike
 
 from ..text.passage import Passage
-if TYPE_CHECKING:
-    from ..text.corpus import Corpus
 
 from transformers import AutoTokenizer
 
@@ -58,11 +57,11 @@ class VectorDatabaseManagerWrapper(ABC):
         return NotImplemented
 
     @abstractmethod
-    def insert_passages_embeddings(self, collection:Collection, passages: List[Passage]):
+    def insert_passages_embeddings(self, collection:Collection, passages: list[Passage]):
         return NotImplemented
 
     @abstractmethod
-    def retrieve_vectors_if_exist(self, collection: Collection, passages: List[Passage]):
+    def retrieve_vectors_if_exist(self, collection: Collection, passages: list[Passage]):
         return NotImplemented
 
 
@@ -118,7 +117,7 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
         else:
             print(f"A connection to the client already exsists in this session: {self.client}")
 
-    def create_new_collection(self, name: str, passages: List[Passage] = None, embeddings: ArrayLike = None) -> Optional[Collection]:
+    def create_new_collection(self, name: str, passages: list[Passage] = None, embeddings: ArrayLike = None) -> Optional[Collection]:
         if not self.client:
             print("Please connect to a valid database first")
             return None
@@ -134,7 +133,8 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
             self.active_collection_name = name
             self._save_config()
             # If the collection is new then insert the corresponding passages already
-            if passages: self.insert_passages_embeddings(collection, passages, embeddings)
+            if passages: 
+                self.insert_passages_embeddings(collection, passages, embeddings)
 
             return collection
         except UniqueConstraintError:
@@ -146,7 +146,8 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
             collection = self.client.get_collection(name, embedding_function=self.embedding_function)
             self.active_collection_name = name
             return collection
-        except:
+        except Exception as e:
+           logging.warn(f"get_existing_collection() caused exception {e}")
            return None
 
 
@@ -154,11 +155,12 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
         try:
             self.client.delete_collection(name)
             logging.info(f"Succesfully deleted {name}")
-        except:
-            print(f"Collection '{name}' does not exist in this database.")
+        except Exception as e:
+            logging.warn(f"delete_collection() caused exception {e}")
+            logging.info(f"Collection '{name}' does not exist in this database.")
 
 
-    def insert_passages_embeddings(self, collection: Collection, passages: List[Passage], embeddings: ArrayLike = None):
+    def insert_passages_embeddings(self, collection: Collection, passages: list[Passage], embeddings: ArrayLike = None):
         if self.requires_explicit_embeddings and embeddings is None:
             raise ValueError("This Database requires embeddings to be explicitly pre-computed and fed into this function!")
         
@@ -172,7 +174,8 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
         for i, batch in enumerate(self._batches(passages)):
             docs, metas, ids = [], [], []
             for p in batch:
-                if embeddings is not None: p.tokenization = self._tokenize(p.text)
+                if embeddings is not None: 
+                    p.tokenization = self._tokenize(p.text)
                 docs.append(p.text)
                 metas.append(p.metadata)
                 ids.append(str(hash(p)))
@@ -205,7 +208,8 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
         
         records = self.get_records(collection)
 
-        if len(records["ids"]) == 0: return None
+        if len(records["ids"]) == 0: 
+            return None
 
         full_embeddings = records["embeddings"]
         database_ids = records["ids"]
@@ -225,7 +229,7 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
         return compressed
     
 
-    def get_records(self, collection:Collection, filter_words: List[str] = [], where_obj: Dict[str, Any] = None, include: List[str] = ["metadatas", "documents", "embeddings"]):
+    def get_records(self, collection:Collection, filter_words: list[str] = [], where_obj: dict[str, Any] = None, include: list[str] = ["metadatas", "documents", "embeddings"]):
         # Result OBJ has these keys: dict_keys(['ids', 'embeddings', 'metadatas', 'documents', 'uris', 'data']) but by default only "metadatas" and "documents" are populated
         
         # Build the WHERE_DOCUMENT Object
@@ -249,7 +253,7 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
             "embeddings": [] if "embeddings" not in result else np.array(result["embeddings"], dtype=np.float32)
         }
     
-    def query_vector_neighbors(self, collection: Collection, vector: List[float], k_neighbors = 10, include: List[str] = ["metadatas", "documents", "embeddings", "distances"]):
+    def query_vector_neighbors(self, collection: Collection, vector: list[float], k_neighbors = 10, include: list[str] = ["metadatas", "documents", "embeddings", "distances"]):
         result = collection.query(
             query_embeddings=[vector],
             n_results=k_neighbors,
@@ -266,7 +270,7 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
             res_dict["distances"] = result["distances"][0]
         return res_dict
     
-    def query_text_neighbors(self, collection: Collection, text: str, k_neighbors = 10, include: List[str] = ["metadatas", "documents", "embeddings", "distances"]):
+    def query_text_neighbors(self, collection: Collection, text: str, k_neighbors = 10, include: list[str] = ["metadatas", "documents", "embeddings", "distances"]):
         if not self.embedding_function:
             print("WARN: There is no embedding function defined in this database")
             return None
@@ -290,7 +294,7 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
         encoded_input = self.tokenizer(sentence, return_tensors='pt')
         return encoded_input
 
-    def embed_text_batch(self, text_batch: List[str]):
+    def embed_text_batch(self, text_batch: list[str]):
         if self.embedding_function:
             return self.embedding_function(text_batch)
         else:
@@ -319,13 +323,14 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
 
     def get_vector_from_db(self, collection: Collection, text: str):
         results = collection.get(where_document={"$contains": text}, include=["documents", "embeddings"])
-        if len(results) == 0: return None
+        if len(results) == 0: 
+            return None
         for ix, ret_doc in enumerate(results["documents"]):
             if len(text) == len(ret_doc):
                 return results["embeddings"][ix]
         return None
     
-    def retrieve_vectors_if_exist(self, collection:Collection, passages: List[Passage]) -> List[float]:
+    def retrieve_vectors_if_exist(self, collection:Collection, passages: list[Passage]) -> list[float]:
         # TODO: Lookup by unique ID and retrieve the vectors if exist in the DB
         # Even if a single vector in the batch is missing then we will compute the full batch again (to avoid confusions)
         response = {"ids": []} # When we have uniqueID's we will query here...

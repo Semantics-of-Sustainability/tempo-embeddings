@@ -3,7 +3,7 @@ import logging
 from enum import Enum
 from enum import auto
 from typing import TYPE_CHECKING
-from typing import Iterable, Dict
+from typing import Iterable
 import numpy as np
 import torch
 from accelerate import Accelerator
