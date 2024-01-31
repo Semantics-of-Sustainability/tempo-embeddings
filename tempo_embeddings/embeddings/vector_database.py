@@ -153,7 +153,7 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
     def delete_collection(self, name):
         try:
             self.client.delete_collection(name)
-            print(f"Succesfully deleted {name}")
+            logging.info(f"Succesfully deleted {name}")
         except:
             print(f"Collection '{name}' does not exist in this database.")
 
