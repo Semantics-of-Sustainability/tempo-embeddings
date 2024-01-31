@@ -73,7 +73,7 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
     def __init__(self, 
                  db_path: str = "default_db",
                  embedder_name: str = "sentence-transformers/all-MiniLM-L6-v2",
-                 embedder_config: Dict[str,Any] = None,
+                 embedder_config: dict[str,Any] = None,
                  batch_size: int = 8):
         super().__init__(batch_size)
         self.db_path = db_path
