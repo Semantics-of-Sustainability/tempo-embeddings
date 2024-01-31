@@ -167,7 +167,7 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
         else:
             embeddings_list = embeddings.tolist()
         
-        # TODO: When executed in separate context it actually inserts records again (so Hash is not actually unique). Find a better UNIQUE ID!
+        # TODO: When executed in separate context it actually inserts records again (so Hash is not actually unique). Find a better UNIQUE ID! See https://github.com/Semantics-of-Sustainability/tempo-embeddings/issues/40
         num_records = collection.count()
         for i, batch in enumerate(self._batches(passages)):
             docs, metas, ids = [], [], []
