@@ -55,7 +55,7 @@ class VectorDatabaseManagerWrapper(ABC):
 
     @abstractmethod
     def connect(self):
-        pass
+        return NotImplemented
 
     @abstractmethod
     def insert_passages_embeddings(self, collection:Collection, passages: List[Passage]):
