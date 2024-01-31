@@ -115,7 +115,7 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
                 print(f"Creating NEW Database in {self.db_path}...")
                 self._save_config()
         else:
-            print(f"A connection to the client already exsists in this session: {self.client}")
+            logging.info(f"A connection to the client already exists in this session: {self.client}")
 
     def create_new_collection(self, name: str, passages: list[Passage] = None, embeddings: ArrayLike = None) -> Optional[Collection]:
         if not self.client:
