@@ -59,7 +59,7 @@ class VectorDatabaseManagerWrapper(ABC):
 
     @abstractmethod
     def insert_passages_embeddings(self, collection:Collection, passages: List[Passage]):
-        pass
+        return NotImplemented
 
     @abstractmethod
     def retrieve_vectors_if_exist(self, collection: Collection, passages: List[Passage]):
