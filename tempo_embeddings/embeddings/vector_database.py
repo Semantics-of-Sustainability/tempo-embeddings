@@ -294,7 +294,7 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
         if self.embedding_function:
             return self.embedding_function(text_batch)
         else:
-            print("WARN: There is no valid embedding function in this database")
+            logging.warning("There is no valid embedding function in this database")
             return None
         
     def is_in_collection(self, collection:Collection, text: str):
