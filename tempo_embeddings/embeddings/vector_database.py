@@ -63,7 +63,7 @@ class VectorDatabaseManagerWrapper(ABC):
 
     @abstractmethod
     def retrieve_vectors_if_exist(self, collection: Collection, passages: List[Passage]):
-        pass
+        return NotImplemented
 
 
 class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
