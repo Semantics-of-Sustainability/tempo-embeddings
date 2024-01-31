@@ -119,8 +119,7 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
 
     def create_new_collection(self, name: str, passages: list[Passage] = None, embeddings: ArrayLike = None) -> Optional[Collection]:
         if not self.client:
-            print("Please connect to a valid database first")
-            return None
+            raise RuntimeError("Please connect to a valid database first")
         # Create NEW collection and Embeds the given passages. Do nothing otherwise
         try:
             if self.embedding_function:
