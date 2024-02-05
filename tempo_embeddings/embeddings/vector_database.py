@@ -72,7 +72,7 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
     def __init__(self, 
                  db_path: str = "default_db",
                  embedder_name: str = "sentence-transformers/all-MiniLM-L6-v2",
-                 embedder_config: dict[str,Any] = None,
+                 embedder_config: dict[str,Any] = {"type": "default"},
                  batch_size: int = 8):
         super().__init__(batch_size)
         self.db_path = db_path
@@ -81,16 +81,18 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
         self.tokenizer = AutoTokenizer.from_pretrained(embedder_name)
         self.client =  None
         self.requires_explicit_embeddings = False
-        if self.embedder_config and self.embedder_config.get("type") == "hf":
+        if self.embedder_config.get("type") == "hf":
             self.embedding_function = embedding_functions.HuggingFaceEmbeddingFunction(
                 api_key=self.embedder_config.get("api_key"),
                 model_name=embedder_name
             )
-        elif self.embedder_config and self.embedder_config.get("type") == "custom":
+        elif self.embedder_config.get("type") == "custom":
             self.requires_explicit_embeddings = True
             self.embedding_function = None
-        else:
+        elif self.embedder_config.get("type") == "default":
             self.embedding_function = None
+        else:
+            raise ValueError(f"Malformed embedder_config {self.embedder_config}")
 
         self.config = {
             "embedder_name": self.embedder_name,
@@ -104,50 +106,44 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
             json.dump(self.config, open(f"{self.db_path}/config.json", "w"), indent=2)
 
     def connect(self):
-        if not self.client:
+        if self.client:
+            logging.info(f"A connection to the client already exists in this session: {self.client}")
+        else:
             self.client = chromadb.PersistentClient(path=self.db_path)
             # If the given path existed then we will load the records AND override the parameters with the config
             config_path = f"{self.db_path}/config.json"
             if os.path.exists(config_path):
                 self.config = json.load(open(config_path))
-                print(f"Database Path '{self.db_path}' already exists. Loading current configuration\n{self.config}")
+                logging.info(f"Path '{self.db_path}' already exists. Loading DB configuration:\n{self.config}")
             else:
-                print(f"Creating NEW Database in {self.db_path}...")
+                logging.info(f"Creating NEW Database in {self.db_path}...")
                 self._save_config()
-        else:
-            logging.info(f"A connection to the client already exists in this session: {self.client}")
+           
 
-    def create_new_collection(self, name: str, passages: list[Passage] = None, embeddings: ArrayLike = None) -> Optional[Collection]:
+    def create_new_collection(self, name: str, passages: list[Passage] = None, embeddings: ArrayLike = None, metadata={"hnsw:space": "cosine"}) -> Optional[Collection]:
         if not self.client:
             raise RuntimeError("Please connect to a valid database first")
         # Create NEW collection and Embeds the given passages. Do nothing otherwise
         try:
-            if self.embedding_function:
-                collection = self.client.create_collection(name, 
-                                                            embedding_function=self.embedding_function,
-                                                            metadata={"hnsw:space": "cosine"})
-            else:
-                collection = self.client.create_collection(name, metadata={"hnsw:space": "cosine"})
+            collection = self.client.create_collection(name, 
+                                                    embedding_function=self.embedding_function,
+                                                    metadata=metadata)
             self.config["existing_collections"].append(name)
             self.active_collection_name = name
             self._save_config()
             # If the collection is new then insert the corresponding passages already
             if passages: 
                 self.insert_passages_embeddings(collection, passages, embeddings)
-
+            print(f"Created NEW collection '{name}'")
             return collection
         except UniqueConstraintError:
-            print(f"Collection '{name}' already exists. Not doing anything. (You can delete it or use the 'get_existing_collection' method)")
-            return None
+            raise ValueError
         
     def get_existing_collection(self, name: str) -> Optional[Collection]:
-        try:
-            collection = self.client.get_collection(name, embedding_function=self.embedding_function)
-            self.active_collection_name = name
-            return collection
-        except Exception as e:
-           logging.warn(f"get_existing_collection() caused exception {e}")
-           return None
+        collection = self.client.get_collection(name, embedding_function=self.embedding_function)
+        self.active_collection_name = name
+        print(f"Retrieved existing collection '{name}'")
+        return collection
 
 
     def delete_collection(self, name):
@@ -163,7 +159,7 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
         if self.requires_explicit_embeddings and embeddings is None:
             raise ValueError("This Database requires embeddings to be explicitly pre-computed and fed into this function!")
         
-        if isinstance(embeddings, list):
+        if embeddings is None or isinstance(embeddings, list):
             embeddings_list = embeddings
         else:
             embeddings_list = embeddings.tolist()
