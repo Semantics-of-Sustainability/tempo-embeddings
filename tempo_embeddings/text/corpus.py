@@ -10,11 +10,10 @@ import joblib
 import numpy as np
 from numpy.typing import ArrayLike
 from sklearn.feature_extraction.text import TfidfVectorizer
+from ..embeddings.vector_database import ChromaDatabaseManager
 from ..settings import DEFAULT_ENCODING
 from .abstractcorpus import AbstractCorpus
 from .passage import Passage
-# from .highlighting import Highlighting
-from ..embeddings.vector_database import ChromaDatabaseManager
 
 
 class Corpus(AbstractCorpus):

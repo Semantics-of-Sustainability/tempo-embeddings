@@ -1,24 +1,21 @@
 # pylint: disable=logging-fstring-interpolation
 import json
 import logging
-from abc import ABC, abstractmethod
-import numpy as np
-from tqdm import tqdm
-from typing import Iterable, Any, Optional
-
-# from typing import TYPE_CHECKING
-from numpy.typing import ArrayLike
-
-from ..text.passage import Passage
-
-from transformers import AutoTokenizer
-
+from abc import ABC
+from abc import abstractmethod
+from typing import Any
+from typing import Iterable
+from typing import Optional
 import chromadb
-from chromadb.utils import embedding_functions
-from chromadb.types import Collection
+import numpy as np
 from chromadb.db.base import UniqueConstraintError
-
+from chromadb.types import Collection
+from chromadb.utils import embedding_functions
+from numpy.typing import ArrayLike
+from tqdm import tqdm
+from transformers import AutoTokenizer
 from umap.umap_ import UMAP
+from ..text.passage import Passage
 
 
 class VectorDatabaseManagerWrapper(ABC):
