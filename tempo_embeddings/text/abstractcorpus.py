@@ -209,9 +209,9 @@ class AbstractCorpus(ABC):
         """
         tf_idfs: csr_matrix = self.tf_idf()
 
-        assert all(
-            passage.highlighting for passage in self.passages
-        ), "Passages must have highlightings"
+        # assert all(
+        #     passage.highlighting for passage in self.passages
+        # ), "Passages must have highlightings"
 
         assert tf_idfs.shape == (
             len(self.passages),

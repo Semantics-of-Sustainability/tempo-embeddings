@@ -13,8 +13,8 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from ..settings import DEFAULT_ENCODING
 from .abstractcorpus import AbstractCorpus
 from .passage import Passage
-from .highlighting import Highlighting
-from ..embeddings.vector_database import VectorDatabaseManagerWrapper, ChromaDatabaseManager
+# from .highlighting import Highlighting
+from ..embeddings.vector_database import ChromaDatabaseManager
 
 
 class Corpus(AbstractCorpus):
@@ -126,27 +126,28 @@ class Corpus(AbstractCorpus):
         cls,
         db: ChromaDatabaseManager,
         collection_name: str,
-        filter_terms: list[str] = [],
+        filter_terms: list[str] = None,
     ):
         """Read input data from an existing ChromaDatabase"""
 
         collection = db.get_existing_collection(collection_name)
-        if collection is None: return None
+
+        filter_terms = filter_terms or []
         
         records = db.get_records(collection, include=["documents", "metadatas"])
         passages, db_embeddings = [], []
         for doc, meta in zip(records["documents"], records["metadatas"]):
-            print(doc, type(doc))
             #TODO: this whole BLOCK is very hacky. Fix tokenization and highlights!
-            if len(filter_terms) > 0:
-                term = filter_terms[0]
-                start = doc.lower().index(term.lower())
-                end = start + len(term)
-                p = Passage(doc, metadata=meta, highlighting=Highlighting(start, end))
-            else:
-                p = Passage(doc, metadata=meta)
-            p.tokenization = db._tokenize(p.text)
-            passages.append(p)
+            # if len(filter_terms) > 0:
+            #     term = filter_terms[0]
+            #     start = doc.lower().index(term.lower())
+            #     end = start + len(term)
+            #     p = Passage(doc, metadata=meta, highlighting=Highlighting(start, end))
+            # else:
+            #     p = Passage(doc, metadata=meta)
+            # p.tokenization = db._tokenize(p.text)
+            # passages.append(p)
+            passages.append(Passage(doc, metadata=meta))
             if "datapoint_x" in meta:
                 db_embeddings.append([meta["datapoint_x"], meta["datapoint_y"]])
         
