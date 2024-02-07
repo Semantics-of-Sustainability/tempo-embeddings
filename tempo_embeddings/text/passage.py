@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import string
 from typing import Any
@@ -5,7 +6,6 @@ from typing import Iterable
 from typing import Optional
 from tokenizers import Encoding
 from .highlighting import Highlighting
-import hashlib
 
 
 class Passage:
