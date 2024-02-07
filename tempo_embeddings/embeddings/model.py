@@ -182,7 +182,7 @@ class TransformerModelWrapper(abc.ABC):
         store_tokenizations: bool = True,
         umap_verbose: bool = True,
         **umap_args,
-    ) -> ArrayLike:
+    ) -> dict[str, ArrayLike]:
         # TODO: add relevant UMAP arguments with reasonable defaults
 
         """Computes the embeddings for highlightings in all passages in a corpus.
@@ -210,7 +210,7 @@ class TransformerModelWrapper(abc.ABC):
         ), f"Embeddings shape is {embeddings.shape}, corpus length is {len(corpus)}."
 
         umap = UMAP(verbose=umap_verbose, **umap_args)
-        return umap.fit_transform(embeddings)
+        return {"embeddings_full": embeddings, "embeddings_xy": umap.fit_transform(embeddings)}
 
     @classmethod
     def from_pretrained(
