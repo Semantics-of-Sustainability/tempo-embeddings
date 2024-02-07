@@ -185,8 +185,6 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
         else:
             embeddings_list = embeddings.tolist()
 
-        # TODO: When executed in separate context it actually inserts records again (so Hash is not actually unique). 
-        # Find a better UNIQUE ID! See https://github.com/Semantics-of-Sustainability/tempo-embeddings/issues/40
         num_records = collection.count()
         for i, batch in enumerate(self._batches(passages)):
             docs, metas, ids = [], [], []
@@ -194,8 +192,9 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
                 if embeddings is not None:
                     p.tokenization = self._tokenize(p.text)
                 docs.append(p.text)
+                p.metadata["tokenized_text"] = " ".join(p.words())
                 metas.append(p.metadata)
-                ids.append(str(hash(p)))
+                ids.append(p.get_unique_id())
             if embeddings is None:
                 collection.add(documents=docs, metadatas=metas, ids=ids)
             else:
@@ -338,7 +337,7 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
         if self.embedding_function:
             batch_embeddings = self.embedding_function(text_batch)
         else:
-            logging.warning("There is no valid embedding function in this database")
+            logging.warning("There is no valid embedding function in this database. Returning None")
         return batch_embeddings
 
     def is_in_collection(self, collection: Collection, text: str):
@@ -377,10 +376,11 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
     def retrieve_vectors_if_exist(
         self, collection: Collection, passages: list[Passage]
     ) -> list[float]:
-        # TODO: Lookup by unique ID and retrieve the vectors if exist in the DB
+        # Lookup by unique ID and retrieve the vectors if exist in the DB
         # Even if a single vector in the batch is missing then we will compute the full batch again (to avoid confusions)
-        response = {"ids": []}  # When we have uniqueID's we will query here...
-        retrieved_embeddings = []
-        if len(response["ids"]) == len(passages):
-            retrieved_embeddings = response["embeddings"]
-        return retrieved_embeddings
+        # response = {"ids": []}  # When we have uniqueID's we will query here...
+        # retrieved_embeddings = []
+        # if len(response["ids"]) == len(passages):
+        #     retrieved_embeddings = response["embeddings"]
+        # return retrieved_embeddings
+        raise NotImplementedError

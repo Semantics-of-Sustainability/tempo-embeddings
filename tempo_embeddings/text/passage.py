@@ -5,6 +5,7 @@ from typing import Iterable
 from typing import Optional
 from tokenizers import Encoding
 from .highlighting import Highlighting
+import hashlib
 
 
 class Passage:
@@ -21,10 +22,15 @@ class Passage:
         self._metadata = metadata or {}
         self._highlighting = highlighting
         self._tokenization: Optional[Encoding] = tokenization
+        self._tokenized_text = None
 
     @property
     def text(self) -> str:
         return self._text
+    
+    @property
+    def tokenized_text(self) -> str:
+        return self._tokenized_text
 
     @property
     def metadata(self) -> dict:
@@ -41,6 +47,12 @@ class Passage:
     @tokenization.setter
     def tokenization(self, value: Encoding):
         self._tokenization = value
+
+    def get_unique_id(self) -> str:
+        meta_sorted = sorted(self.metadata.items(), key=lambda x: x[0]) if self.metadata else []
+        key = self.text + str(meta_sorted) + str(self.highlighting)
+        hex_dig = hashlib.sha256(key.encode()).hexdigest()
+        return hex_dig
 
     def contains_any(self, tokens: Iterable[str]) -> bool:
         """Returns True if any of the tokens are contained in the passage.
@@ -129,7 +141,7 @@ class Passage:
 
         return self.tokenization.word_to_chars(word_index)
 
-    def words(self, use_tokenizer: bool = True) -> Iterable[str]:
+    def words(self, use_tokenizer: bool = True) -> list[str]:
         """Returns the words in the passage.
 
         Args:
@@ -144,17 +156,23 @@ class Passage:
             if self.tokenization is None:
                 raise RuntimeError("Passage has no tokenization.")
 
-            for i in self.tokenization.words:
-                if i is not None:
-                    start, end = self.tokenization.word_to_chars(i)
-                    yield self._text[start:end]
+            char_spans = [self.tokenization.word_to_chars(i) for i in self.tokenization.word_ids() if i is not None]
+            tokens = [self.text[sp[0]: sp[1]] for sp in sorted(set(char_spans))]
         else:
             tokens = [
                 token.strip(string.punctuation).strip() for token in self._text.split()
             ]
-            for token in tokens:
-                if len(token) > 1:
-                    yield token
+            tokens = [token for token in tokens if len(token) > 1]
+
+        self._tokenized_text = tokens
+        return tokens
+
+    def get_token_spans(self) -> list[tuple[int, int]]:
+        if self.tokenization is None:
+            raise RuntimeError("Passage has no tokenization.")
+
+        char_spans = [self.tokenization.word_to_chars(i) for i in self.tokenization.word_ids() if i is not None]
+        return sorted([(s.start, s.end) for s in set(char_spans)])
 
     def __contains__(self, token: str) -> bool:
         return token in self._text
