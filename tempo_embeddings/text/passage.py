@@ -138,16 +138,16 @@ class Passage:
     def word_span(self, start, end) -> tuple[int, int]:
         if not self.tokenization or self.tokenization is None:
             raise RuntimeError("Passage has no tokenization.")
-        else:
-            word_index = self.tokenization.char_to_word(start)
-            if self.tokenization.char_to_word(end - 1) != word_index:
-                logging.info(
-                    "Token spans from %d to %d over multiple words in passage '%s'",
-                    start,
-                    end,
-                    self.text,
-                )
-            return self.tokenization.word_to_chars(word_index)
+        
+        word_index = self.tokenization.char_to_word(start)
+        if self.tokenization.char_to_word(end - 1) != word_index:
+            logging.info(
+                "Token spans from %d to %d over multiple words in passage '%s'",
+                start,
+                end,
+                self.text,
+            )
+        return self.tokenization.word_to_chars(word_index)
 
     def words(self, use_tokenizer: bool = True) -> list[str]:
         """Returns the words in the passage.
