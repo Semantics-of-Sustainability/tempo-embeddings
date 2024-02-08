@@ -193,6 +193,7 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
                     p.tokenization = self._tokenize(p.text)
                 docs.append(p.text)
                 p.metadata["tokenized_text"] = " ".join(p.words())
+                p.metadata["highlighting"] = p.highlighting.get_span(stringify=True) if p.highlighting else "-"
                 metas.append(p.metadata)
                 ids.append(p.get_unique_id())
             if embeddings is None:

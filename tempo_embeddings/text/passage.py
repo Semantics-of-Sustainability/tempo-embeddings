@@ -22,7 +22,7 @@ class Passage:
         self._metadata = metadata or {}
         self._highlighting = highlighting
         self._tokenization: Optional[Encoding] = tokenization
-        self._tokenized_text = None
+        self._tokenized_text: Optional[list[str]] = None
 
     @property
     def text(self) -> str:
@@ -43,6 +43,12 @@ class Passage:
     @property
     def tokenization(self) -> Optional[Encoding]:
         return self._tokenization
+
+    @tokenized_text.setter
+    def tokenized_text(self, value: list[str]):
+        if not isinstance(value, list):
+            raise ValueError("You should pass a list of strings as tokenized text")
+        self._tokenized_text = value
 
     @tokenization.setter
     def tokenization(self, value: Encoding):
@@ -86,9 +92,14 @@ class Passage:
         """
         if not self.highlighting:
             raise ValueError(f"Passage does not have a highlighting: {str(self)}")
-        word_start, word_end = self.word_span(
-            self.highlighting.start, self.highlighting.end
-        )
+        
+        try:
+            word_start, word_end = self.word_span(
+                self.highlighting.start, self.highlighting.end
+            )
+        except RuntimeError:
+            word_start, word_end = self.highlighting.start, self.highlighting.end
+
 
         pre_context = self.text[:word_start][-max_context_length:]
         post_context = self.text[word_end:][:max_context_length]
@@ -125,21 +136,18 @@ class Passage:
         self._metadata[key] = value
 
     def word_span(self, start, end) -> tuple[int, int]:
-        if not self.tokenization:
+        if not self.tokenization or self.tokenization is None:
             raise RuntimeError("Passage has no tokenization.")
-        if self.tokenization is None:
-            raise RuntimeError("Passage has no tokenization.")
-
-        word_index = self.tokenization.char_to_word(start)
-        if self.tokenization.char_to_word(end - 1) != word_index:
-            logging.info(
-                "Token spans from %d to %d over multiple words in passage '%s'",
-                start,
-                end,
-                self.text,
-            )
-
-        return self.tokenization.word_to_chars(word_index)
+        else:
+            word_index = self.tokenization.char_to_word(start)
+            if self.tokenization.char_to_word(end - 1) != word_index:
+                logging.info(
+                    "Token spans from %d to %d over multiple words in passage '%s'",
+                    start,
+                    end,
+                    self.text,
+                )
+            return self.tokenization.word_to_chars(word_index)
 
     def words(self, use_tokenizer: bool = True) -> list[str]:
         """Returns the words in the passage.
@@ -151,6 +159,9 @@ class Passage:
         Returns:
             An iterable of words in the passage.
         """
+
+        if self._tokenized_text is not None:
+            return self._tokenized_text
 
         if use_tokenizer:
             if self.tokenization is None:
