@@ -127,6 +127,7 @@ class Corpus(AbstractCorpus):
         db: ChromaDatabaseManager,
         collection_name: str
     ):
+        # pylint: disable=too-many-locals
         """Read input data from an existing ChromaDatabase"""
 
         collection = db.get_existing_collection(collection_name)
