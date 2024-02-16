@@ -129,9 +129,6 @@ class Passage:
         if not self.highlighting:
             raise ValueError(f"Passage does not have a highlighting: {str(self)}")
         
-        # word_start, word_end = self.word_span(
-        #     self.highlighting.start, self.highlighting.end
-        # )
         word_start, word_end = self.highlighting.start, self.highlighting.end
 
 
