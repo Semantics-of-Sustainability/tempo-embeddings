@@ -2,13 +2,12 @@ import abc
 import logging
 from enum import Enum
 from enum import auto
-from typing import TYPE_CHECKING
 from typing import Iterable
+from typing import Optional
 import numpy as np
 import torch
 from accelerate import Accelerator
 from numpy.typing import ArrayLike
-from tqdm import tqdm
 from transformers import AutoModel
 from transformers import AutoModelForMaskedLM
 from transformers import AutoTokenizer
@@ -17,9 +16,7 @@ from transformers import XmodModel
 from umap.umap_ import UMAP
 from ..text.passage import Passage
 from tokenizers import Encoding
-
-if TYPE_CHECKING:
-    from ..text.corpus import Corpus
+from ..text.corpus import Corpus
 
 
 class EmbeddingsMethod(Enum):
@@ -114,17 +111,17 @@ class TransformerModelWrapper(abc.ABC):
     def name(self) -> str:
         return self._model.config._name_or_path  # pylint: disable=protected-access
 
-    def _batches(self, passages: list[Passage], skip_batching: bool = False) -> Iterable[list[Passage]]:
-        if skip_batching:
-            yield passages
-        else:
-            for batch_start in tqdm(
-                range(0, len(passages), self.batch_size),
-                desc="Embeddings",
-                unit="batch",
-                total=len(passages) // self.batch_size + 1,
-            ):
-                yield passages[batch_start : batch_start + self.batch_size]
+    # def _batches(self, passages: list[Passage], skip_batching: bool = False) -> Iterable[list[Passage]]:
+    #     if skip_batching:
+    #         yield passages
+    #     else:
+    #         for batch_start in tqdm(
+    #             range(0, len(passages), self.batch_size),
+    #             desc="Embeddings",
+    #             unit="batch",
+    #             total=len(passages) // self.batch_size + 1,
+    #         ):
+    #             yield passages[batch_start : batch_start + self.batch_size]
 
     @staticmethod
     def _get_token_spans(encoding: Encoding) -> list[tuple[int, int]]:
@@ -150,10 +147,11 @@ class TransformerModelWrapper(abc.ABC):
         return encodings
 
     @torch.no_grad()
-    def embed_passages(
-        self, passages: list[Passage], store_tokenizations: bool, skip_batching: bool = False
+    def embed_corpus(
+        self, corpus: Corpus, store_tokenizations: bool, batch_size:Optional[int] = None
     ) -> Iterable[torch.Tensor]:
-        for batch in self._batches(passages, skip_batching=skip_batching):
+        batch_size = batch_size or self.batch_size
+        for batch in corpus.batches(batch_size):
             encodings = self._encodings(batch, store_tokenizations)
             embeddings = self._model(**encodings.to(self.device))
             layer_output = embeddings.hidden_states[self.layer]
@@ -211,8 +209,8 @@ class TransformerModelWrapper(abc.ABC):
         embeddings: ArrayLike = np.concatenate(
             [
                 tensor.cpu()
-                for tensor in self.embed_passages(
-                    corpus.passages, store_tokenizations
+                for tensor in self.embed_corpus(
+                    corpus, store_tokenizations
                 )
             ],
             axis=0,
@@ -311,10 +309,11 @@ class SentenceTransformerModelWrapper(TransformerModelWrapper):
         )
 
     @torch.no_grad()
-    def embed_passages(
-        self, passages: list[Passage], store_tokenizations: bool, skip_batching: bool = False
+    def embed_corpus(
+        self, corpus: Corpus, store_tokenizations: bool, batch_size: Optional[int] = None
     ) -> Iterable[torch.Tensor]:
-        for batch in self._batches(passages, skip_batching=skip_batching):
+        batch_size = batch_size or self.batch_size
+        for batch in corpus.batches(batch_size):
             encodings = self._encodings(batch, store_tokenizations)
             embeddings = self._model(**encodings.to(self.device))
             sentence_embeddings = SentenceTransformerModelWrapper.mean_pooling(

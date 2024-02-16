@@ -6,17 +6,16 @@ from abc import abstractmethod
 from typing import Any
 from typing import Iterable
 from typing import Optional
-from types import GeneratorType
 import chromadb
 import numpy as np
 from chromadb.db.base import UniqueConstraintError
 from chromadb.types import Collection
 from chromadb.utils import embedding_functions
 from numpy.typing import ArrayLike
-from tqdm import tqdm
 from transformers import AutoTokenizer
 from umap.umap_ import UMAP
 from ..text.passage import Passage
+from ..text.corpus import Corpus
 from ..text.highlighting import Highlighting
 
 
@@ -39,22 +38,22 @@ class VectorDatabaseManagerWrapper(ABC):
     def batch_size(self, batch_size: int) -> None:
         self._batch_size = batch_size
 
-    def _batches(self, passages: list[Passage]) -> Iterable[list[Passage]]:
-        for batch_start in tqdm(
-            range(0, len(passages), self.batch_size),
-            desc="Embeddings Batches",
-            unit="batch",
-            total=len(passages) // self.batch_size + 1,
-        ):
-            yield passages[batch_start : batch_start + self.batch_size]
+    # def _batches(self, passages: list[Passage]) -> Iterable[list[Passage]]:
+    #     for batch_start in tqdm(
+    #         range(0, len(passages), self.batch_size),
+    #         desc="Embeddings Batches",
+    #         unit="batch",
+    #         total=len(passages) // self.batch_size + 1,
+    #     ):
+    #         yield passages[batch_start : batch_start + self.batch_size]
 
     @abstractmethod
     def connect(self):
         return NotImplemented
 
     @abstractmethod
-    def insert_passages(
-        self, collection: Collection, passages: list[Passage]
+    def insert_corpus(
+        self, collection: Collection, corpus: Corpus
     ):
         return NotImplemented
 
@@ -139,7 +138,7 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
     def create_new_collection(
         self,
         name: str,
-        passages: list[Passage] = None,
+        corpus: Corpus = None,
         collection_metadata = None,
     ) -> Optional[Collection]:
         if collection_metadata is None:
@@ -158,8 +157,8 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
         self.active_collection_name = name
         self._save_config()
         # If the collection is new then insert the corresponding passages already
-        if passages:
-            self.insert_passages(collection, passages)
+        if corpus:
+            self.insert_corpus(collection, corpus)
         print(f"Created NEW collection '{name}'")
         return collection
         
@@ -199,24 +198,22 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
                     insert_embeds.append(p.embedding)
         return docs, metas, ids, insert_embeds
 
-    def insert_passages(
+    def insert_corpus(
         self,
         collection: Collection,
-        passages: list[Passage]
+        corpus: Corpus
     ):
-        if isinstance(passages, GeneratorType):
-            passages = list(passages)
 
-        if len(passages) == 0:
+        if len(corpus.passages) == 0:
             raise ValueError("There should be at least one passage to insert.") 
 
-        passages_need_embeddings = passages[0].embedding is None
+        passages_need_embeddings = corpus.passages[0].embedding is None
         num_records = collection.count()
         seen_ids = set()
 
-        for batch_pass in self._batches(passages):
+        for batch_pass in corpus.batches(self.batch_size):
             if passages_need_embeddings and self.model:
-                embedded_tensors = self.model.embed_passages(batch_pass, store_tokenizations=True, skip_batching=True) 
+                embedded_tensors = self.model.embed_corpus(Corpus(batch_pass), store_tokenizations=True, batch_size=1) 
                 embeddings = [tensor.tolist() for tensor in embedded_tensors][0]
             elif passages_need_embeddings and not self.model and not self.embedding_function:
                 raise RuntimeError("These passages need embeddings but no valid model or embedding function was provided to the Database Object")
@@ -235,18 +232,16 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
 
     def compress_embeddings(
         self,
-        passages: list[Passage],
+        corpus: Corpus,
         umap_verbose: bool = True,
         **umap_args,
     ) -> ArrayLike:
 
-        if len(passages) == 0:
+        if len(corpus) == 0:
             return None
 
-        full_embeddings = [p.embedding for p in passages]
-
         umap = UMAP(verbose=umap_verbose, **umap_args)
-        compressed = umap.fit_transform(full_embeddings)
+        compressed = umap.fit_transform([p.embedding for p in corpus.passages])
 
         return compressed
 
@@ -276,14 +271,14 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
         return p
 
 
-    def get_passages(
+    def get_corpus(
         self,
         collection: Collection,
-        limit: int = 0,
         filter_words: list[str] = None,
         where_obj: dict[str, Any] = None,
+        limit: int = 0,
         include_embeddings: bool = False
-    ) -> Iterable[Passage]:
+    ) -> Corpus:
         # pylint: disable=too-many-arguments
         # Result OBJ has these keys: dict_keys(['ids', 'embeddings', 'metadatas', 'documents', 'uris', 'data'])
         # by default only "metadatas" and "documents" are populated
@@ -298,11 +293,12 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
         records = collection.get(
             where=where_obj, where_document=where_doc, include=include, limit=limit
         )
-        # Return empty list if no records where found
+        # Return empty corpus if no records where found
         if len(records) > 0:
             if "embeddings" not in include: 
                 records["embeddings"] = []
             # Build Passage objects
+            passages = []
             for ix, rec_id in enumerate(records["ids"]):
                 doc = records["documents"][ix]
                 meta = records["metadatas"][ix]
@@ -310,7 +306,9 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
                 # Assign Embedding if requested
                 if "embeddings" in include:
                     passage.embedding = records["embeddings"][ix]
-                yield passage
+                passages.append(passage)
+            return Corpus(passages, label="; ".join(filter_words) if filter_words else None)
+        return Corpus()
 
     def query_vector_neighbors(
         self,

@@ -8,11 +8,13 @@ from typing import Optional
 from typing import TextIO
 import joblib
 from numpy.typing import ArrayLike
+from tqdm import tqdm
 from sklearn.feature_extraction.text import TfidfVectorizer
-from ..embeddings.vector_database import ChromaDatabaseManager
+# from ..embeddings.vector_database import ChromaDatabaseManager
 from ..settings import DEFAULT_ENCODING
 from .abstractcorpus import AbstractCorpus
 from .passage import Passage
+
 
 class Corpus(AbstractCorpus):
     """A Corpus implementation that holds the concrecte passages and embedings."""
@@ -52,7 +54,6 @@ class Corpus(AbstractCorpus):
     def embeddings(self):
         return self._embeddings
     
-
     @property
     def vectorizer(self) -> TfidfVectorizer:
         if self._vectorizer is None:
@@ -64,6 +65,18 @@ class Corpus(AbstractCorpus):
         self._embeddings = embeddings
         self._validate_embeddings()
 
+
+    def batches(self, batch_size: int) -> Iterable[list[Passage]]:
+        if batch_size <= 1:
+            yield self.passages
+        else:
+            for batch_start in tqdm(
+                range(0, len(self.passages), batch_size),
+                desc="Embeddings",
+                unit="batch",
+                total=len(self.passages) // batch_size + 1,
+            ):
+                yield self.passages[batch_start : batch_start + batch_size]
 
     def save(self, filepath: Path):
         """Save the corpus to a file."""
@@ -219,25 +232,3 @@ class Corpus(AbstractCorpus):
                     passages.extend(windows)
 
         return Corpus(passages)
-
-    @classmethod
-    def from_chroma_db(
-        cls,
-        db: ChromaDatabaseManager,
-        collection_name: str,
-        include_embeddings: bool = False
-    ):
-        """Read input data from an existing ChromaDatabase"""
-
-        collection = db.get_existing_collection(collection_name)
-
-        filter_terms = set()
-        passages = db.get_passages(collection, include_embeddings=include_embeddings)
-
-        corpus = Corpus(passages, label="; ".join(filter_terms) if filter_terms else None)
-        
-        if include_embeddings:
-            two_dim_embeddings = db.compress_embeddings(passages)
-            corpus.embeddings = two_dim_embeddings
-
-        return corpus
