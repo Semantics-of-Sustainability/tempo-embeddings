@@ -14,9 +14,9 @@ from chromadb.utils import embedding_functions
 from numpy.typing import ArrayLike
 from transformers import AutoTokenizer
 from umap.umap_ import UMAP
-from ..text.passage import Passage
 from ..text.corpus import Corpus
 from ..text.highlighting import Highlighting
+from ..text.passage import Passage
 
 
 class VectorDatabaseManagerWrapper(ABC):

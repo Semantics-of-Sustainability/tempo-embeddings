@@ -8,9 +8,8 @@ from typing import Optional
 from typing import TextIO
 import joblib
 from numpy.typing import ArrayLike
-from tqdm import tqdm
 from sklearn.feature_extraction.text import TfidfVectorizer
-# from ..embeddings.vector_database import ChromaDatabaseManager
+from tqdm import tqdm
 from ..settings import DEFAULT_ENCODING
 from .abstractcorpus import AbstractCorpus
 from .passage import Passage

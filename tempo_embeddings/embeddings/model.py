@@ -8,15 +8,15 @@ import numpy as np
 import torch
 from accelerate import Accelerator
 from numpy.typing import ArrayLike
+from tokenizers import Encoding
 from transformers import AutoModel
 from transformers import AutoModelForMaskedLM
 from transformers import AutoTokenizer
 from transformers import RobertaModel
 from transformers import XmodModel
 from umap.umap_ import UMAP
-from ..text.passage import Passage
-from tokenizers import Encoding
 from ..text.corpus import Corpus
+from ..text.passage import Passage
 
 
 class EmbeddingsMethod(Enum):
