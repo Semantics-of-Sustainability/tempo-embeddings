@@ -170,9 +170,6 @@ class Passage:
         self._metadata[key] = value
 
     def word_span(self, start, end) -> tuple[int, int]:
-        # if not self.tokenization or self.tokenization is None:
-        #     raise RuntimeError("Passage has no tokenization.")
-        
         word_index = self.tokenization.char_to_word(start)
         if self.tokenization.char_to_word(end - 1) != word_index:
             logging.info(
