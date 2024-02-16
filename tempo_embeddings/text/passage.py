@@ -20,6 +20,7 @@ class Passage:
         char2tokens: Optional[list[int]] = None,
         unique_id: str = None
     ) -> None:
+        # pylint: disable=too-many-arguments
         self._text = text.strip()
         self._unique_id = unique_id
         self._metadata = metadata or {}

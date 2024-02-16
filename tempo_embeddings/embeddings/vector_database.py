@@ -6,6 +6,7 @@ from abc import abstractmethod
 from typing import Any
 from typing import Iterable
 from typing import Optional
+from types import GeneratorType
 import chromadb
 import numpy as np
 from chromadb.db.base import UniqueConstraintError
@@ -180,22 +181,40 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
             logging.warning(f"delete_collection() caused exception {e}")
             logging.info(f"Collection '{name}' does not exist in this database.")
 
+    def _prepare_insertion_batch(self, batch, embeddings, seen_ids):
+        docs, metas, ids = [], [], []
+        insert_embeds = []
+        for k, p in enumerate(batch):
+            pid = p.get_unique_id()
+            if pid not in seen_ids:
+                docs.append(p.text)
+                p.metadata["tokenized_text"] = " ".join(p.words())
+                p.metadata["highlighting"] = p.highlighting.get_span(stringify=True) if p.highlighting else "-"
+                metas.append(p.metadata)
+                ids.append(pid)
+                seen_ids.add(pid)
+                if embeddings:
+                    p.embedding = embeddings[k]
+                if p.embedding is not None:
+                    insert_embeds.append(p.embedding)
+        return docs, metas, ids, insert_embeds
+
     def insert_passages(
         self,
         collection: Collection,
         passages: list[Passage]
     ):
+        if isinstance(passages, GeneratorType):
+            passages = list(passages)
+
         if len(passages) == 0:
             raise ValueError("There should be at least one passage to insert.") 
 
-        passages_need_embeddings = True if passages[0].embedding is None else False
+        passages_need_embeddings = passages[0].embedding is None
         num_records = collection.count()
         seen_ids = set()
 
         for batch_pass in self._batches(passages):
-        # for batch_pass, batch_emb in zip(self._batches(passages), batched_embeddings):
-            docs, metas, ids = [], [], []
-            insert_embeds = []
             if passages_need_embeddings and self.model:
                 embedded_tensors = self.model.embed_passages(batch_pass, store_tokenizations=True, skip_batching=True) 
                 embeddings = [tensor.tolist() for tensor in embedded_tensors][0]
@@ -203,20 +222,9 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
                 raise RuntimeError("These passages need embeddings but no valid model or embedding function was provided to the Database Object")
             else: 
                 embeddings = None
-            # embeddings = [tensor.tolist() for tensor in batch_emb] if batched_embeddings != [] else None
-            for k, p in enumerate(batch_pass):
-                pid = p.get_unique_id()
-                if pid not in seen_ids:
-                    docs.append(p.text)
-                    p.metadata["tokenized_text"] = " ".join(p.words())
-                    p.metadata["highlighting"] = p.highlighting.get_span(stringify=True) if p.highlighting else "-"
-                    metas.append(p.metadata)
-                    ids.append(pid)
-                    seen_ids.add(pid)
-                    if embeddings:
-                        p.embedding = embeddings[k]
-                    if p.embedding is not None:
-                        insert_embeds.append(p.embedding)
+
+            docs, metas, ids, insert_embeds = self._prepare_insertion_batch(batch_pass, embeddings, seen_ids)
+
             if len(insert_embeds) > 0:
                 collection.add(documents=docs, metadatas=metas, ids=ids, embeddings=insert_embeds)
             else:
@@ -242,19 +250,7 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
 
         return compressed
 
-    def get_passages(
-        self,
-        collection: Collection,
-        limit: int = 0,
-        filter_words: list[str] = None,
-        where_obj: dict[str, Any] = None,
-        include_embeddings: bool = False
-    ) -> list[Passage]:
-        # Result OBJ has these keys: dict_keys(['ids', 'embeddings', 'metadatas', 'documents', 'uris', 'data'])
-        # by default only "metadatas" and "documents" are populated
-        include = ["metadatas", "documents", "embeddings"] if include_embeddings else ["metadatas", "documents"]
-
-        # Build the WHERE_DOCUMENT Object
+    def _build_filter_text_expression(self, filter_words):
         if filter_words is None:
             filter_words = []
         if len(filter_words) == 0:
@@ -263,38 +259,57 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
             where_doc = {"$contains": filter_words[0]}
         else:
             where_doc = {"$and": [{"$contains": w} for w in filter_words]}
+        return where_doc
+
+    def _create_passage_from_record(self, rec_id, doc, meta):
+        # Get Highlighting
+        highlighting = None
+        hl = meta["highlighting"]
+        if "_" in hl:
+            start, end = [int(x) for x in hl.split("_")]
+            highlighting = Highlighting(start, end)
+            # filter_terms.add(doc[start:end])
+        # Create Passage
+        p = Passage(doc, meta, highlighting, unique_id=rec_id) # meta["full_word_spans"], meta["char2tokens"]
+        # Assign Tokenized Text
+        p.tokenized_text = meta["tokenized_text"].split()
+        return p
+
+
+    def get_passages(
+        self,
+        collection: Collection,
+        limit: int = 0,
+        filter_words: list[str] = None,
+        where_obj: dict[str, Any] = None,
+        include_embeddings: bool = False
+    ) -> Iterable[Passage]:
+        # pylint: disable=too-many-arguments
+        # Result OBJ has these keys: dict_keys(['ids', 'embeddings', 'metadatas', 'documents', 'uris', 'data'])
+        # by default only "metadatas" and "documents" are populated
+        include = ["metadatas", "documents", "embeddings"] if include_embeddings else ["metadatas", "documents"]
+
+        # Build the WHERE_DOCUMENT Object
+        where_doc = self._build_filter_text_expression(filter_words)
+        
         # Query the collection
         limit = limit if limit > 0 else None
         records = collection.get(
             where=where_obj, where_document=where_doc, include=include, limit=limit
         )
         # Return empty list if no records where found
-        if len(records) == 0:
-            return []
-        if "embeddings" not in include: 
-            records["embeddings"] = []
-        # Build Passage objects
-        # TODO: Make this a generator
-        passages = []
-        for ix, rec_id in enumerate(records["ids"]):
-            doc = records["documents"][ix]
-            meta = records["metadatas"][ix]
-            # Get Highlighting
-            highlighting = None
-            hl = meta["highlighting"]
-            if "_" in hl:
-                start, end = [int(x) for x in hl.split("_")]
-                highlighting = Highlighting(start, end)
-                # filter_terms.add(doc[start:end])
-            # Get Passage
-            p = Passage(doc, meta, highlighting, unique_id=rec_id) # meta["full_word_spans"], meta["char2tokens"]
-            # Assign Tokenized Text
-            p.tokenized_text = meta["tokenized_text"].split()
-            # Assign Embedding if requested
-            if "embeddings" in include:
-                p.embedding = records["embeddings"][ix]
-            passages.append(p)
-        return passages
+        if len(records) > 0:
+            if "embeddings" not in include: 
+                records["embeddings"] = []
+            # Build Passage objects
+            for ix, rec_id in enumerate(records["ids"]):
+                doc = records["documents"][ix]
+                meta = records["metadatas"][ix]
+                passage = self._create_passage_from_record(rec_id, doc, meta)
+                # Assign Embedding if requested
+                if "embeddings" in include:
+                    passage.embedding = records["embeddings"][ix]
+                yield passage
 
     def query_vector_neighbors(
         self,
