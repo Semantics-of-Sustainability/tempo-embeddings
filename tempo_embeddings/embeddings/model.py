@@ -175,7 +175,8 @@ class TransformerModelWrapper(abc.ABC):
 
             yield passage_embeddings
 
-    def _token_embedding(self, passage: Passage, embedding) -> torch.Tensor:
+    @staticmethod
+    def _token_embedding(passage: Passage, embedding) -> torch.Tensor:
         tokenization = passage.char2tokens
         first_token = tokenization[passage.highlighting.start]
         last_token = tokenization[passage.highlighting.end - 1]
