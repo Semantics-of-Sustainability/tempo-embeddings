@@ -293,7 +293,8 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
         where_doc = self._build_filter_text_expression(filter_words)
         
         # Query the collection
-        limit = limit if limit > 0 else None
+        if limit == 0:
+            limit = None
         records = collection.get(
             where=where_obj, where_document=where_doc, include=include, limit=limit
         )
