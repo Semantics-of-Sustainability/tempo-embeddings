@@ -126,7 +126,8 @@ class TransformerModelWrapper(abc.ABC):
             ):
                 yield passages[batch_start : batch_start + self.batch_size]
 
-    def _get_token_spans(self, encoding: Encoding) -> list[tuple[int, int]]:
+    @staticmethod
+    def _get_token_spans(encoding: Encoding) -> list[tuple[int, int]]:
         char_spans = [encoding.word_to_chars(i) for i in encoding.word_ids if i is not None]
         return sorted(set(char_spans))
 
