@@ -38,14 +38,6 @@ class VectorDatabaseManagerWrapper(ABC):
     def batch_size(self, batch_size: int) -> None:
         self._batch_size = batch_size
 
-    # def _batches(self, passages: list[Passage]) -> Iterable[list[Passage]]:
-    #     for batch_start in tqdm(
-    #         range(0, len(passages), self.batch_size),
-    #         desc="Embeddings Batches",
-    #         unit="batch",
-    #         total=len(passages) // self.batch_size + 1,
-    #     ):
-    #         yield passages[batch_start : batch_start + self.batch_size]
 
     @abstractmethod
     def connect(self):
