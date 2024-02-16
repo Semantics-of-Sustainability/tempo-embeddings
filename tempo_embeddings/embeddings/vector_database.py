@@ -12,9 +12,10 @@ from chromadb.db.base import UniqueConstraintError
 from chromadb.types import Collection
 from chromadb.utils import embedding_functions
 from numpy.typing import ArrayLike
-from tqdm import tqdm
 from transformers import AutoTokenizer
 from umap.umap_ import UMAP
+from ..text.corpus import Corpus
+from ..text.highlighting import Highlighting
 from ..text.passage import Passage
 
 
@@ -37,22 +38,14 @@ class VectorDatabaseManagerWrapper(ABC):
     def batch_size(self, batch_size: int) -> None:
         self._batch_size = batch_size
 
-    def _batches(self, passages: list[Passage]) -> Iterable[list[Passage]]:
-        for batch_start in tqdm(
-            range(0, len(passages), self.batch_size),
-            desc="Embeddings Batches",
-            unit="batch",
-            total=len(passages) // self.batch_size + 1,
-        ):
-            yield passages[batch_start : batch_start + self.batch_size]
 
     @abstractmethod
     def connect(self):
         return NotImplemented
 
     @abstractmethod
-    def insert_passages_embeddings(
-        self, collection: Collection, passages: list[Passage]
+    def insert_corpus(
+        self, collection: Collection, corpus: Corpus
     ):
         return NotImplemented
 
@@ -80,14 +73,18 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
         self.embedder_name = embedder_name
         self.embedder_config = embedder_config or {"type": "default"}
         self.tokenizer = AutoTokenizer.from_pretrained(embedder_name)
+        self.model = None
         self.client = None
-        self.requires_explicit_embeddings = False
         if self.embedder_config.get("type") == "hf":
             self.embedding_function = embedding_functions.HuggingFaceEmbeddingFunction(
                 api_key=self.embedder_config.get("api_key"), model_name=embedder_name
             )
-        elif self.embedder_config.get("type") == "custom":
-            self.requires_explicit_embeddings = True
+        elif self.embedder_config.get("type") == "custom_model":
+            try:
+                self.model = self.embedder_config["model"]
+                self.model.batch_size = self.batch_size
+            except KeyError:
+                logging.error("If the type is 'custom_model' you should pass the model object under Key 'model'")
             self.embedding_function = None
         elif self.embedder_config.get("type") == "default":
             self.embedding_function = None
@@ -97,7 +94,6 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
         self.config = {
             "embedder_name": self.embedder_name,
             "embedder_type": self.embedder_config["type"],
-            "requires_explicit_embeddings": self.requires_explicit_embeddings,
             "existing_collections": [],
         }
 
@@ -105,6 +101,11 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
         if self.config:
             with open(f"{self.db_path}/config.json", "w", encoding="utf-8") as f:
                 json.dump(self.config, f, indent=2)
+
+    def get_available_collections(self):
+        if self.config:
+            return self.config.get("existing_collections", [])
+        return []
 
     def connect(self):
         if self.client:
@@ -129,29 +130,30 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
     def create_new_collection(
         self,
         name: str,
-        passages: list[Passage] = None,
-        embeddings: ArrayLike = None,
-        metadata = None,
+        corpus: Corpus = None,
+        collection_metadata = None,
     ) -> Optional[Collection]:
-        if metadata is None:
-            metadata = {"hnsw:space": "cosine"}
+        if collection_metadata is None:
+            collection_metadata = {"hnsw:space": "cosine"}
         if not self.client:
             raise RuntimeError("Please connect to a valid database first")
         # Create NEW collection and Embeds the given passages. Do nothing otherwise
         try:
             collection = self.client.create_collection(
-                name, embedding_function=self.embedding_function, metadata=metadata
+                name, embedding_function=self.embedding_function, metadata=collection_metadata
             )
-            self.config["existing_collections"].append(name)
-            self.active_collection_name = name
-            self._save_config()
-            # If the collection is new then insert the corresponding passages already
-            if passages:
-                self.insert_passages_embeddings(collection, passages, embeddings)
-            print(f"Created NEW collection '{name}'")
-            return collection
         except UniqueConstraintError as exc:
             raise ValueError from exc
+        
+        self.config["existing_collections"].append(name)
+        self.active_collection_name = name
+        self._save_config()
+        # If the collection is new then insert the corresponding passages already
+        if corpus:
+            self.insert_corpus(collection, corpus)
+        print(f"Created NEW collection '{name}'")
+        return collection
+        
 
     def get_existing_collection(self, name: str) -> Optional[Collection]:
         collection = self.client.get_collection(
@@ -164,93 +166,78 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
     def delete_collection(self, name):
         try:
             self.client.delete_collection(name)
+            self.config["existing_collections"] = [c for c in self.config["existing_collections"] if c != name]
             logging.info(f"Succesfully deleted {name}")
         except Exception as e:
             logging.warning(f"delete_collection() caused exception {e}")
             logging.info(f"Collection '{name}' does not exist in this database.")
 
-    def insert_passages_embeddings(
-        self,
-        collection: Collection,
-        passages: list[Passage],
-        embeddings: ArrayLike = None,
-    ):
-        if self.requires_explicit_embeddings and embeddings is None:
-            raise ValueError(
-                "This Database requires embeddings to be explicitly pre-computed and fed into this function!"
-            )
-
-        if embeddings is None or isinstance(embeddings, list):
-            embeddings_list = embeddings
-        else:
-            embeddings_list = embeddings.tolist()
-
-        num_records = collection.count()
-        for i, batch in enumerate(self._batches(passages)):
-            docs, metas, ids = [], [], []
-            for p in batch:
-                if embeddings is not None:
-                    p.tokenization = self._tokenize(p.text)
+    def _prepare_insertion_batch(self, batch, embeddings, seen_ids):
+        docs, metas, ids = [], [], []
+        insert_embeds = []
+        for k, p in enumerate(batch):
+            pid = p.get_unique_id()
+            if pid not in seen_ids:
                 docs.append(p.text)
                 p.metadata["tokenized_text"] = " ".join(p.words())
+                p.metadata["highlighting"] = str(p.highlighting)
                 metas.append(p.metadata)
-                ids.append(p.get_unique_id())
-            if embeddings is None:
-                collection.add(documents=docs, metadatas=metas, ids=ids)
+                ids.append(pid)
+                seen_ids.add(pid)
+                if embeddings:
+                    p.embedding = embeddings[k]
+                if p.embedding is not None:
+                    insert_embeds.append(p.embedding)
+        return docs, metas, ids, insert_embeds
+
+    def insert_corpus(
+        self,
+        collection: Collection,
+        corpus: Corpus
+    ):
+
+        if len(corpus.passages) == 0:
+            raise ValueError("There should be at least one passage to insert.") 
+
+        passages_need_embeddings = corpus.passages[0].embedding is None
+        num_records = collection.count()
+        seen_ids = set()
+
+        for batch_pass in corpus.batches(self.batch_size):
+            if passages_need_embeddings and self.model:
+                embedded_tensors = self.model.embed_corpus(Corpus(batch_pass), store_tokenizations=True, batch_size=1) 
+                embeddings = [tensor.tolist() for tensor in embedded_tensors][0]
+            elif passages_need_embeddings and not self.model and not self.embedding_function:
+                raise RuntimeError("These passages need embeddings but no valid model or embedding function was provided to the Database Object")
+            else: 
+                embeddings = None
+
+            docs, metas, ids, insert_embeds = self._prepare_insertion_batch(batch_pass, embeddings, seen_ids)
+
+            if len(insert_embeds) > 0:
+                collection.add(documents=docs, metadatas=metas, ids=ids, embeddings=insert_embeds)
             else:
-                start_slice = i * self.batch_size
-                embeds = embeddings_list[start_slice : start_slice + self.batch_size]
-                collection.add(
-                    documents=docs, embeddings=embeds, metadatas=metas, ids=ids
-                )
+                collection.add(documents=docs, metadatas=metas, ids=ids)
 
         new_count = collection.count()
         print(f"Added {new_count - num_records} new documents. Total = {new_count}")
 
     def compress_embeddings(
         self,
-        collection: Collection = None,
-        persist_in_db: bool = False,
+        corpus: Corpus,
         umap_verbose: bool = True,
         **umap_args,
     ) -> ArrayLike:
-        records = self.get_records(collection)
 
-        if len(records["ids"]) == 0:
+        if len(corpus) == 0:
             return None
 
-        full_embeddings = records["embeddings"]
-        database_ids = records["ids"]
-        metadatas = records["metadatas"]
-
         umap = UMAP(verbose=umap_verbose, **umap_args)
-        compressed = umap.fit_transform(full_embeddings)
-
-        if persist_in_db:
-            for i, m in enumerate(metadatas):
-                datapoint = list(compressed[i])
-                m["datapoint_x"] = float(datapoint[0])
-                m["datapoint_y"] = float(datapoint[1])
-            collection.update(database_ids, metadatas=metadatas)
-            print(
-                "Corresponding Datapoints (datapoint_x, datapoint_y) were saved in the database"
-            )
+        compressed = umap.fit_transform([p.embedding for p in corpus.passages])
 
         return compressed
 
-    def get_records(
-        self,
-        collection: Collection,
-        filter_words: list[str] = None,
-        where_obj: dict[str, Any] = None,
-        include: list[str] = None,
-    ):
-        # Result OBJ has these keys: dict_keys(['ids', 'embeddings', 'metadatas', 'documents', 'uris', 'data'])
-        # by default only "metadatas" and "documents" are populated
-        if include is None:
-            include = ["metadatas", "documents", "embeddings"]
-
-        # Build the WHERE_DOCUMENT Object
+    def _build_filter_text_expression(self, filter_words):
         if filter_words is None:
             filter_words = []
         if len(filter_words) == 0:
@@ -259,45 +246,78 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
             where_doc = {"$contains": filter_words[0]}
         else:
             where_doc = {"$and": [{"$contains": w} for w in filter_words]}
+        return where_doc
 
-        result = collection.get(
-            where=where_obj, where_document=where_doc, include=include
+    def _create_passage_from_record(self, rec_id, doc, meta):
+        # Get Highlighting
+        highlighting = None
+        hl = meta["highlighting"]
+        if "_" in hl:
+            start, end = [int(x) for x in hl.split("_")]
+            highlighting = Highlighting(start, end)
+            # filter_terms.add(doc[start:end])
+        # Create Passage
+        p = Passage(doc, meta, highlighting, unique_id=rec_id) # meta["full_word_spans"], meta["char2tokens"]
+        # Assign Tokenized Text
+        p.tokenized_text = meta["tokenized_text"].split()
+        return p
+
+
+    def get_corpus(
+        self,
+        collection: Collection,
+        filter_words: list[str] = None,
+        where_obj: dict[str, Any] = None,
+        limit: int = 0,
+        include_embeddings: bool = False
+    ) -> Corpus:
+        # pylint: disable=too-many-arguments
+        # Result OBJ has these keys: dict_keys(['ids', 'embeddings', 'metadatas', 'documents', 'uris', 'data'])
+        # by default only "metadatas" and "documents" are populated
+        include = ["metadatas", "documents", "embeddings"] if include_embeddings else ["metadatas", "documents"]
+
+        # Build the WHERE_DOCUMENT Object
+        where_doc = self._build_filter_text_expression(filter_words)
+        
+        # Query the collection
+        if limit == 0:
+            limit = None
+        records = collection.get(
+            where=where_obj, where_document=where_doc, include=include, limit=limit
         )
-
-        return {
-            "ids": result.get("ids", []),
-            "metadatas": result.get("metadatas", []),
-            "documents": result.get("documents", []),
-            "embeddings": []
-            if "embeddings" not in result
-            else np.array(result["embeddings"], dtype=np.float32),
-        }
+        # Return empty corpus if no records where found
+        if len(records) > 0:
+            if "embeddings" not in include: 
+                records["embeddings"] = []
+            # Build Passage objects
+            passages = []
+            for ix, rec_id in enumerate(records["ids"]):
+                doc = records["documents"][ix]
+                meta = records["metadatas"][ix]
+                passage = self._create_passage_from_record(rec_id, doc, meta)
+                # Assign Embedding if requested
+                if "embeddings" in include:
+                    passage.embedding = records["embeddings"][ix]
+                passages.append(passage)
+            return Corpus(passages, label="; ".join(filter_words) if filter_words else None)
+        return Corpus()
 
     def query_vector_neighbors(
         self,
         collection: Collection,
         vector: list[float],
-        k_neighbors=10,
-        include: list[str] = None,
-    ):
-        if include is None:
-            include = ["metadatas", "documents", "embeddings", "distances"]
+        k_neighbors=10
+    ) -> Iterable[tuple[Passage, float]]:
+        include = ["metadatas", "documents", "embeddings", "distances"]
 
         result = collection.query(
             query_embeddings=[vector], n_results=k_neighbors, include=include
         )
 
-        res_dict = {
-            "ids": result.get("ids", [[]])[0],
-            "metadatas": result.get("metadatas", [[]])[0],
-            "documents": result.get("documents", [[]])[0],
-            "embeddings": []
-            if "embeddings" not in result
-            else np.array(result["embeddings"][0], dtype=np.float32),
-        }
-        if "distances" in result:
-            res_dict["distances"] = result["distances"][0]
-        return res_dict
+        for rec_id, doc, meta, emb, dist in zip(result["ids"][0], result["documents"][0], result["metadatas"][0], 
+                                                result["embeddings"][0], result["distances"][0]):
+            yield (Passage(doc, meta, embedding=emb, unique_id=rec_id), dist)
+        
 
     def query_text_neighbors(
         self,

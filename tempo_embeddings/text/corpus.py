@@ -7,10 +7,9 @@ from typing import Iterable
 from typing import Optional
 from typing import TextIO
 import joblib
-import numpy as np
 from numpy.typing import ArrayLike
 from sklearn.feature_extraction.text import TfidfVectorizer
-from ..embeddings.vector_database import ChromaDatabaseManager
+from tqdm import tqdm
 from ..settings import DEFAULT_ENCODING
 from .abstractcorpus import AbstractCorpus
 from .passage import Passage
@@ -53,7 +52,7 @@ class Corpus(AbstractCorpus):
     @property
     def embeddings(self):
         return self._embeddings
-
+    
     @property
     def vectorizer(self) -> TfidfVectorizer:
         if self._vectorizer is None:
@@ -64,6 +63,19 @@ class Corpus(AbstractCorpus):
     def embeddings(self, embeddings: ArrayLike):
         self._embeddings = embeddings
         self._validate_embeddings()
+
+
+    def batches(self, batch_size: int) -> Iterable[list[Passage]]:
+        if batch_size <= 1:
+            yield self.passages
+        else:
+            for batch_start in tqdm(
+                range(0, len(self.passages), batch_size),
+                desc="Embeddings",
+                unit="batch",
+                total=len(self.passages) // batch_size + 1,
+            ):
+                yield self.passages[batch_start : batch_start + batch_size]
 
     def save(self, filepath: Path):
         """Save the corpus to a file."""
@@ -91,6 +103,7 @@ class Corpus(AbstractCorpus):
         filter_terms: list[str] = None,
         metadata: dict = None,
         window_size: Optional[int] = None,
+        nlp_pipeline = None
     ):
         """Read input data from an open file handler, one sequence per line."""
         if filter_terms and len(filter_terms) > 1:
@@ -102,7 +115,7 @@ class Corpus(AbstractCorpus):
             passage
             for line in f
             for passage in Passage.from_text(
-                line, metadata=metadata, window_size=window_size
+                line, metadata=metadata, window_size=window_size, nlp_pipeline=nlp_pipeline
             )
             if passage.contains_any(filter_terms)
         )
@@ -119,46 +132,6 @@ class Corpus(AbstractCorpus):
             passages = list(windows)
 
         return Corpus(passages, label="; ".join(filter_terms) if filter_terms else None)
-
-    @classmethod
-    def from_chroma_db(
-        cls,
-        db: ChromaDatabaseManager,
-        collection_name: str,
-        filter_terms: list[str] = None,
-    ):
-        """Read input data from an existing ChromaDatabase"""
-
-        collection = db.get_existing_collection(collection_name)
-
-        filter_terms = filter_terms or []
-        
-        records = db.get_records(collection, include=["documents", "metadatas"])
-        passages, db_embeddings = [], []
-        for doc, meta in zip(records["documents"], records["metadatas"]):
-            #TODO: this whole BLOCK is very hacky. Fix tokenization and highlights!
-            # if len(filter_terms) > 0:
-            #     term = filter_terms[0]
-            #     start = doc.lower().index(term.lower())
-            #     end = start + len(term)
-            #     p = Passage(doc, metadata=meta, highlighting=Highlighting(start, end))
-            # else:
-            #     p = Passage(doc, metadata=meta)
-            # p.tokenization = db._tokenize(p.text)
-            # passages.append(p)
-            passages.append(Passage(doc, metadata=meta))
-            if "datapoint_x" in meta:
-                db_embeddings.append([meta["datapoint_x"], meta["datapoint_y"]])
-        
-        if len(db_embeddings) == 0:
-            two_dim_embeddings = db.compress_embeddings(collection)
-        else:
-            two_dim_embeddings = np.array(db_embeddings)
-
-        corpus = Corpus(passages, label="; ".join(filter_terms) if filter_terms else None)
-        corpus.embeddings = two_dim_embeddings
-
-        return corpus
 
     @classmethod
     def from_lines_file(
@@ -182,6 +155,7 @@ class Corpus(AbstractCorpus):
         filter_terms: list[str] = None,
         encoding=DEFAULT_ENCODING,
         compression: Optional[str] = None,
+        nlp_pipeline = None,
         **kwargs,
     ):
         """Read input data from a CSV file."""
@@ -190,7 +164,8 @@ class Corpus(AbstractCorpus):
 
         with open_func(filepath, "rt", encoding=encoding) as f:
             return cls.from_csv_stream(
-                f, text_columns, filter_terms=filter_terms, **kwargs
+                f, text_columns, filter_terms=filter_terms, 
+                nlp_pipeline=nlp_pipeline, **kwargs
             )
 
     @classmethod
@@ -202,6 +177,7 @@ class Corpus(AbstractCorpus):
         filter_terms: list[str] = None,
         window_size: int = 1000,
         window_overlap: int = 0,
+        nlp_pipeline = None,
         **kwargs,
     ):
         if filter_terms and len(filter_terms) > 1:
@@ -235,6 +211,7 @@ class Corpus(AbstractCorpus):
                     metadata=metadata,
                     window_size=window_size,
                     window_overlap=window_overlap,
+                    nlp_pipeline=nlp_pipeline
                 )
 
                 if filter_terms:
