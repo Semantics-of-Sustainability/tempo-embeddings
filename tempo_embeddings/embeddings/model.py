@@ -131,7 +131,8 @@ class TransformerModelWrapper(abc.ABC):
         char_spans = [encoding.word_to_chars(i) for i in encoding.word_ids if i is not None]
         return sorted(set(char_spans))
 
-    def _get_char2tokens(self, passage:Passage, encoding: Encoding) -> list[int]:
+    @staticmethod
+    def _get_char2tokens(passage:Passage, encoding: Encoding) -> list[int]:
         return [encoding.char_to_token(i) for i in range(len(passage.text))]
 
     def _encodings(self, passages: list[Passage], store_tokenizations: bool):
