@@ -189,7 +189,7 @@ class Passage:
             ]
             tokens = [token for token in tokens if len(token) > 1]
         else:
-            tokens = [self.text[sp[0]:sp[1]] for sp in self.full_word_spans]
+            tokens = [self.text[span[0]:span[1]] for span in self.full_word_spans]
 
         return tokens
 
