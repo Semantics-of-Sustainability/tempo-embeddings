@@ -189,7 +189,7 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
             if pid not in seen_ids:
                 docs.append(p.text)
                 p.metadata["tokenized_text"] = " ".join(p.words())
-                p.metadata["highlighting"] = p.highlighting.get_span(stringify=True) if p.highlighting else "-"
+                p.metadata["highlighting"] = str(p.highlighting)
                 metas.append(p.metadata)
                 ids.append(pid)
                 seen_ids.add(pid)

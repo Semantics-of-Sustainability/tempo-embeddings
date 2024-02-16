@@ -187,13 +187,13 @@ class Passage:
             An list of words in the passage.
         """
 
-        if self.full_word_spans is not None:
-            tokens = [self.text[sp[0]:sp[1]] for sp in self.full_word_spans]
-        else:
+        if self.full_word_spans is None:
             tokens = [
                 token.strip(string.punctuation).strip() for token in self._text.split()
             ]
             tokens = [token for token in tokens if len(token) > 1]
+        else:
+            tokens = [self.text[sp[0]:sp[1]] for sp in self.full_word_spans]
 
         return tokens
 
@@ -310,7 +310,7 @@ class Passage:
         # TODO validate parameters
         # TODO: use window_size on tokens instead of characters
 
-        if nlp_pipeline is not None:
+        if nlp_pipeline:
             doc = nlp_pipeline(text)
             for ix, sentence in enumerate(doc.sentences):
                 print(ix, sentence.text)
