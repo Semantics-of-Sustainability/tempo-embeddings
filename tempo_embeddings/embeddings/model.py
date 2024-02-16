@@ -111,17 +111,6 @@ class TransformerModelWrapper(abc.ABC):
     def name(self) -> str:
         return self._model.config._name_or_path  # pylint: disable=protected-access
 
-    # def _batches(self, passages: list[Passage], skip_batching: bool = False) -> Iterable[list[Passage]]:
-    #     if skip_batching:
-    #         yield passages
-    #     else:
-    #         for batch_start in tqdm(
-    #             range(0, len(passages), self.batch_size),
-    #             desc="Embeddings",
-    #             unit="batch",
-    #             total=len(passages) // self.batch_size + 1,
-    #         ):
-    #             yield passages[batch_start : batch_start + self.batch_size]
 
     @staticmethod
     def _get_token_spans(encoding: Encoding) -> list[tuple[int, int]]:
