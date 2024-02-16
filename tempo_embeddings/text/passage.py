@@ -157,8 +157,7 @@ class Passage:
                 key: str(self.metadata.get(key))[:max_length] for key in metadata_fields
             }
 
-        text = self.text # self.highlighted_text() if self.highlighting else self.text
-        return {"text": text} | metadata
+        return {"text": self.text} | metadata
 
     def set_metadata(self, key: str, value: Any) -> None:
         """Sets a metadata key to a value.
