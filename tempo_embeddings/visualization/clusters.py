@@ -52,7 +52,7 @@ class ClusterVisualizer(BokehVisualizer):
             )
 
         # FIXME: remove `size` from legend
-        return sns.scatterplot(
+        g = sns.scatterplot(
             data=self._create_data(point_size=point_size),
             x="x",
             y="y",
@@ -60,3 +60,5 @@ class ClusterVisualizer(BokehVisualizer):
             palette=palette,
             size="size",
         )
+        g.legend(loc='center left', bbox_to_anchor=(1.25, 0.5), ncol=1)
+        return g

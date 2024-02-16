@@ -289,7 +289,7 @@ class AbstractCorpus(ABC):
         """
 
         def tokenizer(passage: Passage) -> list[str]:
-            return [word.casefold() for word in passage.words(use_tokenizer=False)]
+            return [word.casefold() for word in passage.words()]
 
         vectorizer = TfidfVectorizer(
             tokenizer=tokenizer, preprocessor=lambda x: x, **kwargs

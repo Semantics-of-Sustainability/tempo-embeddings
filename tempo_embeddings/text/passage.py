@@ -4,7 +4,6 @@ import string
 from typing import Any
 from typing import Iterable
 from typing import Optional
-from tokenizers import Encoding
 from .highlighting import Highlighting
 
 
@@ -16,18 +15,27 @@ class Passage:
         text: str,
         metadata: dict = None,
         highlighting: Optional[Highlighting] = None,
-        tokenization: Optional[Encoding] = None,
+        embedding: Optional[list[float]] = None,
+        full_word_spans: Optional[list[tuple[int, int]]] = None,
+        char2tokens: Optional[list[int]] = None,
+        unique_id: str = None
     ) -> None:
         self._text = text.strip()
+        self._unique_id = unique_id
         self._metadata = metadata or {}
         self._highlighting = highlighting
-        self._tokenization: Optional[Encoding] = tokenization
-        self._tokenized_text: Optional[list[str]] = None
+        self._embedding = embedding
+        self._full_word_spans = full_word_spans
+        self._char2tokens = char2tokens
 
     @property
     def text(self) -> str:
         return self._text
     
+    @property
+    def unique_id(self) -> str:
+        return self._unique_id
+
     @property
     def tokenized_text(self) -> str:
         return self._tokenized_text
@@ -41,8 +49,22 @@ class Passage:
         return self._highlighting
 
     @property
-    def tokenization(self) -> Optional[Encoding]:
-        return self._tokenization
+    def embedding(self) -> Optional[list[float]]:
+        return self._embedding
+
+    @property
+    def full_word_spans(self) -> Optional[list[tuple[int, int]]]:
+        return self._full_word_spans
+    
+    @property
+    def char2tokens(self) -> Optional[list[int]]:
+        return self._char2tokens
+
+    @unique_id.setter
+    def unique_id(self, value: str):
+        if not isinstance(value, str):
+            raise ValueError("The Unique ID of a Passage should be a SHA256 string")
+        self._unique_id = value
 
     @tokenized_text.setter
     def tokenized_text(self, value: list[str]):
@@ -50,15 +72,28 @@ class Passage:
             raise ValueError("You should pass a list of strings as tokenized text")
         self._tokenized_text = value
 
-    @tokenization.setter
-    def tokenization(self, value: Encoding):
-        self._tokenization = value
+    @embedding.setter
+    def embedding(self, value: list[float]):
+        if not isinstance(value, list):
+            raise ValueError("You should pass a list of floats as the embedding vector")
+        self._embedding = value
+
+    @full_word_spans.setter
+    def full_word_spans(self, value: list[tuple[int, int]]):
+        self._full_word_spans = value
+
+    @char2tokens.setter
+    def char2tokens(self, value: list[int]):
+        self._char2tokens = value
 
     def get_unique_id(self) -> str:
-        meta_sorted = sorted(self.metadata.items(), key=lambda x: x[0]) if self.metadata else []
-        key = self.text + str(meta_sorted) + str(self.highlighting)
-        hex_dig = hashlib.sha256(key.encode()).hexdigest()
-        return hex_dig
+        if not self._unique_id:
+            meta_sorted = sorted(self.metadata.items(), key=lambda x: x[0]) if self.metadata else []
+            key = self.text + str(meta_sorted) + str(self.highlighting)
+            hex_dig = hashlib.sha256(key.encode()).hexdigest()
+            self._unique_id = hex_dig
+        return self._unique_id
+            
 
     def contains_any(self, tokens: Iterable[str]) -> bool:
         """Returns True if any of the tokens are contained in the passage.
@@ -93,12 +128,10 @@ class Passage:
         if not self.highlighting:
             raise ValueError(f"Passage does not have a highlighting: {str(self)}")
         
-        try:
-            word_start, word_end = self.word_span(
-                self.highlighting.start, self.highlighting.end
-            )
-        except RuntimeError:
-            word_start, word_end = self.highlighting.start, self.highlighting.end
+        # word_start, word_end = self.word_span(
+        #     self.highlighting.start, self.highlighting.end
+        # )
+        word_start, word_end = self.highlighting.start, self.highlighting.end
 
 
         pre_context = self.text[:word_start][-max_context_length:]
@@ -123,7 +156,7 @@ class Passage:
                 key: str(self.metadata.get(key))[:max_length] for key in metadata_fields
             }
 
-        text = self.highlighted_text() if self.highlighting else self.text
+        text = self.text # self.highlighted_text() if self.highlighting else self.text
         return {"text": text} | metadata
 
     def set_metadata(self, key: str, value: Any) -> None:
@@ -136,8 +169,8 @@ class Passage:
         self._metadata[key] = value
 
     def word_span(self, start, end) -> tuple[int, int]:
-        if not self.tokenization or self.tokenization is None:
-            raise RuntimeError("Passage has no tokenization.")
+        # if not self.tokenization or self.tokenization is None:
+        #     raise RuntimeError("Passage has no tokenization.")
         
         word_index = self.tokenization.char_to_word(start)
         if self.tokenization.char_to_word(end - 1) != word_index:
@@ -149,41 +182,22 @@ class Passage:
             )
         return self.tokenization.word_to_chars(word_index)
 
-    def words(self, use_tokenizer: bool = True) -> list[str]:
-        """Returns the words in the passage.
-
-        Args:
-            use_tokenizer: If True, uses the tokenizer to split the passage into words.
-                Otherwise, splits the passage by whitespace.
+    def words(self) -> list[str]:
+        """Returns the full words in the passage if word spans are known. Otherwise, splits the passage by whitespace.
 
         Returns:
-            An iterable of words in the passage.
+            An list of words in the passage.
         """
 
-        if self._tokenized_text is not None:
-            return self._tokenized_text
-
-        if use_tokenizer:
-            if self.tokenization is None:
-                raise RuntimeError("Passage has no tokenization.")
-
-            char_spans = [self.tokenization.word_to_chars(i) for i in self.tokenization.word_ids() if i is not None]
-            tokens = [self.text[sp[0]: sp[1]] for sp in sorted(set(char_spans))]
+        if self.full_word_spans is not None:
+            tokens = [self.text[sp[0]:sp[1]] for sp in self.full_word_spans]
         else:
             tokens = [
                 token.strip(string.punctuation).strip() for token in self._text.split()
             ]
             tokens = [token for token in tokens if len(token) > 1]
 
-        self._tokenized_text = tokens
         return tokens
-
-    def get_token_spans(self) -> list[tuple[int, int]]:
-        if self.tokenization is None:
-            raise RuntimeError("Passage has no tokenization.")
-
-        char_spans = [self.tokenization.word_to_chars(i) for i in self.tokenization.word_ids() if i is not None]
-        return sorted([(s.start, s.end) for s in set(char_spans)])
 
     def __contains__(self, token: str) -> bool:
         return token in self._text
@@ -276,10 +290,11 @@ class Passage:
         if self.highlighting is not None:
             raise RuntimeError("Passage already has a highlighting.")
         return Passage(
-            self._text,
-            self._metadata,
+            text=self._text,
+            metadata=self._metadata,
             highlighting=highlighting,
-            tokenization=self.tokenization,
+            full_word_spans=self.full_word_spans,
+            char2tokens=self.char2tokens
         )
 
     @classmethod
@@ -290,13 +305,20 @@ class Passage:
         window_size: int = None,
         window_overlap: int = None,
         metadata: dict = None,
+        nlp_pipeline = None,
     ) -> Iterable["Passage"]:
         """Create a Passage from a text string."""
 
         # TODO validate parameters
         # TODO: use window_size on tokens instead of characters
 
-        if window_size is None:
+        if nlp_pipeline is not None:
+            doc = nlp_pipeline(text)
+            for ix, sentence in enumerate(doc.sentences):
+                print(ix, sentence.text)
+                metadata["sentence_index"] = ix
+                yield cls(sentence.text, metadata)
+        elif window_size is None:
             # Single window comprising the entire text
             yield cls(text, metadata)
         else:
