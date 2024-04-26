@@ -64,7 +64,7 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
     def __init__(
         self,
         db_path: str = "default_db",
-        embedder_name: str = "sentence-transformers/all-MiniLM-L6-v2",
+        embedder_name: str = None,
         embedder_config: dict[str, Any] = None,
         batch_size: int = 8,
     ):
@@ -72,7 +72,7 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
         self.db_path = db_path
         self.embedder_name = embedder_name
         self.embedder_config = embedder_config or {"type": "default"}
-        self.tokenizer = AutoTokenizer.from_pretrained(embedder_name)
+        self.tokenizer = AutoTokenizer.from_pretrained(embedder_name) if embedder_name else None
         self.model = None
         self.client = None
         if self.embedder_config.get("type") == "hf":
@@ -178,8 +178,10 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
         for k, p in enumerate(batch):
             pid = p.get_unique_id()
             if pid not in seen_ids:
-                docs.append(p.text)
-                p.metadata["tokenized_text"] = " ".join(p.words())
+                # docs.append(p.text)
+                # p.metadata["tokenized_text"] = " ".join(p.words())
+                # Save in the DB as "pre-tokenized" to avoid using space
+                docs.append(" ".join(p.words()))
                 p.metadata["highlighting"] = str(p.highlighting)
                 metas.append(p.metadata)
                 ids.append(pid)
@@ -258,8 +260,9 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
             # filter_terms.add(doc[start:end])
         # Create Passage
         p = Passage(doc, meta, highlighting, unique_id=rec_id) # meta["full_word_spans"], meta["char2tokens"]
-        # Assign Tokenized Text
-        p.tokenized_text = meta["tokenized_text"].split()
+        # Assign Tokenized Text as a list of strings (the doc was saved pre-tokenized...)
+        # p.tokenized_text = meta["tokenized_text"].split()
+        p.tokenized_text = doc.split()
         return p
 
 
@@ -348,7 +351,14 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
             res_dict["distances"] = result["distances"][0]
         return res_dict
 
+    def load_tokenizer(self, tokenizer_name):
+        if tokenizer_name != self.config["embedder_name"]:
+            logging.warning(f"The original database used '{self.config['embedder_name']}' tokenizer and you are loading '{tokenizer_name}'")
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+
     def _tokenize(self, sentence: str):
+        if self.tokenizer is None:
+            raise AttributeError("This Database Client does not have a tokenizer. Run load_tokenizer() first!")
         encoded_input = self.tokenizer(sentence, return_tensors="pt")
         return encoded_input
 
@@ -359,6 +369,21 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
         else:
             logging.warning("There is no valid embedding function in this database. Returning None")
         return batch_embeddings
+
+    def get_metadata_stats(self, collection: Collection, include_only: list[str] = None) -> dict[dict[str, int]]:
+        result = collection.get(include=["metadatas"])
+        stats = {}
+        for meta_dict in result["metadatas"]:
+            for field_name, value in meta_dict.items():
+                if include_only is None or field_name in include_only:
+                    if field_name in stats:
+                        if value in stats[field_name]:
+                            stats[field_name][value] += 1
+                        else:
+                            stats[field_name][value] = 1
+                    else:
+                        stats[field_name] = {value: 1}
+        return stats
 
     def is_in_collection(self, collection: Collection, text: str):
         results = collection.get(
