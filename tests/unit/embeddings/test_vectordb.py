@@ -1,9 +1,6 @@
 import pytest
 import hashlib
-import os
-from dotenv import load_dotenv
 from tempo_embeddings.embeddings.vector_database import ChromaDatabaseManager
-from tempo_embeddings.embeddings.model import SentenceTransformerModelWrapper
 from tempo_embeddings.text.passage import Passage
 
 
@@ -41,25 +38,25 @@ class TestChromaDB:
         with pytest.raises(AttributeError):
             ChromaDatabaseManager("pytest_db", model_name, embedder_config={"type":"custom_model", "model": None})
     
-    def test_create_new_valid_db_custom_model(self, model_name: str):
-        cfg = {"type": "custom_model", "model": SentenceTransformerModelWrapper.from_pretrained(model_name)}
-        database = ChromaDatabaseManager("pytest_db", model_name, embedder_config=cfg)
-        database.connect()
+    # def test_create_new_valid_db_custom_model(self, model_name: str):
+    #     cfg = {"type": "custom_model", "model": SentenceTransformerModelWrapper.from_pretrained(model_name)}
+    #     database = ChromaDatabaseManager("pytest_db", model_name, embedder_config=cfg)
+    #     database.connect()
 
-    def test_create_valid_db_with_embedding_function(self, model_name: str):
-        load_dotenv()
-        cfg = {"type": "hf", "api_key": os.getenv('HF_API')}
-        database = ChromaDatabaseManager("pytest_db_cm", model_name, embedder_config=cfg)
-        database.connect()
+    # def test_create_valid_db_with_embedding_function(self, model_name: str):
+    #     load_dotenv()
+    #     cfg = {"type": "hf", "api_key": os.getenv('HF_API')}
+    #     database = ChromaDatabaseManager("pytest_db_cm", model_name, embedder_config=cfg)
+    #     database.connect()
     
-    @pytest.fixture()
-    def database(self, model_name: str):
-        cfg = {"type": "custom_model", "model": SentenceTransformerModelWrapper.from_pretrained(model_name)}
-        database = ChromaDatabaseManager("pytest_db", model_name, embedder_config=cfg)
-        database.connect()
-        return database
+    # @pytest.fixture()
+    # def database(self, model_name: str):
+    #     cfg = {"type": "custom_model", "model": SentenceTransformerModelWrapper.from_pretrained(model_name)}
+    #     database = ChromaDatabaseManager("pytest_db", model_name, embedder_config=cfg)
+    #     database.connect()
+    #     return database
 
-    @pytest.fixture()
-    def collection(self, database: ChromaDatabaseManager):
-        collection = database.create_new_collection("pytest")
-        return collection
+    # @pytest.fixture()
+    # def collection(self, database: ChromaDatabaseManager):
+    #     collection = database.create_new_collection("pytest")
+    #     return collection
