@@ -105,6 +105,15 @@ class AbstractCorpus(ABC):
         for passage in self.passages:
             passage.set_metadata(key, value)
 
+    def to_dataframe(self):
+        rows = []
+        for p in self.passages:
+            row = {"ID_DB": p.get_unique_id(), "text": p.text}
+            for key in p.metadata.keys():
+                row[key] = p.metadata[key]
+            rows.append(row)
+        return pd.DataFrame(rows)
+
     def hover_datas(
         self, metadata_fields: Optional[list[str]] = None
     ) -> list[dict[str, str]]:
@@ -191,7 +200,7 @@ class AbstractCorpus(ABC):
             stopwords: if given, exclude these words
         """
 
-        self._label = "; ".join(self.top_words(**kwargs))
+        self._label = "; ".join(sorted(self.top_words(**kwargs)))
 
         return self._label
 

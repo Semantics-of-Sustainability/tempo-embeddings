@@ -2,6 +2,7 @@
 *.egg-info
 *.eggs
 .ipynb_checkpoints
+.env
 
 build
 dist
@@ -33,3 +34,5 @@ venv3
 
 notebooks/semeval2020_ulscd_eng/*
 notebooks/stopwords-filter-nl.txt
+notebooks/testing_db*
+notebooks/clusters*
