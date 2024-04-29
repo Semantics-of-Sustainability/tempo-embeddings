@@ -178,9 +178,7 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
         for k, p in enumerate(batch):
             pid = p.get_unique_id()
             if pid not in seen_ids:
-                # docs.append(p.text)
-                # p.metadata["tokenized_text"] = " ".join(p.words())
-                # Save in the DB as "pre-tokenized" to avoid using space
+                # Save in the DB as "pre-tokenized" to avoid using more space
                 docs.append(" ".join(p.words()))
                 p.metadata["highlighting"] = str(p.highlighting)
                 metas.append(p.metadata)
@@ -260,8 +258,6 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
             # filter_terms.add(doc[start:end])
         # Create Passage
         p = Passage(doc, meta, highlighting, unique_id=rec_id) # meta["full_word_spans"], meta["char2tokens"]
-        # Assign Tokenized Text as a list of strings (the doc was saved pre-tokenized...)
-        # p.tokenized_text = meta["tokenized_text"].split()
         p.tokenized_text = doc.split()
         return p
 
@@ -377,10 +373,7 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
             for field_name, value in meta_dict.items():
                 if include_only is None or field_name in include_only:
                     if field_name in stats:
-                        if value in stats[field_name]:
-                            stats[field_name][value] += 1
-                        else:
-                            stats[field_name][value] = 1
+                        stats[field_name][value] = stats[field_name].get(value, 0) + 1
                     else:
                         stats[field_name] = {value: 1}
         return stats
