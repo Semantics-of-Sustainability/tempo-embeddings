@@ -1,6 +1,7 @@
 # pylint: disable=logging-fstring-interpolation
 import json
 import logging
+import platform
 from abc import ABC
 from abc import abstractmethod
 from typing import Any
@@ -18,6 +19,8 @@ from ..text.corpus import Corpus
 from ..text.highlighting import Highlighting
 from ..text.passage import Passage
 
+
+logger = logging.getLogger(__name__)
 
 class VectorDatabaseManagerWrapper(ABC):
     """A Wrapper for different Vector Databases"""
@@ -84,7 +87,7 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
                 self.model = self.embedder_config["model"]
                 self.model.batch_size = self.batch_size
             except KeyError:
-                logging.error("If the type is 'custom_model' you should pass the model object under Key 'model'")
+                logger.error("If the type is 'custom_model' you should pass the model object under Key 'model'")
             self.embedding_function = None
         elif self.embedder_config.get("type") == "default":
             self.embedding_function = None
@@ -109,7 +112,7 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
 
     def connect(self):
         if self.client:
-            logging.info(
+            logger.info(
                 "A connection to the client already exists in this session: %s",
                 self.client,
             )
@@ -120,11 +123,11 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
             try:
                 with open(config_path, encoding="utf-8") as f:
                     self.config = json.load(f)
-                    logging.info(
+                    logger.info(
                         f"Path '{self.db_path}' already exists. Loading DB configuration:\n{self.config}"
                     )
             except FileNotFoundError:
-                logging.info(f"Creating NEW Database in {self.db_path}...")
+                logger.info(f"Creating NEW Database in {self.db_path}...")
                 self._save_config()
 
     def create_new_collection(
@@ -151,7 +154,7 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
         # If the collection is new then insert the corresponding passages already
         if corpus:
             self.insert_corpus(collection, corpus)
-        print(f"Created NEW collection '{name}'")
+        logger.info(f"Created NEW collection '{name}'")
         return collection
         
 
@@ -160,34 +163,30 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
             name, embedding_function=self.embedding_function
         )
         self.active_collection_name = name
-        print(f"Retrieved existing collection '{name}'")
+        logger.info(f"Retrieved existing collection '{name}'")
         return collection
 
     def delete_collection(self, name):
         try:
             self.client.delete_collection(name)
             self.config["existing_collections"] = [c for c in self.config["existing_collections"] if c != name]
-            logging.info(f"Succesfully deleted {name}")
+            logger.info(f"Succesfully deleted {name}")
         except Exception as e:
-            logging.warning(f"delete_collection() caused exception {e}")
-            logging.info(f"Collection '{name}' does not exist in this database.")
+            logger.warning(f"delete_collection() caused exception {e}")
+            logger.info(f"Collection '{name}' does not exist in this database.")
 
-    def _prepare_insertion_batch(self, batch, embeddings, seen_ids):
+    def _prepare_insertion_batch(self, batch, embeddings):
         docs, metas, ids = [], [], []
         insert_embeds = []
         for k, p in enumerate(batch):
             pid = p.get_unique_id()
-            if pid not in seen_ids:
-                # Save in the DB as "pre-tokenized" to avoid using more space
-                docs.append(" ".join(p.words()))
-                p.metadata["highlighting"] = str(p.highlighting)
-                metas.append(p.metadata)
-                ids.append(pid)
-                seen_ids.add(pid)
-                if embeddings:
-                    p.embedding = embeddings[k]
-                if p.embedding is not None:
-                    insert_embeds.append(p.embedding)
+            # Save in the DB as "pre-tokenized" to avoid using more space
+            docs.append(" ".join(p.words()))
+            p.metadata["highlighting"] = str(p.highlighting)
+            metas.append(p.metadata)
+            ids.append(pid)
+            if embeddings is not None:
+                insert_embeds.append(embeddings[k])
         return docs, metas, ids, insert_embeds
 
     def insert_corpus(
@@ -201,26 +200,31 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
 
         passages_need_embeddings = corpus.passages[0].embedding is None
         num_records = collection.count()
-        seen_ids = set()
 
-        for batch_pass in corpus.batches(self.batch_size):
+        if passages_need_embeddings and self.model:
+            embeddings = self.model.embed_corpus(corpus, store_tokenizations=True, batch_size=self.batch_size)
+        elif passages_need_embeddings and not self.model and not self.embedding_function:
+            raise RuntimeError("These passages need embeddings but no valid model or embedding function was provided to the Database Object")
+        else:
+            embeddings = None
+        
+        for batch_pass, batch_embeds in zip(corpus.batches(self.batch_size), embeddings):
             if passages_need_embeddings and self.model:
-                embedded_tensors = self.model.embed_corpus(Corpus(batch_pass), store_tokenizations=True, batch_size=1) 
-                embeddings = [tensor.tolist() for tensor in embedded_tensors][0]
-            elif passages_need_embeddings and not self.model and not self.embedding_function:
-                raise RuntimeError("These passages need embeddings but no valid model or embedding function was provided to the Database Object")
-            else: 
-                embeddings = None
+                logger.debug(f"Batch pass...{type(batch_pass)} | {type(batch_embeds)}")
+                logger.debug(f"NODE: {platform.node()}")
+                embeddings = [tensor.tolist() for tensor in batch_embeds]
 
-            docs, metas, ids, insert_embeds = self._prepare_insertion_batch(batch_pass, embeddings, seen_ids)
+            docs, metas, ids, insert_embeds = self._prepare_insertion_batch(batch_pass, embeddings)
 
             if len(insert_embeds) > 0:
                 collection.add(documents=docs, metadatas=metas, ids=ids, embeddings=insert_embeds)
+                logger.info(f"Inserting {len(docs)} records with custom embeddings")
             else:
                 collection.add(documents=docs, metadatas=metas, ids=ids)
+                logger.info(f"Inserting {len(docs)} records, database engine will compute embeddings")
 
         new_count = collection.count()
-        print(f"Added {new_count - num_records} new documents. Total = {new_count}")
+        logger.info(f"Added {new_count - num_records} new documents. Total = {new_count}")
 
     def compress_embeddings(
         self,
@@ -329,7 +333,7 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
             include = ["metadatas", "documents", "embeddings", "distances"]
 
         if not self.embedding_function:
-            print("WARN: There is no embedding function defined in this database")
+            logger.warning("There is no embedding function defined in this database")
             return None
         result = collection.query(
             query_texts=[text], n_results=k_neighbors, include=include
@@ -349,7 +353,7 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
 
     def load_tokenizer(self, tokenizer_name):
         if tokenizer_name != self.config["embedder_name"]:
-            logging.warning(f"The original database used '{self.config['embedder_name']}' tokenizer and you are loading '{tokenizer_name}'")
+            logger.warning(f"The original database used '{self.config['embedder_name']}' tokenizer and you are loading '{tokenizer_name}'")
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
 
     def _tokenize(self, sentence: str):
@@ -363,7 +367,7 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
         if self.embedding_function:
             batch_embeddings = self.embedding_function(text_batch)
         else:
-            logging.warning("There is no valid embedding function in this database. Returning None")
+            logger.warning("There is no valid embedding function in this database. Returning None")
         return batch_embeddings
 
     def get_metadata_stats(self, collection: Collection, include_only: list[str] = None) -> dict[dict[str, int]]:
@@ -386,19 +390,6 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
             if len(text) == len(ret_doc):
                 return True
         return False
-
-        # ## This at the bottom does NOT work because the distance is VERY small but actually not 0
-        # result = collection.query(
-        #     query_texts=[text],
-        #     n_results=1,
-        #     include=["distances"]
-        # )
-        # if len(result) == 0: return False
-        # print(result["distances"][0])
-        # if result["distances"][0] == 0:
-        #     return True
-        # else:
-        #     return False
 
     def get_vector_from_db(self, collection: Collection, text: str):
         results = collection.get(
