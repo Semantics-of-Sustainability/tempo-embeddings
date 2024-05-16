@@ -1,5 +1,5 @@
-import pytest
 import hashlib
+import pytest
 from tempo_embeddings.embeddings.vector_database import ChromaDatabaseManager
 from tempo_embeddings.text.passage import Passage
 
