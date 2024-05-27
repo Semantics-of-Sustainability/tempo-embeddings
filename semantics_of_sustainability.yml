@@ -1,6 +1,6 @@
 ---
 - name: Install  Git and Clone Repository
-  hosts: server1
+  hosts: localhost
   become: yes  # This ensures the tasks run with sudo privileges
   tasks:
     - name: Ensure git is installed
