@@ -12,15 +12,8 @@
     - name: Clone the public GitHub repository
       git:
         repo: 'https://github.com/Semantics-of-Sustainability/tempo-embeddings.git'
-        dest: /scratch/
+        dest: /scratch
         update: yes
-    - name: Change directory and install Python package
-      shell: |
-        cd /scratch/tempo-embeddings
-        python3 -m pip install .
-      args:
-        chdir: /scratch/tempo-embeddings
-
     - name: Print completion message
       debug:
         msg: "Repository cloned and Python package installed successfully."
