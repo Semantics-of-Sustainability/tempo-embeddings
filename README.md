@@ -37,6 +37,23 @@ git clone git@github.com:Semantics-of-Sustainability/tempo-embeddings.git
 cd tempo-embeddings
 python3 -m pip install .
 ```
+## How to use tempo_embeddings on Research Cloud?
+Research Cloud provides a ready-to-use environment for users to run tools without needing to install Python and other required libraries. If your Research Cloud account is set up for the Semantics of Sustainability project, you can use the tempo-embeddings tool by following these steps: can use tempo-embeddings tool with the following steps:
+
+- Create a workspace using the "semantics-of-sustainability" catalog item.
+- Open a new terminal and run:
+```console
+/etc/miniconda/bin/conda init
+```
+- Close the terminal, open a new one, and run:
+```console
+cd /scratch/tempo-embeddings/
+conda activate tempo-embeddings
+```
+- Start to play with the notebooks using:
+```console
+jupyter lab notebooks/[1_compute_embeddings_nl.ipynb]
+```
 
 ## Documentation
 
