@@ -11,7 +11,7 @@
 
     - name: Create tempo-embeddings directory in /scratch
       file:
-        path: /scratch/tempo-embeddings
+        path: /scratch/tempo-embeddings/
         state: directory
         mode: '0777'
 
