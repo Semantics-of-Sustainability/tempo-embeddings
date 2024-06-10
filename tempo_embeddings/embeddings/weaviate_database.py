@@ -49,8 +49,8 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                 self.model = self.embedder_config["model"]
                 self.model.batch_size = self.batch_size
                 self.embedding_function = wvc.config.Configure.Vectorizer.none()
-            except KeyError:
-                logger.error("If the type is 'custom_model' or 'default' you should pass the model object under Key 'model'")
+            except KeyError as e:
+                logger.error(f"If the type is 'custom_model' or 'default' you should pass the model object under Key 'model': {e}")
         else:
             raise ValueError(f"Malformed embedder_config {self.embedder_config}. Check that 'type', 'api_key' and 'model' keys are properly populated.")
 
@@ -67,7 +67,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         
     def connect(self):
         with weaviate.connect_to_local() as client:
-            # Do something with the client
+            # TODO: add functionality for connecting to remote database
             logger.info(type(client))
             logger.info("Weaviate Server Is Up: %s", client.is_ready())
             return client.is_ready()
@@ -96,10 +96,18 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         corpus: Corpus = None,
         # collection_metadata = None, # This Dict can be used in the future to give a precise SCHEMA. NOT IMPLEMENTED YET!
     ) -> None:
+        """
+        Create NEW collection and Embeds the given passages. Do nothing otherwise
+        Args:
+            name (str): name of the collection to be created in Weaviate
+            corpus (Corpus, optional): Insert the provided corpus after creating the collection. Defaults to None.
 
-        # Create NEW collection and Embeds the given passages. Do nothing otherwise
+        Raises:
+            ValueError: If the given collection name already exists
+        """
+        # 
         if name in self.config["existing_collections"]:
-            raise ValueError("This collection has been created already! Try 'insert_corpus()' if you want to add more items to the collection")
+            raise ValueError(f"Collection '{name}' has been created already! Try 'insert_corpus()' if you want to add more items to the collection")
         
         # If the collection is new then insert the corresponding passages already
         if corpus:
@@ -117,8 +125,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                 self._save_config()
                 logger.info("Succesfully deleted %s", name)
             except Exception as e:
-                logger.warning("delete_collection() caused exception %s", e)
-                logger.info("Collection '%s' does not exist in this database.", name)
+                logger.error("delete_collection() with name '%s' caused exception %s", name, e)
 
 
     def get_collection_count(self, name):

@@ -67,7 +67,7 @@ class VectorDatabaseManagerWrapper(ABC):
     ) -> ArrayLike:
 
         if len(corpus) == 0:
-            return None
+            raise ValueError("Empty corpus passed to compress_embeddings")
 
         umap = UMAP(verbose=umap_verbose, **umap_args)
         compressed = umap.fit_transform([p.embedding for p in corpus.passages])
