@@ -1,0 +1,21 @@
+---
+apt:
+  repo_keys: []
+  repos:
+  - 'deb http://archive.ubuntu.com/ubuntu focal main multiverse universe restricted'
+  - 'deb http://archive.ubuntu.com/ubuntu focal-security main multiverse universe restricted'
+  packages:
+  - ncdu
+
+miniconda:
+  name: tempo-embeddings
+  channels:
+  - conda-forge
+  dependencies:
+  - python>=3.9      # change version if needed
+  - jupyterlab
+  - ipykernel
+  - pip
+  - pip:
+    - git+https://github.com/Semantics-of-Sustainability/tempo-embeddings.git
+  prefix: /etc/miniconda/envs
