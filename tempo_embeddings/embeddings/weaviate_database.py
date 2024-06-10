@@ -50,7 +50,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                 self.model.batch_size = self.batch_size
                 self.embedding_function = wvc.config.Configure.Vectorizer.none()
             except KeyError as e:
-                logger.error(f"If the type is 'custom_model' or 'default' you should pass the model object under Key 'model': {e}")
+                logger.error("If the type is 'custom_model' or 'default' you should pass the model object under Key 'model': %s", str(e))
         else:
             raise ValueError(f"Malformed embedder_config {self.embedder_config}. Check that 'type', 'api_key' and 'model' keys are properly populated.")
 
