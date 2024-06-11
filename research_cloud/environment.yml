@@ -12,7 +12,7 @@ miniconda:
   channels:
   - conda-forge
   dependencies:
-  - python>=3.9      # change version if needed
+  - python=3.9      # change version if needed
   - jupyterlab
   - ipykernel
   - pip
