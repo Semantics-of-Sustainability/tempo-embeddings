@@ -19,9 +19,10 @@ jobs:
         with:
           fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
       - name: Set up Python
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v5
         with:
           python-version: '3.9'
+          cache: 'pip'
       - name: Python info
         shell: bash -l {0}
         run: |

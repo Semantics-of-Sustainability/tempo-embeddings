@@ -8,6 +8,9 @@ SPHINXPROJ    = tempo_embeddings
 SOURCEDIR     = .
 BUILDDIR      = _build
 
+# Set protobuf implementation to avoid this error: https://github.com/Semantics-of-Sustainability/tempo-embeddings/actions/runs/9450112946/job/26027944835?pr=54
+export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
+
 # Put it first so that "make" without argument is like "make help".
 help:
 	@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)

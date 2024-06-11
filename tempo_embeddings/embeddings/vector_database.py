@@ -7,6 +7,7 @@ from abc import abstractmethod
 from typing import Any
 from typing import Iterable
 from typing import Optional
+from typing import Union
 import chromadb
 import numpy as np
 from chromadb.db.base import UniqueConstraintError
@@ -48,15 +49,31 @@ class VectorDatabaseManagerWrapper(ABC):
 
     @abstractmethod
     def insert_corpus(
-        self, collection: Collection, corpus: Corpus
+        self, collection: Union[Collection, str], corpus: Corpus
     ):
         return NotImplemented
 
     @abstractmethod
-    def retrieve_vectors_if_exist(
-        self, collection: Collection, passages: list[Passage]
+    def get_corpus(
+        self, collection: Union[Collection, str], filter_words: list[str], where_obj: dict[str, Any]
     ):
         return NotImplemented
+    
+    @staticmethod
+    def compress_embeddings(
+        corpus: Corpus,
+        umap_verbose: bool = True,
+        **umap_args,
+    ) -> ArrayLike:
+
+        if len(corpus) == 0:
+            raise ValueError("Empty corpus passed to compress_embeddings")
+
+        umap = UMAP(verbose=umap_verbose, **umap_args)
+        compressed = umap.fit_transform([p.embedding for p in corpus.passages])
+
+        return compressed
+
 
 
 class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
@@ -130,6 +147,9 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
                 logger.info(f"Creating NEW Database in {self.db_path}...")
                 self._save_config()
 
+    def get_collection_count(self, collection: Collection):
+        return collection.count()
+
     def create_new_collection(
         self,
         name: str,
@@ -201,45 +221,29 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
         passages_need_embeddings = corpus.passages[0].embedding is None
         num_records = collection.count()
 
-        if passages_need_embeddings and self.model:
-            embeddings = self.model.embed_corpus(corpus, store_tokenizations=True, batch_size=self.batch_size)
-        elif passages_need_embeddings and not self.model and not self.embedding_function:
+        if passages_need_embeddings and not self.model and not self.embedding_function:
             raise RuntimeError("These passages need embeddings but no valid model or embedding function was provided to the Database Object")
-        else:
-            embeddings = None
         
-        for batch_pass, batch_embeds in zip(corpus.batches(self.batch_size), embeddings):
+        for batch_pass in corpus.batches(self.batch_size):
             if passages_need_embeddings and self.model:
+                batch_embeds = self.model.embed_corpus(Corpus(batch_pass), store_tokenizations=True, batch_size=1)
                 logger.debug(f"Batch pass...{type(batch_pass)} | {type(batch_embeds)}")
                 logger.debug(f"NODE: {platform.node()}")
-                embeddings = [tensor.tolist() for tensor in batch_embeds]
+                embeddings = [tensor.tolist() for tensor in batch_embeds][0]
+            else:
+                embeddings = None
 
             docs, metas, ids, insert_embeds = self._prepare_insertion_batch(batch_pass, embeddings)
 
             if len(insert_embeds) > 0:
                 collection.add(documents=docs, metadatas=metas, ids=ids, embeddings=insert_embeds)
-                logger.info(f"Inserting {len(docs)} records with custom embeddings")
+                logger.debug(f"Inserting {len(docs)} records with custom embeddings")
             else:
                 collection.add(documents=docs, metadatas=metas, ids=ids)
-                logger.info(f"Inserting {len(docs)} records, database engine will compute embeddings")
+                logger.debug(f"Inserting {len(docs)} records, database engine will compute embeddings")
 
         new_count = collection.count()
         logger.info(f"Added {new_count - num_records} new documents. Total = {new_count}")
-
-    def compress_embeddings(
-        self,
-        corpus: Corpus,
-        umap_verbose: bool = True,
-        **umap_args,
-    ) -> ArrayLike:
-
-        if len(corpus) == 0:
-            return None
-
-        umap = UMAP(verbose=umap_verbose, **umap_args)
-        compressed = umap.fit_transform([p.embedding for p in corpus.passages])
-
-        return compressed
 
     def _build_filter_text_expression(self, filter_words):
         if filter_words is None:
@@ -401,15 +405,3 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
             if len(text) == len(ret_doc):
                 return results["embeddings"][ix]
         return None
-
-    def retrieve_vectors_if_exist(
-        self, collection: Collection, passages: list[Passage]
-    ) -> list[float]:
-        # Lookup by unique ID and retrieve the vectors if exist in the DB
-        # Even if a single vector in the batch is missing then we will compute the full batch again (to avoid confusions)
-        # response = {"ids": []}  # When we have uniqueID's we will query here...
-        # retrieved_embeddings = []
-        # if len(response["ids"]) == len(passages):
-        #     retrieved_embeddings = response["embeddings"]
-        # return retrieved_embeddings
-        raise NotImplementedError

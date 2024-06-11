@@ -299,7 +299,7 @@ class SentenceTransformerModelWrapper(TransformerModelWrapper):
 
     @torch.no_grad()
     def embed_corpus(
-        self, corpus: Corpus, store_tokenizations: bool, batch_size: Optional[int] = None
+        self, corpus: Corpus, store_tokenizations: bool = False, batch_size: Optional[int] = None
     ) -> Iterable[torch.Tensor]:
         batch_size = batch_size or self.batch_size
         for batch in corpus.batches(batch_size):
@@ -309,6 +309,16 @@ class SentenceTransformerModelWrapper(TransformerModelWrapper):
                 embeddings, encodings["attention_mask"]
             )
             yield sentence_embeddings
+    
+    @torch.no_grad()
+    def embed_passage(
+        self, passage: Passage, store_tokenizations: bool = False) -> Iterable[torch.Tensor]:
+        encodings = self._encodings([passage], store_tokenizations)
+        embeddings = self._model(**encodings.to(self.device))
+        sentence_embeddings = SentenceTransformerModelWrapper.mean_pooling(
+            embeddings, encodings["attention_mask"]
+        )
+        return sentence_embeddings[0]
 
     @classmethod
     def from_pretrained(
