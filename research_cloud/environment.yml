@@ -8,11 +8,11 @@ apt:
   - ncdu
 
 miniconda:
-  name: tempo-embeddings
+  name: tempo_embeddings
   channels:
   - conda-forge
   dependencies:
-  - python>=3.9      # change version if needed
+  - python=3.9      # change version if needed
   - jupyterlab
   - ipykernel
   - pip
