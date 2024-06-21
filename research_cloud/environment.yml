@@ -8,7 +8,7 @@ apt:
   - ncdu
 
 miniconda:
-  name: tempo_embeddings
+  name: tempo-embeddings
   channels:
   - conda-forge
   dependencies:
