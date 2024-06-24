@@ -11,14 +11,14 @@
 
     - name: Create tempo-embeddings directory in /opt
       file:
-        path: /opt/tempo-embeddings/
+        path: ../../opt/tempo-embeddings/
         state: directory
         mode: '0777'
 
     - name: Clone the public GitHub repository
       git:
         repo: 'https://github.com/Semantics-of-Sustainability/tempo-embeddings.git'
-        dest: /opt/tempo-embeddings
+        dest: ../../opt/tempo-embeddings
         update: yes
     - name: Print completion message
       debug:
