@@ -106,10 +106,6 @@ class Corpus(AbstractCorpus):
         nlp_pipeline = None
     ):
         """Read input data from an open file handler, one sequence per line."""
-        if filter_terms and len(filter_terms) > 1:
-            raise NotImplementedError(
-                "Highlighting/embedding multiple filter terms not yet implemented."
-            )
 
         windows: Iterable[Passage] = (
             passage
@@ -180,10 +176,6 @@ class Corpus(AbstractCorpus):
         nlp_pipeline = None,
         **kwargs,
     ):
-        if filter_terms and len(filter_terms) > 1:
-            raise NotImplementedError(
-                "Highlighting/embedding multiple filter terms not yet implemented."
-            )
 
         reader = csv.DictReader(file_handler, **kwargs)
         if not all(column in reader.fieldnames for column in text_columns):
@@ -216,7 +208,6 @@ class Corpus(AbstractCorpus):
 
                 if filter_terms:
                     # Highlight terms in passages
-
                     passages.extend(
                         [
                             passage
