@@ -61,8 +61,10 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             self.config = {
                 "embedder_name": self.embedder_name,
                 "embedder_type": self.embedder_config["type"],
+                "model": self.model,
                 "existing_collections": [],
             }
+            self._save_config()
         
         
     def connect(self):
