@@ -52,7 +52,7 @@ If your Research Cloud account is set up for the Semantics of Sustainability pro
 ```
 - Close the terminal, open a new one, and run:
 ```console
-cd ../../opt/tempo-embeddings/
+cd /opt/tempo-embeddings/
 conda activate tempo-embeddings
 ```
 - Start to play with the notebooks using:
