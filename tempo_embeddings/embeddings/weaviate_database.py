@@ -1,12 +1,15 @@
+import gzip
 import json
 import logging
 import os
 import platform
+import uuid
 from typing import Any
 from typing import Iterable
 from typing import TypeVar
 import weaviate
 import weaviate.classes as wvc
+from tqdm import tqdm
 from transformers import AutoTokenizer
 from weaviate.classes.query import Filter
 from weaviate.classes.query import MetadataQuery
@@ -46,7 +49,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             self.weaviate_headers = {"X-HuggingFace-Api-Key": self.embedder_config["api_key"]}
         elif self.embedder_config.get("type") == "custom_model" or self.embedder_config.get("type") == "default":
             try:
-                self.model = self.embedder_config["model"]
+                self.model = self.embedder_config.get("model")
                 self.model.batch_size = self.batch_size
                 self.embedding_function = wvc.config.Configure.Vectorizer.none()
             except KeyError as e:
@@ -61,7 +64,6 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             self.config = {
                 "embedder_name": self.embedder_name,
                 "embedder_type": self.embedder_config["type"],
-                "model": self.model,
                 "existing_collections": [],
             }
             self._save_config()
@@ -284,4 +286,36 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             for o in response.objects:
                 text = o.properties.pop("passage")
                 yield (Passage(text, o.properties, embedding=o.vector['default'], unique_id=o.uuid), o.metadata.distance)
-        
+
+
+    def export_from_collection(self, collection_name: str, filepath: str = None) -> None:
+        filename_tgt = filepath or f"{collection_name}.json.gz"
+        with weaviate.connect_to_local() as client:
+            collection_src = client.collections.get(collection_name)
+            with gzip.open(filename_tgt, 'wt', encoding='utf-8') as fileout:
+                logging.info("Writing into '%s' file...", filename_tgt)
+                for q in tqdm(collection_src.iterator(include_vector=True)):
+                    row_dict = q.properties
+                    row_dict['vector'] = q.vector['default']
+                    row_dict['uuid'] = str(q.uuid)
+                    fileout.write(f'{json.dumps(row_dict)}\n')
+    
+
+    def import_into_collection(self, filename_src: str, collection_name: str):
+        with weaviate.connect_to_local() as client:
+            collection_tgt = client.collections.get(collection_name)
+            with gzip.open(filename_src, 'rt', encoding='utf-8') as f:
+                logging.info("Importing into Weaviate '%s' collection...", filename_src)
+                if collection_name not in self.config["existing_collections"]:
+                    self.config["existing_collections"].append(collection_name)
+                    self._save_config()
+                with collection_tgt.batch.fixed_size(batch_size=self.batch_size) as batch:
+                    for line in tqdm(f):
+                        item = json.loads(line.strip())
+                        item_id = uuid.UUID(item.pop('uuid'))
+                        item_vector = item.pop('vector')
+                        batch.add_object(
+                            properties=item,
+                            vector=item_vector,
+                            uuid=item_id
+                        )
