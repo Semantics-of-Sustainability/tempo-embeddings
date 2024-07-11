@@ -38,13 +38,20 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         super().__init__(batch_size)
         self.db_path = db_path
         self.embedder_name = embedder_name
-        self.embedder_config = embedder_config or {"type": "default"}
+        self.embedder_config = embedder_config
         self.tokenizer = AutoTokenizer.from_pretrained(embedder_name) if embedder_name else None
         self.model = None
         self.client = None
         self.weaviate_headers = {}
         
-        if self.embedder_config.get("type") == "hf":
+        creating_new_db = True
+        if self.embedder_config is None:
+            if os.path.exists(self.db_path):
+                self._load_config()
+                creating_new_db = False
+            else:
+                raise FileNotFoundError("No existing configuration was found for this Database. Did you provide the right path?")
+        elif self.embedder_config.get("type") == "hf":
             self.embedding_function = wvc.config.Configure.Vectorizer.text2vec_huggingface(model=self.embedder_name)
             self.weaviate_headers = {"X-HuggingFace-Api-Key": self.embedder_config["api_key"]}
         elif self.embedder_config.get("type") == "custom_model" or self.embedder_config.get("type") == "default":
@@ -57,9 +64,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         else:
             raise ValueError(f"Malformed embedder_config {self.embedder_config}. Check that 'type', 'api_key' and 'model' keys are properly populated.")
 
-        if os.path.exists(self.db_path):
-            self._load_config()
-        else:
+        if creating_new_db:
             os.makedirs(self.db_path)
             self.config = {
                 "embedder_name": self.embedder_name,
