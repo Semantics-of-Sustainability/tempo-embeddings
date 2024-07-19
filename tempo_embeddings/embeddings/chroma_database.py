@@ -21,6 +21,9 @@ logger = logging.getLogger(__name__)
 class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
     """A Chroma Database can create N collections and will always use THE SAME embedder function and tokenizer for all collections.
     To create collections with different embedders one needs to create separate databases
+
+    WARNING: This class does not work because the currently used version of ChromaDB is not compatible
+    with the current version of protobuf that is required by Weaviate.
     """
 
     def __init__(
