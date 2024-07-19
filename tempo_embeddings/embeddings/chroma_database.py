@@ -16,6 +16,7 @@ from ..text.highlighting import Highlighting
 from ..text.passage import Passage
 from .vector_database import VectorDatabaseManagerWrapper
 
+
 logger = logging.getLogger(__name__)
 
 class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
