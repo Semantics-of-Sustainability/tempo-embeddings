@@ -8,7 +8,6 @@ class TestPassage:
     # TODO: mock this
     model = RobertaModelWrapper.from_pretrained("roberta-base", accelerate=False)
 
-    @pytest.mark.skip("Needs to be updated.")
     @pytest.mark.parametrize(
         "passage, metadata_fields, max_context_length, expected",
         [
@@ -40,9 +39,6 @@ class TestPassage:
     def test_highlighted_text(
         self, passage, metadata_fields, max_context_length, expected
     ):
-        self.model.compute_passage_embeddings(passage)
-        self.model.tokenize_passage(passage)
-
         assert (
             passage.highlighted_text(
                 metadata_fields=metadata_fields, max_context_length=max_context_length
@@ -59,16 +55,9 @@ class TestPassage:
                 ["key"],
                 {"text": "test text", "key": "value"},
             ),
-            (
-                Passage("test text", highlighting=Highlighting(0, 4)),
-                [],
-                {"text": "<b>test</b> text"},
-            ),
         ],
     )
     def test_hover_data(self, passage, metadata_fields, expected):
-        if passage.highlighting is not None:
-            pytest.skip("Testing with highlighted text not implemented.")
         assert passage.hover_data(metadata_fields=metadata_fields) == expected
 
     @pytest.mark.parametrize(
