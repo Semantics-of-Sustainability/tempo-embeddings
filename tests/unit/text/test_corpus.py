@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import pytest
+from numpy.testing import assert_equal
 from tempo_embeddings.text.corpus import Corpus
 from tempo_embeddings.text.highlighting import Highlighting
 from tempo_embeddings.text.passage import Passage
@@ -125,6 +126,38 @@ class TestCorpus:
 
         assert filepath.is_file()
         assert Corpus.load(filepath) == corpus
+
+    @pytest.mark.parametrize(
+        "corpus,expected",
+        [
+            (Corpus([Passage("test")]), np.array([None])),
+            (Corpus([Passage("test", embedding=np.ones(10))]), np.ones((1, 10))),
+            (
+                Corpus(
+                    [
+                        Passage("test 1", embedding=np.ones(10)),
+                        Passage("test 2", embedding=np.ones(10)),
+                    ]
+                ),
+                np.ones((2, 10)),
+            ),
+        ],
+    )
+    def test_embeddings(self, corpus, expected):
+        assert_equal(corpus.embeddings, expected)
+
+    @pytest.mark.parametrize(
+        "corpus",
+        [
+            (Corpus([Passage("test")])),
+            (Corpus([Passage("test" + str(i)) for i in range(5)])),
+        ],
+    )
+    def test_embeddings_setter(self, corpus):
+        embeddings = [np.random.rand(10) for passage in corpus.passages]
+        corpus.embeddings = np.array(embeddings)
+        for passage, embedding in zip(corpus.passages, embeddings):
+            assert_equal(passage.embedding, embedding)
 
     @pytest.mark.parametrize(
         "embeddings,expected",
