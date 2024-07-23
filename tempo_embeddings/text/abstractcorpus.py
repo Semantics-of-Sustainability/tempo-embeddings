@@ -24,9 +24,14 @@ class AbstractCorpus(ABC):
         return NotImplemented
 
     @property
-    @abstractmethod
-    def embeddings(self) -> Optional[ArrayLike]:
-        return NotImplemented
+    def embeddings(self) -> ArrayLike:
+        return np.array([p.embedding for p in self.passages])
+
+    @embeddings.setter
+    def embeddings(self, embeddings: ArrayLike):
+        for row, passage in zip(embeddings, self._passages, strict=True):
+            # FIXME: this sets the same value to all passages in every iterations
+            passage.embedding = row.copy()
 
     @property
     @abstractmethod
@@ -57,15 +62,6 @@ class AbstractCorpus(ABC):
 
     def __contains__(self, passage: Passage) -> bool:
         return passage in self._passages
-
-    def _validate_embeddings(self) -> None:
-        if self._embeddings is not None and self._embeddings.shape[0] != len(
-            self._passages
-        ):
-            raise ValueError(
-                f"Embeddings shape is {self._embeddings.shape}, "
-                f"but number of passages is {len(self._passages)}."
-            )
 
     def centroid(self) -> ArrayLike:
         """The mean for all passage embeddings."""

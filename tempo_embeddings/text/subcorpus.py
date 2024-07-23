@@ -1,6 +1,5 @@
 from typing import TYPE_CHECKING
 from typing import Optional
-from numpy.typing import ArrayLike
 from .abstractcorpus import AbstractCorpus
 from .passage import Passage
 
@@ -34,14 +33,6 @@ class Subcorpus(AbstractCorpus):
     @property
     def passages(self) -> list[Passage]:
         return [self._parent_corpus.passages[i] for i in self._indices]
-
-    @property
-    def embeddings(self) -> ArrayLike:
-        return (
-            None
-            if self._parent_corpus.embeddings is None
-            else self._parent_corpus.embeddings.take(self._indices, axis=0)
-        )
 
     @property
     def vectorizer(self):

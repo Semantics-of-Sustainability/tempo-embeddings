@@ -170,5 +170,6 @@ class TestCorpus:
         ],
     )
     def test_embeddings_as_df(self, embeddings, expected):
-        corpus = Corpus(embeddings=embeddings, validate_embeddings=False)
+        corpus = Corpus([Passage("test" + str(i)) for i in range(embeddings.shape[0])])
+        corpus.embeddings = embeddings
         pd.testing.assert_frame_equal(corpus.embeddings_as_df(), expected)

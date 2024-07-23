@@ -7,7 +7,6 @@ from typing import Iterable
 from typing import Optional
 from typing import TextIO
 import joblib
-from numpy.typing import ArrayLike
 from sklearn.feature_extraction.text import TfidfVectorizer
 from tqdm import tqdm
 from ..settings import DEFAULT_ENCODING
@@ -18,29 +17,18 @@ from .passage import Passage
 class Corpus(AbstractCorpus):
     """A Corpus implementation that holds the concrecte passages and embedings."""
 
-    def __init__(
-        self,
-        passages: list[Passage] = None,
-        label: Optional[Any] = None,
-        embeddings: Optional[ArrayLike] = None,
-        *,
-        validate_embeddings: bool = True
-    ):
+    def __init__(self, passages: list[Passage] = None, label: Optional[Any] = None):
         self._passages: list[Passage] = passages or []
         self._label: Optional[str] = label
-        self._embeddings: Optional[ArrayLike] = embeddings
         self._vectorizer: TfidfVectorizer = None
-
-        if validate_embeddings:
-            self._validate_embeddings()
 
     def __add__(self, other: "Corpus", new_label: str = None) -> "Corpus":
         if any(corpus.embeddings is not None for corpus in (self, other)):
             logging.warning(
-                "Removing existing embeddings to avoid inconsistent vector spaces."
+                "Dropping existing embeddings to avoid inconsistent vector spaces."
             )
 
-        return Corpus(self._passages + other._passages, new_label, embeddings=None)
+        return Corpus(self._passages + other._passages, new_label)
 
     def __repr__(self) -> str:
         return f"Corpus({self._label!r}, {self._passages[:10]!r})"
@@ -50,20 +38,10 @@ class Corpus(AbstractCorpus):
         return self._passages
 
     @property
-    def embeddings(self):
-        return self._embeddings
-    
-    @property
     def vectorizer(self) -> TfidfVectorizer:
         if self._vectorizer is None:
             self._vectorizer = AbstractCorpus.tfidf_vectorizer(self.passages)
         return self._vectorizer
-
-    @embeddings.setter
-    def embeddings(self, embeddings: ArrayLike):
-        self._embeddings = embeddings
-        self._validate_embeddings()
-
 
     def batches(self, batch_size: int) -> Iterable[list[Passage]]:
         if batch_size <= 1:
@@ -103,7 +81,7 @@ class Corpus(AbstractCorpus):
         filter_terms: list[str] = None,
         metadata: dict = None,
         window_size: Optional[int] = None,
-        nlp_pipeline = None
+        nlp_pipeline=None,
     ):
         """Read input data from an open file handler, one sequence per line."""
 
@@ -111,7 +89,10 @@ class Corpus(AbstractCorpus):
             passage
             for line in f
             for passage in Passage.from_text(
-                line, metadata=metadata, window_size=window_size, nlp_pipeline=nlp_pipeline
+                line,
+                metadata=metadata,
+                window_size=window_size,
+                nlp_pipeline=nlp_pipeline,
             )
             if passage.contains_any(filter_terms)
         )
@@ -151,7 +132,7 @@ class Corpus(AbstractCorpus):
         filter_terms: list[str] = None,
         encoding=DEFAULT_ENCODING,
         compression: Optional[str] = None,
-        nlp_pipeline = None,
+        nlp_pipeline=None,
         **kwargs,
     ):
         """Read input data from a CSV file."""
@@ -160,8 +141,11 @@ class Corpus(AbstractCorpus):
 
         with open_func(filepath, "rt", encoding=encoding) as f:
             return cls.from_csv_stream(
-                f, text_columns, filter_terms=filter_terms, 
-                nlp_pipeline=nlp_pipeline, **kwargs
+                f,
+                text_columns,
+                filter_terms=filter_terms,
+                nlp_pipeline=nlp_pipeline,
+                **kwargs,
             )
 
     @classmethod
@@ -173,10 +157,9 @@ class Corpus(AbstractCorpus):
         filter_terms: list[str] = None,
         window_size: int = 1000,
         window_overlap: int = 0,
-        nlp_pipeline = None,
+        nlp_pipeline=None,
         **kwargs,
     ):
-
         reader = csv.DictReader(file_handler, **kwargs)
         if not all(column in reader.fieldnames for column in text_columns):
             raise ValueError("Not all text columns found in CSV file.")
@@ -203,7 +186,7 @@ class Corpus(AbstractCorpus):
                     metadata=metadata,
                     window_size=window_size,
                     window_overlap=window_overlap,
-                    nlp_pipeline=nlp_pipeline
+                    nlp_pipeline=nlp_pipeline,
                 )
 
                 if filter_terms:
