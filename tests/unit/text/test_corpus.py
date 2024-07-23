@@ -5,6 +5,7 @@ from numpy.testing import assert_equal
 from tempo_embeddings.text.corpus import Corpus
 from tempo_embeddings.text.highlighting import Highlighting
 from tempo_embeddings.text.passage import Passage
+from tempo_embeddings.text.subcorpus import Subcorpus
 
 
 class TestCorpus:
@@ -173,3 +174,25 @@ class TestCorpus:
         corpus = Corpus([Passage("test" + str(i)) for i in range(embeddings.shape[0])])
         corpus.embeddings = embeddings
         pd.testing.assert_frame_equal(corpus.embeddings_as_df(), expected)
+
+
+class TestSubCorpus:
+    def test_passages(self):
+        parent_corpus = Corpus([Passage("text 1"), Passage("text 2")])
+
+        subcorpus = Subcorpus(parent_corpus, [0], label="test")
+        assert subcorpus.passages == [parent_corpus.passages[0]]
+        assert subcorpus.passages[0] is parent_corpus.passages[0]
+
+    def test_add(self):
+        parent_corpus = Corpus([Passage("text 1"), Passage("text 2")])
+
+        subcorpus1 = Subcorpus(parent_corpus, [0], label="test1")
+        subcorpus2 = Subcorpus(parent_corpus, [1], label="test2")
+        assert subcorpus1 + subcorpus2 == Subcorpus(
+            parent_corpus, [0, 1], label="test1+test2"
+        )
+
+        with pytest.raises(ValueError) as exc_info:
+            subcorpus1 + Subcorpus(Corpus(), [0], label="test1")  # noqa: expression-not-assigned
+            assert exc_info == "Cannot merge sub-corpora with different parent corpora."
