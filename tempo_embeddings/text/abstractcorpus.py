@@ -1,4 +1,5 @@
 import string
+import sys
 from abc import ABC
 from abc import abstractmethod
 from collections import defaultdict
@@ -29,9 +30,21 @@ class AbstractCorpus(ABC):
 
     @embeddings.setter
     def embeddings(self, embeddings: ArrayLike):
-        for row, passage in zip(embeddings, self._passages, strict=True):
-            # FIXME: this sets the same value to all passages in every iterations
-            passage.embedding = row.copy()
+        try:
+            for row, passage in zip(embeddings, self._passages, strict=True):
+                passage.embedding = row
+        except TypeError as e:
+            # TODO: remove this block once we drop support for Python < 3.10
+            if sys.version_info.minor < 10:
+                if len(embeddings) == len(self._passages):
+                    for row, passage in zip(embeddings, self._passages):
+                        passage.embedding = row
+                else:
+                    raise ValueError(
+                        f"embeddings must have the same length as passages: {len(embeddings)} != {len(self._passages)}"
+                    ) from e
+            else:
+                raise e
 
     @property
     @abstractmethod
