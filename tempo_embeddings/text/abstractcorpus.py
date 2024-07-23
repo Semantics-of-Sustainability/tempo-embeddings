@@ -65,7 +65,7 @@ class AbstractCorpus(ABC):
         self._label = value
 
     def __eq__(self, other: object) -> bool:
-        return other._passages == self._passages
+        return other.passages == self.passages
 
     def __hash__(self) -> int:
         return hash(tuple(self.passages))
