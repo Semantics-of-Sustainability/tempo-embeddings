@@ -84,6 +84,9 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         if not self._client.connect():
             raise ConnectionError(f"Could not connect to Weaviate database with client: {str(self._client)}")
 
+    def __del__(self):
+        self._client.close()
+
     @property
     def client(self):
         return self._client
