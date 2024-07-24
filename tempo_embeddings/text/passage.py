@@ -76,7 +76,7 @@ class Passage:
 
     @embedding.setter
     def embedding(self, value: ArrayLike):
-        # TODO: does this have to be a list?
+        # For Chroma DB, this has to be a list of floats; TODO: add a check/conversion in ChromaDatabaseManager
         self._embedding = value
 
     @full_word_spans.setter
