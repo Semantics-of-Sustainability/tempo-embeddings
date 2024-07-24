@@ -6,6 +6,7 @@ import platform
 import uuid
 from typing import Any
 from typing import Iterable
+from typing import Optional
 from typing import TypeVar
 import weaviate
 import weaviate.classes as wvc
@@ -34,6 +35,8 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         embedder_name: str = None,
         embedder_config: dict[str, Any] = None,
         batch_size: int = 8,
+        *,
+        client: Optional[weaviate.Client] = None,
     ):
         super().__init__(batch_size)
         self.db_path = db_path
@@ -72,9 +75,19 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             }
             self._save_config()
 
-        self._client = weaviate.connect_to_local(headers=weaviate_headers)
+        if weaviate_headers and client is not None:
+            logging.error(
+                "Weaviate headers have been specified, but a client was also provided. Headers will be ignored: %s",
+                weaviate_headers,
+            )
+        self._client = client or weaviate.connect_to_local(headers=weaviate_headers)
+        if not self._client.connect():
+            raise ConnectionError(f"Could not connect to Weaviate database with client: {str(self._client)}")
 
-        
+    @property
+    def client(self):
+        return self._client
+            
     def connect(self):
         # FIXME: Rename this method to is_ready() to match the VectorDatabaseManagerWrapper interface
         return self._client.is_ready
