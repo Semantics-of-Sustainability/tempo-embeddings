@@ -4,6 +4,7 @@ import string
 from typing import Any
 from typing import Iterable
 from typing import Optional
+from numpy.typing import ArrayLike
 from .highlighting import Highlighting
 
 
@@ -74,9 +75,8 @@ class Passage:
         self._tokenized_text = value
 
     @embedding.setter
-    def embedding(self, value: list[float]):
-        if not isinstance(value, list):
-            raise ValueError("You should pass a list of floats as the embedding vector")
+    def embedding(self, value: ArrayLike):
+        # For Chroma DB, this has to be a list of floats; TODO: add a check/conversion in ChromaDatabaseManager
         self._embedding = value
 
     @full_word_spans.setter

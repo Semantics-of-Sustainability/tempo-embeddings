@@ -36,3 +36,5 @@ notebooks/semeval2020_ulscd_eng/*
 notebooks/stopwords-filter-nl.txt
 notebooks/testing_db*
 notebooks/clusters*
+
+weaviate_default_db/*

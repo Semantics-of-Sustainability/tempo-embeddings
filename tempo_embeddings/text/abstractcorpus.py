@@ -1,4 +1,5 @@
 import string
+import sys
 from abc import ABC
 from abc import abstractmethod
 from collections import defaultdict
@@ -24,9 +25,26 @@ class AbstractCorpus(ABC):
         return NotImplemented
 
     @property
-    @abstractmethod
-    def embeddings(self) -> Optional[ArrayLike]:
-        return NotImplemented
+    def embeddings(self) -> ArrayLike:
+        return np.array([p.embedding for p in self.passages])
+
+    @embeddings.setter
+    def embeddings(self, embeddings: ArrayLike):
+        try:
+            for row, passage in zip(embeddings, self._passages, strict=True):
+                passage.embedding = row
+        except TypeError as e:
+            # TODO: remove this block once we drop support for Python < 3.10
+            if sys.version_info.minor < 10:
+                if len(embeddings) == len(self._passages):
+                    for row, passage in zip(embeddings, self._passages):
+                        passage.embedding = row
+                else:
+                    raise ValueError(
+                        f"embeddings must have the same length as passages: {len(embeddings)} != {len(self._passages)}"
+                    ) from e
+            else:
+                raise e
 
     @property
     @abstractmethod
@@ -47,7 +65,7 @@ class AbstractCorpus(ABC):
         self._label = value
 
     def __eq__(self, other: object) -> bool:
-        return other._passages == self._passages
+        return other.passages == self.passages
 
     def __hash__(self) -> int:
         return hash(tuple(self.passages))
@@ -57,15 +75,6 @@ class AbstractCorpus(ABC):
 
     def __contains__(self, passage: Passage) -> bool:
         return passage in self._passages
-
-    def _validate_embeddings(self) -> None:
-        if self._embeddings is not None and self._embeddings.shape[0] != len(
-            self._passages
-        ):
-            raise ValueError(
-                f"Embeddings shape is {self._embeddings.shape}, "
-                f"but number of passages is {len(self._passages)}."
-            )
 
     def centroid(self) -> ArrayLike:
         """The mean for all passage embeddings."""

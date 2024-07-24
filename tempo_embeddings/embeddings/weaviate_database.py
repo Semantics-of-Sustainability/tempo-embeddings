@@ -41,7 +41,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         self.embedder_config = embedder_config
         self.tokenizer = AutoTokenizer.from_pretrained(embedder_name) if embedder_name else None
         self.model = None
-        self.client = None
+        self.client = None # FIXME: this is never used, instead a new client is initialized in every call
         self.weaviate_headers = {}
         
         creating_new_db = True
