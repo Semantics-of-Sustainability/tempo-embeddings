@@ -23,7 +23,7 @@ class Corpus(AbstractCorpus):
         self._vectorizer: TfidfVectorizer = None
 
     def __add__(self, other: "Corpus", new_label: str = None) -> "Corpus":
-        if any(corpus.embeddings is not None for corpus in (self, other)):
+        if self.has_embeddings() or other.has_embeddings():
             logging.warning(
                 "Dropping existing embeddings to avoid inconsistent vector spaces."
             )

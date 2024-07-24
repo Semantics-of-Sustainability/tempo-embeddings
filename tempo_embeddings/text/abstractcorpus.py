@@ -46,6 +46,19 @@ class AbstractCorpus(ABC):
             else:
                 raise e
 
+    def has_embeddings(self) -> bool:
+        """Check if the corpus has embeddings.
+
+        For performance, this assumes consistency across all passages in the corpus, hence stops if any passage has an embedding.
+
+        Returns:
+            bool: True if the corpus has embeddings, False otherwise, including empty corpora.
+        """
+
+        return not any(passage.embedding is None for passage in self.passages) and any(
+            passage.embedding.any() for passage in self.passages
+        )
+
     @property
     @abstractmethod
     def vectorizer(self) -> TfidfVectorizer:
