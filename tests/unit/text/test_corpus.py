@@ -175,6 +175,24 @@ class TestCorpus:
         corpus.embeddings = embeddings
         pd.testing.assert_frame_equal(corpus.embeddings_as_df(), expected)
 
+    @pytest.mark.parametrize(
+        "passages,expected",
+        [
+            ([], False),
+            ([Passage("test")], False),
+            ([Passage("test", embedding=np.random.rand(10))], True),
+            (
+                [
+                    Passage("test 1", embedding=np.random.rand(10)),
+                    Passage("test 2", embedding=np.random.rand(10)),
+                ],
+                True,
+            ),
+        ],
+    )
+    def test_has_embeddings(self, passages, expected):
+        assert Corpus(passages).has_embeddings() == expected
+
 
 class TestSubCorpus:
     def test_passages(self):
