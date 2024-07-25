@@ -83,10 +83,10 @@ isort tempo_embeddings
 
 To fix readability of your code style you can use [yapf](https://github.com/google/yapf).
 
-You can enable automatic linting with `prospector` and `isort` on commit by enabling the git hook from `.githooks/pre-commit`, like so:
+You can enable automatic linting on commits:
 
 ```shell
-git config --local core.hooksPath .githooks
+pre-commit install
 ```
 
 ## Generating the API docs
