@@ -27,4 +27,4 @@ extras = dev
 """
 
 [tool.ruff]
-extend-select = "I"
+extend-select = ["I"]
