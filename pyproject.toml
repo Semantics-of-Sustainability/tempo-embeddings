@@ -25,3 +25,6 @@ skip_missing_interpreters = true
 commands = pytest
 extras = dev
 """
+
+[tool.ruff]
+extend-select = "I"
