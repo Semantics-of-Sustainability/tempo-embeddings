@@ -74,10 +74,8 @@ ruff check
 ruff check --select I tempo_embeddings
 
 # recursively fix import style for the tempo_embeddings module only
-isort check --fix --select I tempo_embeddings
+ruff check --fix --select I tempo_embeddings
 ```
-
-To fix readability of your code style you can use [yapf](https://github.com/google/yapf).
 
 You can enable automatic linting on commits:
 
