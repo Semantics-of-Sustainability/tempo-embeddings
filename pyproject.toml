@@ -25,7 +25,3 @@ skip_missing_interpreters = true
 commands = pytest
 extras = dev
 """
-
-[tool.pyright]
-exclude = [ "**/*.ipynb", "**/*.ipynb*" ]
-ignore = [ "**/*.ipynb", "**/*.ipynb*" ]
