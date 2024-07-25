@@ -16,6 +16,10 @@ repos:
           - id: ruff
             types_or: [python, pyi, jupyter]
             args: [--fix]
+          # Organize imports
+          - id: ruff
+            types_or: [python, pyi, jupyter]
+            args: [--fix --select I]
           # Run the formatter.
           - id: ruff-format
             types_or: [python, pyi, jupyter]
