@@ -1,5 +1,6 @@
 import pandas as pd
 import seaborn as sns
+
 from ..settings import OUTLIERS_LABEL
 from .bokeh import BokehVisualizer
 
@@ -60,5 +61,5 @@ class ClusterVisualizer(BokehVisualizer):
             palette=palette,
             size="size",
         )
-        g.legend(loc='center left', bbox_to_anchor=(1.25, 0.5), ncol=1)
+        g.legend(loc="center left", bbox_to_anchor=(1.25, 0.5), ncol=1)
         return g

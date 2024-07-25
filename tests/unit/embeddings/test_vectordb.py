@@ -1,7 +1,9 @@
 from contextlib import nullcontext as does_not_raise
+
 import numpy as np
 import pytest
 from numpy.testing import assert_equal
+
 from tempo_embeddings.embeddings.vector_database import VectorDatabaseManagerWrapper
 from tempo_embeddings.text.corpus import Corpus
 from tempo_embeddings.text.passage import Passage

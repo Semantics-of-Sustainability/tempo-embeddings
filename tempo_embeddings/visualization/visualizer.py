@@ -1,4 +1,5 @@
 import abc
+
 from ..text.abstractcorpus import AbstractCorpus
 
 

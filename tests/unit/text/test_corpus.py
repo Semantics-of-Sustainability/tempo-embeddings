@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from numpy.testing import assert_equal
+
 from tempo_embeddings.text.corpus import Corpus
 from tempo_embeddings.text.highlighting import Highlighting
 from tempo_embeddings.text.passage import Passage

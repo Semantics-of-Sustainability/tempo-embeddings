@@ -1,10 +1,10 @@
 import hashlib
 import logging
 import string
-from typing import Any
-from typing import Iterable
-from typing import Optional
+from typing import Any, Iterable, Optional
+
 from numpy.typing import ArrayLike
+
 from .highlighting import Highlighting
 
 
@@ -19,7 +19,7 @@ class Passage:
         embedding: Optional[list[float]] = None,
         full_word_spans: Optional[list[tuple[int, int]]] = None,
         char2tokens: Optional[list[int]] = None,
-        unique_id: str = None
+        unique_id: str = None,
     ) -> None:
         # pylint: disable=too-many-arguments
         self._text = text.strip()
@@ -33,7 +33,7 @@ class Passage:
     @property
     def text(self) -> str:
         return self._text
-    
+
     @property
     def unique_id(self) -> str:
         return self._unique_id
@@ -57,7 +57,7 @@ class Passage:
     @property
     def full_word_spans(self) -> Optional[list[tuple[int, int]]]:
         return self._full_word_spans
-    
+
     @property
     def char2tokens(self) -> Optional[list[int]]:
         return self._char2tokens
@@ -89,12 +89,15 @@ class Passage:
 
     def get_unique_id(self) -> str:
         if not self._unique_id:
-            meta_sorted = sorted(self.metadata.items(), key=lambda x: x[0]) if self.metadata else []
+            meta_sorted = (
+                sorted(self.metadata.items(), key=lambda x: x[0])
+                if self.metadata
+                else []
+            )
             key = self.text + str(meta_sorted) + str(self.highlighting)
             hex_dig = hashlib.sha256(key.encode()).hexdigest()
             self._unique_id = hex_dig
         return self._unique_id
-            
 
     def contains_any(self, tokens: Iterable[str]) -> bool:
         """Returns True if any of the tokens are contained in the passage.
@@ -128,9 +131,8 @@ class Passage:
         """
         if not self.highlighting:
             raise ValueError(f"Passage does not have a highlighting: {str(self)}")
-        
-        word_start, word_end = self.highlighting.start, self.highlighting.end
 
+        word_start, word_end = self.highlighting.start, self.highlighting.end
 
         pre_context = self.text[:word_start][-max_context_length:]
         post_context = self.text[word_end:][:max_context_length]
@@ -189,7 +191,7 @@ class Passage:
             ]
             tokens = [token for token in tokens if len(token) > 1]
         else:
-            tokens = [self.text[span[0]:span[1]] for span in self.full_word_spans]
+            tokens = [self.text[span[0] : span[1]] for span in self.full_word_spans]
 
         return tokens
 
@@ -288,7 +290,7 @@ class Passage:
             metadata=self._metadata,
             highlighting=highlighting,
             full_word_spans=self.full_word_spans,
-            char2tokens=self.char2tokens
+            char2tokens=self.char2tokens,
         )
 
     @classmethod
@@ -299,7 +301,7 @@ class Passage:
         window_size: int = None,
         window_overlap: int = None,
         metadata: dict = None,
-        nlp_pipeline = None,
+        nlp_pipeline=None,
     ) -> Iterable["Passage"]:
         """Create a Passage from a text string."""
 

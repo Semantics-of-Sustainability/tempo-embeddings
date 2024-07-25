@@ -8,8 +8,10 @@ import threading
 from functools import partial
 from http.server import SimpleHTTPRequestHandler
 from typing import Optional
+
 import numpy as np
 import wizmap
+
 from ..text.abstractcorpus import AbstractCorpus
 from .visualizer import Visualizer
 

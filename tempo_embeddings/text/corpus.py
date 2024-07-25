@@ -2,13 +2,12 @@ import csv
 import gzip
 import logging
 from pathlib import Path
-from typing import Any
-from typing import Iterable
-from typing import Optional
-from typing import TextIO
+from typing import Any, Iterable, Optional, TextIO
+
 import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
 from tqdm import tqdm
+
 from ..settings import DEFAULT_ENCODING
 from .abstractcorpus import AbstractCorpus
 from .passage import Passage

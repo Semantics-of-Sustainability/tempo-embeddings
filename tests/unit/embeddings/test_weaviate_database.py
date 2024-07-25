@@ -1,4 +1,5 @@
 import pytest
+
 from tempo_embeddings.embeddings.weaviate_database import WeaviateDatabaseManager
 
 

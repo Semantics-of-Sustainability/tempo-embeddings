@@ -1,14 +1,10 @@
-from typing import Iterable
-from typing import Optional
+from typing import Iterable, Optional
+
 import pandas as pd
 import plotly.express as px
-from dash import Dash
-from dash import Input
-from dash import Output
-from dash import callback
-from dash import dcc
-from dash import html
+from dash import Dash, Input, Output, callback, dcc, html
 from dash.html import Figure
+
 from ..text.abstractcorpus import AbstractCorpus
 from .visualizer import Visualizer
 
