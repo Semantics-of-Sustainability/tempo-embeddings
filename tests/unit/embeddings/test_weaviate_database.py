@@ -16,6 +16,7 @@ def mock_weaviate_database_manager(mocker, tmp_path):
 class TestWeaviateDatabase:
     def test_connect(self, mock_weaviate_database_manager):
         assert mock_weaviate_database_manager.connect()
+        mock_weaviate_database_manager.client.is_ready.assert_called()
 
     def test_get_collection_count(self, mock_weaviate_database_manager):
         collection_name = "test"
