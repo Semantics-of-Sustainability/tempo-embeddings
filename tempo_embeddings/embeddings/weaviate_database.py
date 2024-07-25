@@ -82,7 +82,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             )
         self._client = client or weaviate.connect_to_local(headers=weaviate_headers)
         if not self.connect():
-            raise ConnectionError(f"Could not connect to Weaviate database with client: {str(self._client)}")
+            raise ConnectionError(f"Could not connect to Weaviate database at host: {self._client.get_meta()['hostname']}")
 
     def __del__(self):
         self._client.close()
