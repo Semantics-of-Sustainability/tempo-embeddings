@@ -1,7 +1,7 @@
 import json
 from itertools import islice
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Optional
 
 from pydantic import Field
 from pydantic.dataclasses import dataclass
@@ -16,9 +16,9 @@ class CorpusConfig:
     glob_pattern: str = "*_????.csv"
     loader_type: str = "csv"
     text_columns: list[str] = Field(default=["content"])
-    encoding: str = "utf-8"  # TODO: validate
+    encoding: str = "utf-8"
     delimiter: str = ";"
-    compression: str = None  # TODO: validate
+    compression: Optional[str] = None
 
     def exists(self):
         return self.directory.is_dir()
@@ -74,17 +74,18 @@ class CorpusReader:
         self._corpus_dir = base_dir
 
         with open(config_file, "rt") as f:
-            corpora: dict[str, dict[str, Any]] = json.load(f)
+            corpora_configs: dict[str, dict[str, Any]] = json.load(f)
 
         self._corpora = {
             name: CorpusConfig(**(config | {"directory": base_dir / name}))
-            for name, config in corpora.items()
+            for name, config in corpora_configs.items()
             if corpora is None or name in corpora
         }
 
-        for corpus in corpora:
-            if corpus not in self:
-                raise ValueError(f"Corpus '{corpus}' not defined in {config_file}")
+        if corpora:
+            for corpus in corpora:
+                if corpus not in self._corpora:
+                    raise ValueError(f"Corpus '{corpus}' not defined in {config_file}")
 
     def __contains__(self, name) -> bool:
         return name in self._corpora
