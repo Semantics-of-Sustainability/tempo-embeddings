@@ -12,6 +12,7 @@ from transformers import AutoTokenizer
 import weaviate
 import weaviate.classes as wvc
 from weaviate.classes.query import Filter, MetadataQuery
+from weaviate.exceptions import WeaviateQueryError
 from weaviate.util import generate_uuid5
 
 from ..text.corpus import Corpus
@@ -102,7 +103,10 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             )
 
     def __del__(self):
-        self._client.close()
+        try:
+            self._client.close()
+        except:  # noqa: E722
+            pass
 
     @property
     def client(self):
@@ -126,22 +130,24 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             return self.config.get("existing_collections", [])
         return []
 
-    def create_new_collection(
-        self,
-        name: str,
-        corpus: Corpus = None,
-        # collection_metadata = None, # This Dict can be used in the future to give a precise SCHEMA. NOT IMPLEMENTED YET!
+    def create_collection(
+        self, name: str, corpus: Corpus = None, collection_metadata: dict = None
     ) -> None:
         """
-        Create NEW collection and Embeds the given passages. Do nothing otherwise
+        Create new collection and embeds the given passages. Do nothing otherwise
+
         Args:
             name (str): name of the collection to be created in Weaviate
             corpus (Corpus, optional): Insert the provided corpus after creating the collection. Defaults to None.
-
+            collection_metadata (dict, optional) # Define a precise schema.
         Raises:
             ValueError: If the given collection name already exists
         """
-        #
+        if collection_metadata:
+            raise NotImplementedError(
+                "collection_metadata is not implemented yet. Please use the default schema for now."
+            )
+
         if name in self.config["existing_collections"]:
             raise ValueError(
                 f"Collection '{name}' has been created already! Try 'insert_corpus()' if you want to add more items to the collection"
@@ -197,7 +203,10 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                 )
                 data_objects.append(data_object)
             # Make the Insertion
-            response = collection_obj.data.insert_many(data_objects)
+            try:
+                response = collection_obj.data.insert_many(data_objects)
+            except WeaviateQueryError as e:
+                raise ValueError(f"Error inserting data: {data_object}") from e
             num_records += len(response.all_responses)
         return num_records
 
