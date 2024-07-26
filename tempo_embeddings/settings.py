@@ -8,8 +8,9 @@ OUTLIERS_LABEL: str = "Outliers"
 
 CWD = Path(__file__).parent.absolute()
 ROOT_DIR: Path = CWD.parent
+DATA_DIR: Path = CWD / "data"
 
-CORPORA_CONFIG_FILE: Path = CWD / "corpora.json"
+CORPORA_CONFIG_FILE: Path = DATA_DIR / "corpora.json"
 assert (
     CORPORA_CONFIG_FILE.is_file()
 ), f"Corpora config file '{CORPORA_CONFIG_FILE}' not found."
