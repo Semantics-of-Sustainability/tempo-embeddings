@@ -1,12 +1,10 @@
 import string
 import sys
-from abc import ABC
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from collections import defaultdict
 from functools import lru_cache
-from typing import Any
-from typing import Iterable
-from typing import Optional
+from typing import Any, Iterable, Optional
+
 import numpy as np
 import pandas as pd
 from numpy.typing import ArrayLike
@@ -14,6 +12,7 @@ from scipy.sparse import csr_matrix
 from scipy.spatial.distance import cosine
 from sklearn.cluster import HDBSCAN
 from sklearn.feature_extraction.text import TfidfVectorizer
+
 from ..settings import OUTLIERS_LABEL
 from .passage import Passage
 

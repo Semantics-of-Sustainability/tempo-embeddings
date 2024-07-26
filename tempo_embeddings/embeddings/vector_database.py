@@ -1,14 +1,13 @@
-from abc import ABC
-from abc import abstractmethod
-from typing import Any
-from typing import TypeVar
-from typing import Union
+from abc import ABC, abstractmethod
+from typing import Any, TypeVar, Union
+
 from numpy.typing import ArrayLike
 from umap.umap_ import UMAP
+
 from ..text.corpus import Corpus
 
-
 Collection = TypeVar("Collection")
+
 
 class VectorDatabaseManagerWrapper(ABC):
     """A Wrapper for different Vector Databases"""
@@ -29,30 +28,29 @@ class VectorDatabaseManagerWrapper(ABC):
     def batch_size(self, batch_size: int) -> None:
         self._batch_size = batch_size
 
-
     @abstractmethod
     def connect(self):
         return NotImplemented
 
     @abstractmethod
-    def insert_corpus(
-        self, collection: Union[Collection, str], corpus: Corpus
-    ):
+    def insert_corpus(self, collection: Union[Collection, str], corpus: Corpus):
         return NotImplemented
 
     @abstractmethod
     def get_corpus(
-        self, collection: Union[Collection, str], filter_words: list[str], where_obj: dict[str, Any]
+        self,
+        collection: Union[Collection, str],
+        filter_words: list[str],
+        where_obj: dict[str, Any],
     ):
         return NotImplemented
-    
+
     @staticmethod
     def compress_embeddings(
         corpus: Corpus,
         umap_verbose: bool = True,
         **umap_args,
     ) -> ArrayLike:
-
         if len(corpus) == 0:
             raise ValueError("Empty corpus passed to compress_embeddings")
 

@@ -26,6 +26,5 @@ commands = pytest
 extras = dev
 """
 
-[tool.pyright]
-exclude = [ "**/*.ipynb", "**/*.ipynb*" ]
-ignore = [ "**/*.ipynb", "**/*.ipynb*" ]
+[tool.ruff]
+extend-select = ["I"]

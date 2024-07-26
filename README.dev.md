@@ -68,25 +68,19 @@ development tools installed.
 
 ```shell
 # linter
-prospector
+ruff check
 
 # recursively check import style for the tempo_embeddings module only
-isort --check-only tempo_embeddings
-
-# recursively check import style for the tempo_embeddings module only and show
-# any proposed changes as a diff
-isort --check-only --diff tempo_embeddings
+ruff check --select I tempo_embeddings
 
 # recursively fix import style for the tempo_embeddings module only
-isort tempo_embeddings
+ruff check --fix --select I tempo_embeddings
 ```
 
-To fix readability of your code style you can use [yapf](https://github.com/google/yapf).
-
-You can enable automatic linting with `prospector` and `isort` on commit by enabling the git hook from `.githooks/pre-commit`, like so:
+You can enable automatic linting on commits:
 
 ```shell
-git config --local core.hooksPath .githooks
+pre-commit install
 ```
 
 ## Generating the API docs

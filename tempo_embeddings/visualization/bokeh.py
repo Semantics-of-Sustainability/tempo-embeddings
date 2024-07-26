@@ -1,18 +1,17 @@
 import abc
 import logging
+
 import pandas as pd
 from bokeh.client import push_session
 from bokeh.layouts import column
 from bokeh.models import Legend
 from bokeh.models.filters import GroupFilter
-from bokeh.models.sources import CDSView
-from bokeh.models.sources import ColumnDataSource
+from bokeh.models.sources import CDSView, ColumnDataSource
 from bokeh.models.widgets.sliders import RangeSlider
 from bokeh.palettes import turbo
-from bokeh.plotting import curdoc
-from bokeh.plotting import figure
-from bokeh.plotting import show
+from bokeh.plotting import curdoc, figure, show
 from bokeh.transform import factor_cmap
+
 from ..settings import OUTLIERS_LABEL
 from ..text.abstractcorpus import AbstractCorpus
 from .visualizer import Visualizer

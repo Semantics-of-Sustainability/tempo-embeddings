@@ -1,8 +1,7 @@
-from typing import TYPE_CHECKING
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
 from .abstractcorpus import AbstractCorpus
 from .passage import Passage
-
 
 if TYPE_CHECKING:
     from .corpus import Corpus
