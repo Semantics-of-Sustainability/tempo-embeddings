@@ -11,8 +11,9 @@ from transformers import AutoTokenizer
 
 import weaviate
 import weaviate.classes as wvc
+from tempo_embeddings.settings import WEAVIATE_CONFIG_COLLECTION
 from weaviate.classes.query import Filter, MetadataQuery
-from weaviate.exceptions import WeaviateQueryError
+from weaviate.exceptions import UnexpectedStatusCodeError, WeaviateQueryError
 from weaviate.util import generate_uuid5
 
 from ..text.corpus import Corpus
@@ -24,6 +25,32 @@ Collection = TypeVar("Collection")
 logger = logging.getLogger(__name__)
 
 
+class WeaviateConfigDb:
+    _PROPERTIES = {"name": str, "embedder_name": str, "text_fields": list[str]}
+
+    def __init__(self, client: weaviate.Client, *, collection_name: str) -> None:
+        self._client: weaviate.Client = client
+        self._collection = collection_name
+
+    def create(self):
+        try:
+            return self._client.collections.create(self._collection)
+        except UnexpectedStatusCodeError as e:
+            if e.status_code == 422:
+                logging.warning("Collection '%s' already exists", self._collection)
+            else:
+                raise e
+
+    def _collection(self) -> weaviate.collections.Collection:
+        # TODO: Check if collection exists, create otherwise
+        return self._client.collections.get(self._collection)
+
+    def add_corpus(self, name: str, embedder: str, text_fields: list[str]) -> uuid.UUID:
+        _uuid = self._collection.data.insert(
+            {"name": name, embedder: embedder, "text_fields": text_fields}
+        )
+
+
 class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
     """A Weaviate Database can create N collections and will always use THE SAME embedder function and tokenizer for all collections.
     To create collections with different embedders one needs to create separate databases
@@ -33,15 +60,14 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
 
     def __init__(
         self,
-        db_path: str = "weaviate_default_db",
         embedder_name: str = None,
         embedder_config: dict[str, Any] = None,
         batch_size: int = 8,
         *,
         client: Optional[weaviate.Client] = None,
+        config_collection: str = WEAVIATE_CONFIG_COLLECTION,
     ):
         super().__init__(batch_size)
-        self.db_path = db_path
         self.embedder_name = embedder_name
         self.embedder_config = embedder_config
         self.tokenizer = (
