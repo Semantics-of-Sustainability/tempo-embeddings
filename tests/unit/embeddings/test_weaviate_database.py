@@ -26,3 +26,11 @@ class TestWeaviateDatabase:
         mock_weaviate_database_manager.client.collections.get.assert_called_once_with(
             collection_name
         )
+
+    def test_delete_collection(self, mock_weaviate_database_manager):
+        collection_name = "test"
+        mock_weaviate_database_manager.delete_collection(collection_name)
+
+        mock_weaviate_database_manager.client.collections.delete.assert_called_once_with(
+            collection_name
+        )

@@ -29,6 +29,8 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
     To create collections with different embedders one needs to create separate databases
     """
 
+    # TODO: store/retrieve config in database
+
     def __init__(
         self,
         db_path: str = "weaviate_default_db",

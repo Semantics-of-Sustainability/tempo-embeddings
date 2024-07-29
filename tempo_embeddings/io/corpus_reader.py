@@ -82,7 +82,7 @@ class CorpusReader:
             if corpora is None or name in corpora
         }
 
-        if corpora:
+        if corpora is not None:
             for corpus in corpora:
                 if corpus not in self._corpora:
                     raise ValueError(f"Corpus '{corpus}' not defined in {config_file}")
