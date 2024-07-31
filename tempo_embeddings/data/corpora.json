@@ -1,0 +1,51 @@
+{
+    "ANP_mini": {
+        "glob_pattern": "ANP_????.csv.gz",
+        "loader_type": "csv",
+        "text_columns": [
+            "content"
+        ],
+        "encoding": "iso8859_1",
+        "compression": "gzip",
+        "delimiter": ";"
+    },
+    "ANP": {
+        "glob_pattern": "ANP_????.csv.gz",
+        "loader_type": "csv",
+        "text_columns": [
+            "content"
+        ],
+        "encoding": "iso8859_1",
+        "compression": "gzip",
+        "delimiter": ";"
+    },
+    "Parool": {
+        "glob_pattern": "Parool_????.csv.gz",
+        "loader_type": "csv",
+        "text_columns": [
+            "Content"
+        ],
+        "encoding": "utf-8",
+        "compression": "gzip",
+        "delimiter": ";"
+    },
+    "NRC": {
+        "glob_pattern": "NRC_????.csv.gz",
+        "loader_type": "csv",
+        "text_columns": [
+            "Content"
+        ],
+        "encoding": "iso8859_1",
+        "compression": "gzip",
+        "delimiter": ";"
+    },
+    "StatenGeneraal_clean": {
+        "glob_pattern": "StatenGeneraal_????.csv",
+        "loader_type": "csv",
+        "text_columns": [
+            "text_clean_str"
+        ],
+        "encoding": "utf-8",
+        "delimiter": "\t"
+    }
+}

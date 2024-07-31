@@ -123,6 +123,17 @@ class Corpus(AbstractCorpus):
             return Corpus.from_lines(f, filter_terms=filter_terms)
 
     @classmethod
+    def from_csv_files(cls, files: Iterable[Path], desc: str = None, **kwargs):
+        """Read input data from multiple CSV files in a directory."""
+        return sum(
+            (
+                cls.from_csv_file(file, **kwargs)
+                for file in tqdm(files, desc=desc, unit="file")
+            ),
+            Corpus(),
+        )
+
+    @classmethod
     def from_csv_file(
         cls,
         filepath: Path,
@@ -160,8 +171,11 @@ class Corpus(AbstractCorpus):
         **kwargs,
     ):
         reader = csv.DictReader(file_handler, **kwargs)
-        if not all(column in reader.fieldnames for column in text_columns):
-            raise ValueError("Not all text columns found in CSV file.")
+        for column in text_columns:
+            if column not in reader.fieldnames:
+                raise ValueError(
+                    f"Text column(s) {text_columns} not found in CSV file '{file_handler.name}'."
+                )
 
         passages = []
         for row in reader:
@@ -169,7 +183,8 @@ class Corpus(AbstractCorpus):
             metadata = {
                 column: row[column]
                 for column in reader.fieldnames
-                if column not in text_columns
+                # skip blank column names and text columns:
+                if column and column not in text_columns
             }
 
             for text_column in text_columns:
