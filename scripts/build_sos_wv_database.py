@@ -93,4 +93,4 @@ if __name__ == "__main__":
             if collection_name not in db.config["existing_collections"]:
                 db.create_collection(collection_name, corpus)
             else:
-                db.insert_corpus(collection_name, corpus)
+                db.ingest(collection_name, corpus)

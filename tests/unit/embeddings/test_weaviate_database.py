@@ -1,36 +1,118 @@
+from contextlib import nullcontext as does_not_raise
+
 import pytest
 
-from tempo_embeddings.embeddings.weaviate_database import WeaviateDatabaseManager
+import weaviate
+from tempo_embeddings.embeddings.weaviate_database import (
+    WeaviateConfigDb,
+    WeaviateDatabaseManager,
+)
 
 
 @pytest.fixture
-def mock_weaviate_database_manager(mocker, tmp_path):
-    mock_client = mocker.Mock()
+def weaviate_client(tmp_path):
+    client = weaviate.connect_to_embedded(persistence_data_path=tmp_path)
+    yield client
+    client.close()
 
-    yield WeaviateDatabaseManager(
-        db_path=tmp_path / "weaviate",
-        embedder_config={"type": "default", "model": mocker.Mock()},
-        client=mock_client,
+
+@pytest.fixture
+def weaviate_db_manager(mock_transformer_wrapper, weaviate_client):
+    return WeaviateDatabaseManager(
+        model=mock_transformer_wrapper, client=weaviate_client
     )
 
 
+@pytest.fixture
+def weaviate_db_manager_with_data(weaviate_db_manager, corpus):
+    weaviate_db_manager.ingest(corpus)
+    return weaviate_db_manager
+
+
 class TestWeaviateDatabase:
-    def test_connect(self, mock_weaviate_database_manager):
-        assert mock_weaviate_database_manager.connect()
-        mock_weaviate_database_manager.client.is_ready.assert_called()
+    def test_ingest(self, weaviate_db_manager, corpus):
+        weaviate_db_manager.ingest(corpus)
 
-    def test_get_collection_count(self, mock_weaviate_database_manager):
-        collection_name = "test"
-        mock_weaviate_database_manager.get_collection_count(collection_name)
+        weaviate_client = weaviate_db_manager.client
 
-        mock_weaviate_database_manager.client.collections.get.assert_called_once_with(
-            collection_name
-        )
+        expected_collections = ["TestCorpus", "tempo_embeddings"]
+        for collection in expected_collections:
+            assert weaviate_client.collections.exists(
+                collection
+            ), f"Collection '{collection}' has not been created."
 
-    def test_delete_collection(self, mock_weaviate_database_manager):
-        collection_name = "test"
-        mock_weaviate_database_manager.delete_collection(collection_name)
+            assert (
+                weaviate_client.collections.get(collection)
+                .aggregate.over_all(total_count=True)
+                .total_count
+                == 1
+            )
 
-        mock_weaviate_database_manager.client.collections.delete.assert_called_once_with(
-            collection_name
-        )
+        weaviate_db_manager.model.embed_corpus.assert_called_once()
+
+    def test_get_collection_count(self, weaviate_db_manager_with_data):
+        assert weaviate_db_manager_with_data.get_collection_count("TestCorpus") == 1
+
+    def test_delete_collection(self, weaviate_db_manager_with_data):
+        weaviate_db_manager_with_data.delete_collection("TestCorpus")
+
+        weaviate_client = weaviate_db_manager_with_data.client
+        assert not weaviate_client.collections.exists("TestCorpus")
+
+        assert "TestCorpus" not in weaviate_db_manager_with_data._config
+
+    @pytest.mark.parametrize(
+        "corpus_name, expected, exception",
+        [
+            ("TestCorpus", ["test_file"], does_not_raise()),
+            ("NonExistentCorpus", [], pytest.raises(ValueError)),
+        ],
+    )
+    def test_filenames(
+        self, weaviate_db_manager_with_data, corpus_name, expected, exception
+    ):
+        with exception:
+            assert (
+                list(weaviate_db_manager_with_data.filenames(corpus_name)) == expected
+            )
+
+
+class TestWeaviateConfigDb:
+    @pytest.mark.parametrize("create", [True, False])
+    def test_init(self, weaviate_client, create):
+        config = WeaviateConfigDb(weaviate_client, create=create)
+        assert config._exists() == create
+
+        with pytest.raises(ValueError) if create else does_not_raise():
+            config._create()
+        assert config._exists()
+
+    def test_contains(self, weaviate_client):
+        config = WeaviateConfigDb(weaviate_client)
+        corpus_name = "TestCorpus"
+        assert corpus_name not in config
+
+        config.add_corpus(corpus_name, "test_model")
+
+        assert corpus_name in config
+
+    def test_add_get_corpora(self, weaviate_client):
+        config = WeaviateConfigDb(weaviate_client)
+
+        corpus_name = "TestCorpus"
+        assert list(config.get_corpora()) == []
+
+        config.add_corpus(corpus_name, "test_model")
+
+        assert list(config.get_corpora()) == [corpus_name]
+
+    def test_delete_corpus(self, weaviate_client):
+        config = WeaviateConfigDb(weaviate_client)
+
+        corpus_name = "TestCorpus"
+
+        config.add_corpus(corpus_name, "test_model")
+        assert corpus_name in config
+
+        config.delete_corpus(corpus_name)
+        assert corpus_name not in config

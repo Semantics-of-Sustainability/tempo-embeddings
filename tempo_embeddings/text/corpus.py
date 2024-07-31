@@ -29,6 +29,14 @@ class Corpus(AbstractCorpus):
 
         return Corpus(self._passages + other._passages, new_label)
 
+    def __len__(self) -> int:
+        """Return the number of passages in the corpus.
+
+        Returns:
+            int: The number of passages in the corpus.
+        """
+        return len(self._passages)
+
     def __repr__(self) -> str:
         return f"Corpus({self._label!r}, {self._passages[:10]!r})"
 
