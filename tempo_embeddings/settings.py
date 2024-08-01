@@ -44,4 +44,4 @@ DEFAULT_LANGUAGE_MODEL: str = (
     "NetherlandsForensicInstitute/robbert-2022-dutch-sentence-transformers"
 )
 
-WEAVIATE_CONFIG_COLLECTION: str = "tempo_embeddings"
+WEAVIATE_CONFIG_COLLECTION: str = "TempoEmbeddings"
