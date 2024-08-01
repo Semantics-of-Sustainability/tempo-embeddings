@@ -12,12 +12,13 @@ from tempo_embeddings.embeddings.weaviate_database import (
 
 @pytest.fixture
 def weaviate_client(tmp_path):
-    if platform.system() in ["Windows"]:
-        pytest.skip("Weaviate Embedded not supported on Windows")
-    else:
-        client = weaviate.connect_to_embedded(persistence_data_path=tmp_path)
-        yield client
-        client.close()
+    pytest.skipif(
+        platform.system() == "Windows", "Weaviate Embedded not supported on Windows"
+    )
+
+    client = weaviate.connect_to_embedded(persistence_data_path=tmp_path)
+    yield client
+    client.close()
 
 
 @pytest.fixture
