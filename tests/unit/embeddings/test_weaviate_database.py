@@ -43,7 +43,7 @@ class TestWeaviateDatabase:
 
         weaviate_client = weaviate_db_manager.client
 
-        expected_collections = ["TestCorpus", "tempo_embeddings"]
+        expected_collections = ["TestCorpus", "TempoEmbeddings"]
         for collection in expected_collections:
             assert weaviate_client.collections.exists(
                 collection
