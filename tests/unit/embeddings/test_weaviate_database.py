@@ -8,6 +8,7 @@ from tempo_embeddings.embeddings.weaviate_database import (
     WeaviateConfigDb,
     WeaviateDatabaseManager,
 )
+from weaviate.exceptions import WeaviateStartUpError
 
 
 @pytest.fixture
@@ -31,7 +32,9 @@ def weaviate_db_manager_with_data(weaviate_db_manager, corpus):
 
 
 @pytest.mark.xfail(
-    platform.system() == "Windows", reason="Weaviate Embedded not supported on Windows"
+    platform.system() == "Windows",
+    raises=WeaviateStartUpError,
+    reason="Weaviate Embedded not supported on Windows",
 )
 class TestWeaviateDatabase:
     def test_ingest(self, weaviate_db_manager, corpus):
@@ -82,7 +85,9 @@ class TestWeaviateDatabase:
 
 
 @pytest.mark.xfail(
-    platform.system() == "Windows", reason="Weaviate Embedded not supported on Windows"
+    platform.system() == "Windows",
+    raises=WeaviateStartUpError,
+    reason="Weaviate Embedded not supported on Windows",
 )
 class TestWeaviateConfigDb:
     @pytest.mark.parametrize("create", [True, False])
