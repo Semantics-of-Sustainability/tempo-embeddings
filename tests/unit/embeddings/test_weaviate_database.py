@@ -12,10 +12,6 @@ from tempo_embeddings.embeddings.weaviate_database import (
 
 @pytest.fixture
 def weaviate_client(tmp_path):
-    pytest.mark.skipif(
-        platform.system() == "Windows", "Weaviate Embedded not supported on Windows"
-    )
-
     client = weaviate.connect_to_embedded(persistence_data_path=tmp_path)
     yield client
     client.close()
@@ -34,6 +30,9 @@ def weaviate_db_manager_with_data(weaviate_db_manager, corpus):
     return weaviate_db_manager
 
 
+@pytest.mark.xfail(
+    platform.system() == "Windows", reason="Weaviate Embedded not supported on Windows"
+)
 class TestWeaviateDatabase:
     def test_ingest(self, weaviate_db_manager, corpus):
         weaviate_db_manager.ingest(corpus)
@@ -82,6 +81,9 @@ class TestWeaviateDatabase:
             )
 
 
+@pytest.mark.xfail(
+    platform.system() == "Windows", reason="Weaviate Embedded not supported on Windows"
+)
 class TestWeaviateConfigDb:
     @pytest.mark.parametrize("create", [True, False])
     def test_init(self, weaviate_client, create):
