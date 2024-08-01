@@ -366,4 +366,12 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                     "Corpus '%s' is registered in the configuration database but no collection of that name exists in the database.",
                     corpus,
                 )
-        # TODO: get all collections and check if they are in the config
+        for collection in self.client.collections.list_all():
+            if (
+                collection != self._config._collection_name
+                and collection not in self._config
+            ):
+                logging.warning(
+                    "Collection '%s' exists in the database but is not registered in the configuration database.",
+                    collection,
+                )
