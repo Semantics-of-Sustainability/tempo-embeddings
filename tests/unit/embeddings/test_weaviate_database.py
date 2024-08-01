@@ -1,3 +1,4 @@
+import logging
 import platform
 from contextlib import nullcontext as does_not_raise
 
@@ -82,6 +83,26 @@ class TestWeaviateDatabase:
             assert (
                 list(weaviate_db_manager_with_data.filenames(corpus_name)) == expected
             )
+
+    def test_validate_config_missing_collection(self, weaviate_db_manager, corpus):
+        weaviate_db_manager.validate_config()  # Empty collection
+
+        weaviate_db_manager.ingest(corpus)
+        weaviate_db_manager.validate_config()  # Collection with data
+
+        weaviate_db_manager.client.collections.delete("TestCorpus")
+        with pytest.raises(ValueError):
+            weaviate_db_manager.validate_config()
+
+    def test_validate_config_missing_config_entry(self, weaviate_db_manager, caplog):
+        expected_error = "Collection 'TestCorpus' exists in the database but is not registered in the configuration database."
+
+        weaviate_db_manager.validate_config()  # Empty collection
+        weaviate_db_manager.client.collections.create("TestCorpus")
+
+        with caplog.at_level(logging.WARNING):
+            weaviate_db_manager.validate_config()
+        assert caplog.record_tuples == [("root", logging.WARNING, expected_error)]
 
 
 @pytest.mark.xfail(

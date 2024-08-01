@@ -353,3 +353,17 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                     item_id = uuid.UUID(item.pop("uuid"))
                     item_vector = item.pop("vector")
                     batch.add_object(properties=item, vector=item_vector, uuid=item_id)
+
+    def validate_config(self) -> None:
+        """Validate that the configuration database entries are present as database collections.
+
+        Raises:
+            ValueError: If a corpus is registered in the configuration database but the collection does not exist in the database
+        """
+        for corpus in self._config.get_corpora():
+            if not self._client.collections.exists(corpus):
+                raise ValueError(
+                    "Corpus '%s' is registered in the configuration database but no collection of that name exists in the database.",
+                    corpus,
+                )
+        # TODO: get all collections and check if they are in the config
