@@ -12,7 +12,7 @@ from tempo_embeddings.embeddings.weaviate_database import (
 
 @pytest.fixture
 def weaviate_client(tmp_path):
-    pytest.skipif(
+    pytest.mark.skipif(
         platform.system() == "Windows", "Weaviate Embedded not supported on Windows"
     )
 
