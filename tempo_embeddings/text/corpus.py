@@ -1,6 +1,7 @@
 import csv
 import gzip
 import logging
+from os.path import basename
 from pathlib import Path
 from typing import Any, Iterable, Optional, TextIO
 
@@ -188,7 +189,7 @@ class Corpus(AbstractCorpus):
         passages = []
         for row in reader:
             # generate separate passage for each text column, sharing the same metadata
-            metadata = {"provenance": file_handler.name} | {
+            metadata = {"provenance": basename(file_handler.name)} | {
                 column: row[column]
                 for column in reader.fieldnames
                 # skip blank column names and text columns:
