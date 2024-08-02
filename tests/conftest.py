@@ -21,5 +21,5 @@ def mock_transformer_wrapper(mocker):
 @pytest.fixture
 def corpus():
     return Corpus(
-        [Passage("test", metadata={"filename": "test_file"})], label="TestCorpus"
+        [Passage("test", metadata={"provenance": "test_file"})], label="TestCorpus"
     )

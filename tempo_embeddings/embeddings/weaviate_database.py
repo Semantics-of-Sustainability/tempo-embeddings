@@ -133,8 +133,8 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
     def get_available_collections(self) -> Iterable[str]:
         return self._config.get_corpora()
 
-    def filenames(
-        self, collection: str, *, metadata_field: str = "filename"
+    def provenances(
+        self, collection: str, *, metadata_field: str = "provenance"
     ) -> Iterable[str]:
         """Return the filenames in the collection."""
         if collection in self._config:

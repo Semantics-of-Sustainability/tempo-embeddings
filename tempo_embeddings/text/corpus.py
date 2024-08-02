@@ -188,7 +188,7 @@ class Corpus(AbstractCorpus):
         passages = []
         for row in reader:
             # generate separate passage for each text column, sharing the same metadata
-            metadata = {
+            metadata = {"provenance": file_handler.name} | {
                 column: row[column]
                 for column in reader.fieldnames
                 # skip blank column names and text columns:

@@ -1,6 +1,5 @@
 import logging
 import platform
-from contextlib import nullcontext as does_not_raise
 
 import pytest
 
@@ -89,19 +88,29 @@ class TestWeaviateDatabase:
         assert "TestCorpus" not in weaviate_db_manager_with_data._config
 
     @pytest.mark.parametrize(
-        "corpus_name, expected, exception",
+        "corpus_name, expected, expected_warning",
         [
-            ("TestCorpus", ["test_file"], does_not_raise()),
-            ("NonExistentCorpus", [], pytest.raises(ValueError)),
+            ("TestCorpus", {"test_file"}, []),
+            (
+                "NonExistentCorpus",
+                set(),
+                ["root", logging.WARNING, "No such collection."],
+            ),
         ],
     )
-    def test_filenames(
-        self, weaviate_db_manager_with_data, corpus_name, expected, exception
+    def test_provenances(
+        self,
+        weaviate_db_manager_with_data,
+        caplog,
+        corpus_name,
+        expected,
+        expected_warning,
     ):
-        with exception:
+        with caplog.at_level(logging.WARNING):
             assert (
-                list(weaviate_db_manager_with_data.filenames(corpus_name)) == expected
+                set(weaviate_db_manager_with_data.provenances(corpus_name)) == expected
             )
+            caplog.record_tuples == expected_warning
 
     def test_validate_config_missing_collection(self, weaviate_db_manager, corpus):
         weaviate_db_manager.validate_config()  # Empty collection
