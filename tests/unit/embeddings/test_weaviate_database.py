@@ -130,12 +130,15 @@ class TestWeaviateDatabase:
     reason="Weaviate Embedded not supported on Windows",
 )
 class TestWeaviateConfigDb:
-    @pytest.mark.parametrize("create", [True, False])
-    def test_init(self, weaviate_client, create):
-        config = WeaviateConfigDb(weaviate_client, create=create)
-        assert config._exists() == create
+    def test_init(self, weaviate_client):
+        config = WeaviateConfigDb(weaviate_client)
+        assert weaviate_client.collections.exists("TempoEmbeddings")
+        assert config._exists()
 
-        with pytest.raises(ValueError) if create else does_not_raise():
+        collection = weaviate_client.collections.get("TempoEmbeddings")
+        assert collection.config.get(simple=True).vectorizer_config is None
+
+        with pytest.raises(ValueError):
             config._create()
         assert config._exists()
 
@@ -147,6 +150,13 @@ class TestWeaviateConfigDb:
         config.add_corpus(corpus_name, "test_model")
 
         assert corpus_name in config
+
+    def test_delete(self, weaviate_client):
+        config = WeaviateConfigDb(weaviate_client)
+        assert config._exists()
+
+        config._delete()
+        assert not config._exists()
 
     def test_add_get_corpora(self, weaviate_client):
         config = WeaviateConfigDb(weaviate_client)

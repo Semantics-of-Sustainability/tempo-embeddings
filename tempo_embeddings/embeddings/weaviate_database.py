@@ -34,25 +34,23 @@ class WeaviateConfigDb:
         client: weaviate.Client,
         *,
         collection_name: str = WEAVIATE_CONFIG_COLLECTION,
-        create: bool = True,
     ) -> None:
         self._client: weaviate.Client = client
         self._collection_name = collection_name
 
-        if create and not self._exists():
-            self._create()
+        self._collection = (
+            self._client.collections.get(self._collection_name)
+            if self._exists()
+            else self._create()
+        )
 
     def __contains__(self, corpus: str):
         return corpus in self.get_corpora()
 
-    @property
-    def _collection(self) -> weaviate.collections.Collection:
-        return self._client.collections.get(self._collection_name)
-
     def _exists(self):
         return self._client.collections.exists(self._collection_name)
 
-    def _create(self):
+    def _create(self) -> weaviate.collections.Collection:
         if self._exists():
             raise ValueError(f"Collection '{self._collection_name}' already exists.")
         return self._client.collections.create(
@@ -62,7 +60,7 @@ class WeaviateConfigDb:
 
     def _delete(self) -> None:
         if self._exists():
-            return self._collection.delete(self._collection_name)
+            return self._client.collections.delete(self._collection_name)
         else:
             raise ValueError(f"Collection '{self._collection_name}' does not exist.")
 
@@ -70,6 +68,7 @@ class WeaviateConfigDb:
         return self._collection.data.insert(
             properties={WeaviateConfigDb._CORPUS_NAME_FIELD: corpus, "model": embedder},
             uuid=generate_uuid5(corpus),
+            vector={},
         )
 
     def delete_corpus(self, corpus: str) -> bool:
@@ -153,6 +152,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         # TODO: handle existing collection, updating, continuing
         if len(corpus) > 0:
             if not self._client.collections.exists(name):
+                self._config.add_corpus(corpus=name, embedder=self.model.name)
                 # TODO: allow for embedded vectorizers
                 self._client.collections.create(
                     name, vectorizer_config=wvc.config.Configure.Vectorizer.none()
@@ -163,10 +163,9 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                 self._insert_using_custom_model(corpus, collection)
             except Exception as e:
                 logger.error("Error while ingesting corpus '%s': %s", name, e)
-            finally:
-                if self._client.collections.exists(name):
-                    logger.info(f"Adding collection '{name}' to config database")
-                    self._config.add_corpus(corpus=name, embedder=self.model.name)
+                if not self._client.collections.exists(name):
+                    logger.info(f"Removing collection '{name}' to config database")
+                    self._config.delete_corpus(name)
         else:
             logger.warning("No passages to ingest into collection '%s'", name)
 
