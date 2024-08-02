@@ -162,13 +162,13 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             try:
                 self._insert_using_custom_model(corpus, collection)
             except Exception as e:
-                logging.error("Error while ingesting corpus '%s': %s", name, e)
+                logger.error("Error while ingesting corpus '%s': %s", name, e)
             finally:
                 if self._client.collections.exists(name):
                     logger.info(f"Adding collection '{name}' to config database")
-                self._config.add_corpus(corpus=name, embedder=self.model.name)
+                    self._config.add_corpus(corpus=name, embedder=self.model.name)
         else:
-            logging.warning("No passages to ingest into collection '%s'", name)
+            logger.warning("No passages to ingest into collection '%s'", name)
 
     def delete_collection(self, name):
         self._client.collections.delete(name)
@@ -344,7 +344,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         filename_tgt = filepath or f"{collection_name}.json.gz"
         collection_src = self._client.collections.get(collection_name)
         with gzip.open(filename_tgt, "wt", encoding="utf-8") as fileout:
-            logging.info("Writing into '%s' file...", filename_tgt)
+            logger.info("Writing into '%s' file...", filename_tgt)
             for q in tqdm(collection_src.iterator(include_vector=True)):
                 row_dict = q.properties
                 row_dict["vector"] = q.vector["default"]
@@ -354,7 +354,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
     def import_into_collection(self, filename_src: str, collection_name: str):
         collection_tgt = self._client.collections.get(collection_name)
         with gzip.open(filename_src, "rt", encoding="utf-8") as f:
-            logging.info("Importing into Weaviate '%s' collection...", filename_src)
+            logger.info("Importing into Weaviate '%s' collection...", filename_src)
             if collection_name not in self.config["existing_collections"]:
                 self.config["existing_collections"].append(collection_name)
                 self._save_config()
@@ -382,7 +382,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                 collection != self._config._collection_name
                 and collection not in self._config
             ):
-                logging.warning(
+                logger.warning(
                     "Collection '%s' exists in the database but is not registered in the configuration database.",
                     collection,
                 )
