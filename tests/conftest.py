@@ -7,8 +7,11 @@ from tempo_embeddings.text.passage import Passage
 
 @pytest.fixture
 def mock_transformer_wrapper(mocker):
+    def array_generator(shape=(1, 768)):
+        yield np.random.rand(*shape)
+
     mock_model = mocker.Mock()
-    mock_model.embed_corpus.return_value = np.random.rand(1, 768)
+    mock_model.embed_corpus.return_value = array_generator()
     mock_model.batch_size = 1
     mock_model.name = "mock_model"
 

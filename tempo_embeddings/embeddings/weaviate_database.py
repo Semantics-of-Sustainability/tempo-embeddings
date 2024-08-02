@@ -55,7 +55,10 @@ class WeaviateConfigDb:
     def _create(self):
         if self._exists():
             raise ValueError(f"Collection '{self._collection_name}' already exists.")
-        return self._client.collections.create(self._collection_name)
+        return self._client.collections.create(
+            self._collection_name,
+            vectorizer_config=wvc.config.Configure.Vectorizer.none(),
+        )
 
     def _delete(self) -> None:
         if self._exists():
@@ -144,20 +147,24 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         else:
             raise ValueError(f"Collection '{collection}' not found.")
 
-    def ingest(
-        self,
-        corpus: Corpus,
-        name: Optional[str] = None,
-    ):
+    def ingest(self, corpus: Corpus, name: Optional[str] = None):
         name = name or corpus.label
 
         # TODO: handle existing collection, updating, continuing
         if len(corpus) > 0:
-            collection = self._client.collections.create(name=name)
+            if not self._client.collections.exists(name):
+                # TODO: allow for embedded vectorizers
+                self._client.collections.create(
+                    name, vectorizer_config=wvc.config.Configure.Vectorizer.none()
+                )
+            collection = self._client.collections.get(name=name)
             # TODO: implement other model type
-            self._insert_using_custom_model(corpus, collection)
-
-            self._config.add_corpus(corpus=name, embedder=self.model.name)
+            try:
+                self._insert_using_custom_model(corpus, collection)
+            except Exception as e:
+                logging.error("Error while ingesting corpus '%s': %s", name, e)
+            finally:
+                self._config.add_corpus(corpus=name, embedder=self.model.name)
         else:
             logging.warning("No passages to ingest into collection '%s'", name)
 
@@ -202,6 +209,8 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                 data_object = wvc.data.DataObject(
                     properties=props, uuid=generate_uuid5(props), vector=emb
                 )
+                # TODO: allow for named vectors
+                # see https://weaviate.io/developers/weaviate/manage-data/create#create-an-object-with-named-vectors
                 data_objects.append(data_object)
             # Make the Insertion
             try:
@@ -249,7 +258,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         where_obj: dict[str, Any] = None,
         include_embeddings: bool = False,
         limit: int = 10000,
-    ):
+    ) -> Corpus:
         my_collection = self._client.collections.get(collection)
 
         db_filter_words = (

@@ -38,22 +38,41 @@ def weaviate_db_manager_with_data(weaviate_db_manager, corpus):
     reason="Weaviate Embedded not supported on Windows",
 )
 class TestWeaviateDatabase:
+    def assert_collection(
+        self,
+        collection: weaviate.collections.Collection,
+        expected_name: str,
+        expected_count: int,
+        expected_vector_shapes: dict[str, int],
+    ):
+        """Assert the collection has the expected properties."""
+
+        assert collection.name == expected_name, "Unexpected collection name."
+
+        count = collection.aggregate.over_all(total_count=True).total_count
+        assert count == expected_count, f"Unexpected size for '{collection.name}'."
+
+        obj = next(collection.iterator(include_vector=True))
+
+        assert obj.vector.keys() == expected_vector_shapes.keys()
+        for vector_name, vector in obj.vector.items():
+            assert len(vector) == expected_vector_shapes[vector_name]
+
     def test_ingest(self, weaviate_db_manager, corpus):
+        expected_collections = [
+            {"name": "TempoEmbeddings", "count": 1, "vector_shape": {}},
+            {"name": "TestCorpus", "count": 1, "vector_shape": {"default": 768}},
+        ]
+
         weaviate_db_manager.ingest(corpus)
-
-        weaviate_client = weaviate_db_manager.client
-
-        expected_collections = ["TestCorpus", "TempoEmbeddings"]
-        for collection in expected_collections:
-            assert weaviate_client.collections.exists(
-                collection
-            ), f"Collection '{collection}' has not been created."
-
-            assert (
-                weaviate_client.collections.get(collection)
-                .aggregate.over_all(total_count=True)
-                .total_count
-                == 1
+        for collection, expected in zip(
+            weaviate_db_manager.client.collections.list_all(),
+            expected_collections,
+            strict=True,
+        ):
+            self.assert_collection(
+                weaviate_db_manager.client.collections.get(collection),
+                *expected.values(),
             )
 
         weaviate_db_manager.model.embed_corpus.assert_called_once()
