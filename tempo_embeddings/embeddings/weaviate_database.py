@@ -123,6 +123,9 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         except:  # noqa: E722
             pass
 
+    def __contains__(self, corpus: str):
+        return corpus in self._config
+
     @property
     def client(self):
         return self._client
@@ -144,7 +147,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             ):
                 yield group.grouped_by.value
         else:
-            raise ValueError(f"Collection '{collection}' not found.")
+            logger.warning(f"Collection '{collection}' not found.")
 
     def ingest(self, corpus: Corpus, name: Optional[str] = None):
         name = name or corpus.label
