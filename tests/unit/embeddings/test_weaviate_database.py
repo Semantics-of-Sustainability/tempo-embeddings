@@ -130,7 +130,13 @@ class TestWeaviateDatabase:
 
         with caplog.at_level(logging.WARNING):
             weaviate_db_manager.validate_config()
-        assert caplog.record_tuples == [("root", logging.WARNING, expected_error)]
+        assert caplog.record_tuples == [
+            (
+                "tempo_embeddings.embeddings.weaviate_database",
+                logging.WARNING,
+                expected_error,
+            )
+        ]
 
 
 @pytest.mark.xfail(
