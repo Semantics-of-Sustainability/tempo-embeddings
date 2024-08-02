@@ -164,6 +164,8 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             except Exception as e:
                 logging.error("Error while ingesting corpus '%s': %s", name, e)
             finally:
+                if self._client.collections.exists(name):
+                    logger.info(f"Adding collection '{name}' to config database")
                 self._config.add_corpus(corpus=name, embedder=self.model.name)
         else:
             logging.warning("No passages to ingest into collection '%s'", name)
