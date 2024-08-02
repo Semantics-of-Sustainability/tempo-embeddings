@@ -98,7 +98,7 @@ if __name__ == "__main__":
         for corpus_name in tqdm(
             list(corpus_reader.corpora(must_exist=True)), desc="Reading", unit="corpus"
         ):
-            ingested_files = set(db.filenames(corpus_name))
+            ingested_files = set(db.provenances(corpus_name))
             logging.info(f"Skipping {len(ingested_files)} files for '{corpus_name}'.")
 
             corpus: Corpus = corpus_reader[corpus_name].build_corpus(
