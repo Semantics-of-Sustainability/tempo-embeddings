@@ -64,8 +64,8 @@ def arguments_parser():
         "--weaviate-port",
         "--port",
         type=int,
-        default=8080,
-        help="Weaviate server port",
+        default=8087,
+        help="Weaviate server port, defaults to 8087 to match the setting in docker-compose.yml",
     )
     # TODO: add options for logging (level, output file)
 
