@@ -1,5 +1,4 @@
 import json
-from itertools import islice
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
@@ -26,20 +25,33 @@ class CorpusConfig:
     def files(self):
         return self.directory.glob(self.glob_pattern)
 
-    def build_corpus(self, filter_terms, *, max_files: int = None, **kwargs) -> Corpus:
+    def build_corpus(
+        self,
+        filter_terms,
+        *,
+        skip_files: Optional[set[str]] = None,
+        max_files: Optional[int] = None,
+        **kwargs,
+    ) -> Corpus:
         """Build a corpus from the configuration.
 
         Args:
             filter_terms: a list of terms to filter out.
+            skip_files: a set of file names to skip. Defaults to None.
             max_files: the maximum number of files to process.
             **kwargs: additional parameters to pass to the Corpus constructor: window_size, nlp_pipeline.
 
         Returns:
             Corpus: a corpus object.
         """
+        skip_files: set[str] = skip_files or set()
+        files: Iterable[Path] = [
+            file for file in self.files() if file.name not in skip_files
+        ][:max_files]
+
         if self.loader_type == "csv":
             corpus = Corpus.from_csv_files(
-                list(islice(self.files(), max_files)),
+                files=files,
                 desc=self.directory.name,
                 filter_terms=filter_terms,
                 text_columns=self.text_columns,

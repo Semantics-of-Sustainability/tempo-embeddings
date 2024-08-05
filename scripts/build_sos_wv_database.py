@@ -1,9 +1,11 @@
 import argparse
 import csv
+import logging
 from pathlib import Path
 
 from tqdm import tqdm
 
+import weaviate
 from tempo_embeddings import settings
 from tempo_embeddings.embeddings.model import SentenceTransformerModelWrapper
 from tempo_embeddings.embeddings.weaviate_database import WeaviateDatabaseManager
@@ -49,6 +51,22 @@ def arguments_parser():
         metavar="FILE",
         help="File with filter terms, one per line",
     )
+
+    weaviate_args = parser.add_argument_group("Weaviate arguments")
+    weaviate_args.add_argument(
+        "--weaviate-host",
+        "--host",
+        type=str,
+        default="localhost",
+        help="Weaviate server host",
+    )
+    weaviate_args.add_argument(
+        "--weaviate-port",
+        "--port",
+        type=int,
+        default=8087,
+        help="Weaviate server port, defaults to 8087 to match the setting in docker-compose.yml",
+    )
     # TODO: add options for logging (level, output file)
 
     return parser
@@ -68,29 +86,21 @@ if __name__ == "__main__":
         line.strip() for line in args.filter_terms_file
     ]
 
-    # TODO: requires a different wrapper class for non-SentenceBert models
-    model = SentenceTransformerModelWrapper.from_pretrained(
-        args.language_model, layer=9, accelerate=True
-    )
-
-    db = WeaviateDatabaseManager(
-        settings.ROOT_DIR / args.db_name,
-        embedder_name=args.language_model,
-        embedder_config={"type": "default", "model": model},
-        batch_size=args.batch_size,
-    )
-
-    for corpus_name in tqdm(
-        list(corpus_reader.corpora(must_exist=True)), desc="Reading", unit="corpus"
-    ):
-        collection_name = f"corpus_{corpus_name}"
-        corpus_config = corpus_reader[corpus_name]
-
-        corpus: Corpus = corpus_config.build_corpus(
-            args.filter_terms, max_files=args.max_files
+    with weaviate.connect_to_local(args.weaviate_host, args.weaviate_port) as client:
+        # TODO: model requires a different wrapper class for non-SentenceBert models
+        db = WeaviateDatabaseManager(
+            client=client,
+            model=SentenceTransformerModelWrapper.from_pretrained(args.language_model),
+            batch_size=args.batch_size,
         )
-        if len(corpus) > 0:
-            if collection_name not in db.config["existing_collections"]:
-                db.create_collection(collection_name, corpus)
-            else:
-                db.insert_corpus(collection_name, corpus)
+        for corpus_name in tqdm(
+            list(corpus_reader.corpora(must_exist=True)), desc="Reading", unit="corpus"
+        ):
+            ingested_files = set(db.provenances(corpus_name))
+            logging.info(f"Skipping {len(ingested_files)} files for '{corpus_name}'.")
+
+            corpus: Corpus = corpus_reader[corpus_name].build_corpus(
+                args.filter_terms, skip_files=ingested_files, max_files=args.max_files
+            )
+
+            db.ingest(corpus, corpus_name)

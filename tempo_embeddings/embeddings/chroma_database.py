@@ -125,7 +125,7 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
         self._save_config()
         # If the collection is new then insert the corresponding passages already
         if corpus:
-            self.insert_corpus(collection, corpus)
+            self.ingest(collection, corpus)
         logger.info(f"Created NEW collection '{name}'")
         return collection
 
@@ -162,7 +162,7 @@ class ChromaDatabaseManager(VectorDatabaseManagerWrapper):
                 insert_embeds.append(embeddings[k])
         return docs, metas, ids, insert_embeds
 
-    def insert_corpus(self, collection: Collection, corpus: Corpus):
+    def ingest(self, collection: Collection, corpus: Corpus):
         if len(corpus.passages) == 0:
             raise ValueError("There should be at least one passage to insert.")
 

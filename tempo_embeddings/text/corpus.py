@@ -1,6 +1,7 @@
 import csv
 import gzip
 import logging
+from os.path import basename
 from pathlib import Path
 from typing import Any, Iterable, Optional, TextIO
 
@@ -28,6 +29,14 @@ class Corpus(AbstractCorpus):
             )
 
         return Corpus(self._passages + other._passages, new_label)
+
+    def __len__(self) -> int:
+        """Return the number of passages in the corpus.
+
+        Returns:
+            int: The number of passages in the corpus.
+        """
+        return len(self._passages)
 
     def __repr__(self) -> str:
         return f"Corpus({self._label!r}, {self._passages[:10]!r})"
@@ -180,7 +189,7 @@ class Corpus(AbstractCorpus):
         passages = []
         for row in reader:
             # generate separate passage for each text column, sharing the same metadata
-            metadata = {
+            metadata = {"provenance": basename(file_handler.name)} | {
                 column: row[column]
                 for column in reader.fieldnames
                 # skip blank column names and text columns:

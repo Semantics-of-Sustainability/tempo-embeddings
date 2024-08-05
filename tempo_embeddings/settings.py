@@ -43,3 +43,5 @@ except StopIteration:
 DEFAULT_LANGUAGE_MODEL: str = (
     "NetherlandsForensicInstitute/robbert-2022-dutch-sentence-transformers"
 )
+
+WEAVIATE_CONFIG_COLLECTION: str = "TempoEmbeddings"

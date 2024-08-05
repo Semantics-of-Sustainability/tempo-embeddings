@@ -29,11 +29,7 @@ class VectorDatabaseManagerWrapper(ABC):
         self._batch_size = batch_size
 
     @abstractmethod
-    def connect(self):
-        return NotImplemented
-
-    @abstractmethod
-    def insert_corpus(self, collection: Union[Collection, str], corpus: Corpus):
+    def ingest(self, collection: Union[Collection, str], corpus: Corpus):
         return NotImplemented
 
     @abstractmethod
