@@ -57,7 +57,7 @@ class TestWeaviateDatabase:
         for vector_name, vector in obj.vector.items():
             assert len(vector) == expected_vector_shapes[vector_name]
 
-    @pytest.skipif(
+    @pytest.mark.skipif(
         int(platform.python_version_tuple()[1]) < 10,
         reason="Python 3.10+ required for this test.",
     )
