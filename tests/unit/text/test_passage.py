@@ -5,9 +5,28 @@ from tempo_embeddings.text.highlighting import Highlighting
 from tempo_embeddings.text.passage import Passage
 
 
+@pytest.fixture
+def passage():
+    return Passage("this is a test passage")
+
+
 class TestPassage:
     # TODO: mock this
     model = RobertaModelWrapper.from_pretrained("roberta-base", accelerate=False)
+
+    @pytest.mark.parametrize(
+        "term, expected",
+        [("test", True), ("test passage", True), ("TEST", True), ("not", False)],
+    )
+    def test_contains(self, passage, term, expected):
+        assert passage.contains(term) == expected
+
+    @pytest.mark.parametrize(
+        "terms, expected",
+        [(None, True), (["test"], True), (["test", "not"], True), (["not"], False)],
+    )
+    def test_contains_any(self, passage, terms, expected):
+        assert passage.contains_any(terms) == expected
 
     @pytest.mark.parametrize(
         "passage, metadata_fields, max_context_length, expected",
