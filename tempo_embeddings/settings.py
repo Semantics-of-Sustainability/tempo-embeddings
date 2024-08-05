@@ -22,8 +22,9 @@ _CORPUS_DIRS: list[Path] = [
     Path.home() / "Documents" / "SemanticsOfSustainability" / "data" / "Joris",
     Path.home() / "SEED_DATA" / "SemanticsSustainability",
     # Research Cloud:
-    Path("/data/volume_2/data"),
-    Path("/data/storage-semantics-of-sustainability/data/"),
+    Path(
+        "/data/datasets/research-semantics-of-sustainability/semantics-of-sustainability/data/"
+    ),
     # Snellius:
     Path("/home/cschnober/data/"),
     # Yoda drive mounted on MacOS:
@@ -36,6 +37,7 @@ _CORPUS_DIRS: list[Path] = [
 try:
     CORPUS_DIR: Path = next(dir for dir in _CORPUS_DIRS if dir.is_dir())
     """The base directory in which corpora are stored."""
+    print(f"Using corpus directory: '{CORPUS_DIR}'")
 except StopIteration:
     logging.error(f"No corpus directory found in {_CORPUS_DIRS}")
     CORPUS_DIR = None
