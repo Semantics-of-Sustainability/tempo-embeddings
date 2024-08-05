@@ -1,6 +1,5 @@
 import pytest
 
-from tempo_embeddings.embeddings.model import RobertaModelWrapper
 from tempo_embeddings.text.highlighting import Highlighting
 from tempo_embeddings.text.passage import Passage
 
@@ -11,9 +10,6 @@ def passage():
 
 
 class TestPassage:
-    # TODO: mock this
-    model = RobertaModelWrapper.from_pretrained("roberta-base", accelerate=False)
-
     @pytest.mark.parametrize(
         "term, expected",
         [("test", True), ("test passage", True), ("TEST", True), ("not", False)],
