@@ -1,8 +1,12 @@
+from pathlib import Path
+
 import numpy as np
 import pytest
 
 from tempo_embeddings.text.corpus import Corpus
 from tempo_embeddings.text.passage import Passage
+
+CWD = Path(__file__).parent.absolute()
 
 
 @pytest.fixture
@@ -23,3 +27,6 @@ def corpus():
     return Corpus(
         [Passage("test", metadata={"provenance": "test_file"})], label="TestCorpus"
     )
+
+
+CORPUS_DIR: Path = CWD / "data"

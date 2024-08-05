@@ -5,13 +5,13 @@ from tempfile import gettempdir
 import pytest
 
 from tempo_embeddings.io.corpus_reader import CorpusConfig, CorpusReader
-from tempo_embeddings.settings import CORPUS_DIR
+
+from ...conftest import CORPUS_DIR
 
 
 class TestCorpusReader:
     _CONFIGURED_CORPORA = ["ANP_mini", "ANP", "Parool", "NRC", "StatenGeneraal_clean"]
 
-    @pytest.mark.skipif(CORPUS_DIR is None, reason="No corpus directory found")
     @pytest.mark.parametrize(
         "corpora, base_dir, must_exist, expected, expected_exception",
         [
@@ -19,7 +19,7 @@ class TestCorpusReader:
             (None, gettempdir(), True, [], does_not_raise()),
             (None, CORPUS_DIR, False, _CONFIGURED_CORPORA, does_not_raise()),
             # FIXME: this test depends on local data being present or not:
-            (None, CORPUS_DIR, True, ["ANP", "StatenGeneraal_clean"], does_not_raise()),
+            (None, CORPUS_DIR, True, ["ANP"], does_not_raise()),
             (["ANP"], CORPUS_DIR, True, ["ANP"], does_not_raise()),
             (["test corpus"], CORPUS_DIR, True, None, pytest.raises(ValueError)),
         ],
@@ -34,25 +34,49 @@ class TestCorpusReader:
 
 class TestCorpusConfig:
     @pytest.fixture
-    def corpus_config(self, tmp_path):
+    def tmp_corpus_config(self, tmp_path):
         return CorpusConfig(directory=tmp_path / "test_corpus")
 
-    def test_exists(self, corpus_config):
-        assert not corpus_config.exists()
+    @pytest.fixture
+    def anp_corpus_config(self):
+        return CorpusConfig(
+            directory=CORPUS_DIR / "ANP",
+            glob_pattern="ANP_????.csv.gz",
+            loader_type="csv",
+            text_columns=["content"],
+            encoding="iso8859_1",
+            compression="gzip",
+            delimiter=";",
+        )
 
-        corpus_config.directory.mkdir()
-        assert corpus_config.exists()
+    def test_exists(self, tmp_corpus_config):
+        assert not tmp_corpus_config.exists()
 
-    def test_files(self, corpus_config):
-        assert sorted(corpus_config.files()) == []
+        tmp_corpus_config.directory.mkdir()
+        assert tmp_corpus_config.exists()
 
-        corpus_config.directory.mkdir()
-        (corpus_config.directory / "file1.txt").touch()
-        (corpus_config.directory / "file2.csv").touch()
-        (corpus_config.directory / "file2_1984.csv").touch()
+    def test_files_tmp(self, tmp_corpus_config):
+        assert sorted(tmp_corpus_config.files()) == []
 
-        assert sorted(corpus_config.files()) == [
-            corpus_config.directory / "file2_1984.csv"
+        tmp_corpus_config.directory.mkdir()
+        (tmp_corpus_config.directory / "file1.txt").touch()
+        (tmp_corpus_config.directory / "file2.csv").touch()
+        (tmp_corpus_config.directory / "file2_1984.csv").touch()
+
+        assert sorted(tmp_corpus_config.files()) == [
+            tmp_corpus_config.directory / "file2_1984.csv"
         ]
 
-    # TODO: test CorpusConfig.build_corpus()
+    def test_files(self, anp_corpus_config):
+        assert sorted(anp_corpus_config.files()) == [
+            CORPUS_DIR / "ANP" / "ANP_1937.csv.gz"
+        ]
+
+    @pytest.mark.parametrize(
+        "skip_files,expected_size", [(None, 4893), (["ANP_1937.csv.gz"], 0)]
+    )
+    def test_build_corpus(self, anp_corpus_config, skip_files, expected_size):
+        assert (
+            len(anp_corpus_config.build_corpus(filter_terms=[], skip_files=skip_files))
+            == expected_size
+        )

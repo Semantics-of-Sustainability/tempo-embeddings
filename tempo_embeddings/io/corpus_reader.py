@@ -1,5 +1,4 @@
 import json
-from itertools import islice
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
@@ -46,13 +45,13 @@ class CorpusConfig:
             Corpus: a corpus object.
         """
         skip_files: set[str] = skip_files or set()
-        files: Iterable[Path] = islice(
-            (file for file in self.files() if file.name not in skip_files), max_files
-        )
+        files: Iterable[Path] = [
+            file for file in self.files() if file.name not in skip_files
+        ][:max_files]
 
         if self.loader_type == "csv":
             corpus = Corpus.from_csv_files(
-                files=list(files),
+                files=files,
                 desc=self.directory.name,
                 filter_terms=filter_terms,
                 text_columns=self.text_columns,
