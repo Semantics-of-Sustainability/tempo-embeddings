@@ -9,6 +9,7 @@ from tempo_embeddings.embeddings.weaviate_database import (
     WeaviateDatabaseManager,
 )
 from weaviate.exceptions import WeaviateStartUpError
+from weaviate.util import generate_uuid5
 
 
 @pytest.fixture
@@ -90,6 +91,21 @@ class TestWeaviateDatabase:
         assert not weaviate_client.collections.exists("TestCorpus")
 
         assert "TestCorpus" not in weaviate_db_manager_with_data._config
+
+    def test_reset(self, weaviate_db_manager_with_data):
+        client = weaviate_db_manager_with_data.client
+        assert list(client.collections.list_all()) == ["TempoEmbeddings", "TestCorpus"]
+        assert [
+            str(o.uuid) for o in client.collections.get("TempoEmbeddings").iterator()
+        ] == [generate_uuid5("TestCorpus")]
+
+        weaviate_db_manager_with_data.reset()
+
+        assert list(client.collections.list_all()) == ["TempoEmbeddings"]
+
+        assert list(client.collections.get("TempoEmbeddings").iterator()) == []
+
+        weaviate_db_manager_with_data.validate_config()
 
     @pytest.mark.parametrize(
         "corpus_name, expected, expected_warning",
