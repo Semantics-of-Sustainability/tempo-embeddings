@@ -93,8 +93,6 @@ if __name__ == "__main__":
             model=SentenceTransformerModelWrapper.from_pretrained(args.language_model),
             batch_size=args.batch_size,
         )
-        ingested_corpora = db.get_available_collections()
-
         for corpus_name in tqdm(
             list(corpus_reader.corpora(must_exist=True)), desc="Reading", unit="corpus"
         ):
