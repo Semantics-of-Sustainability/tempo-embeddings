@@ -108,7 +108,7 @@ if __name__ == "__main__":
             logging.info(f"Skipping {len(ingested_files)} files for '{corpus_name}'.")
 
             corpus: Corpus = corpus_reader[corpus_name].build_corpus(
-                args.filter_terms, skip_files=ingested_files, max_files=args.max_files
+                filter_terms, skip_files=ingested_files, max_files=args.max_files
             )
 
             db.ingest(corpus, corpus_name)
