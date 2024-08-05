@@ -29,6 +29,9 @@ def arguments_parser():
         required=False,
         help="Maximum number of files to process per corpus. All files if not specified.",
     )
+    parser.add_argument(
+        "--reset-db", action="store_true", help="Reset the database, delete all data"
+    )
 
     parser.add_argument("--db-name", type=str, default="testing_db")
     parser.add_argument("--window-size", type=int, default=200)
@@ -93,6 +96,11 @@ if __name__ == "__main__":
             model=SentenceTransformerModelWrapper.from_pretrained(args.language_model),
             batch_size=args.batch_size,
         )
+        db.validate_config()
+
+        if args.reset_db:
+            db.reset()
+
         for corpus_name in tqdm(
             list(corpus_reader.corpora(must_exist=True)), desc="Reading", unit="corpus"
         ):
@@ -100,7 +108,7 @@ if __name__ == "__main__":
             logging.info(f"Skipping {len(ingested_files)} files for '{corpus_name}'.")
 
             corpus: Corpus = corpus_reader[corpus_name].build_corpus(
-                args.filter_terms, skip_files=ingested_files, max_files=args.max_files
+                filter_terms, skip_files=ingested_files, max_files=args.max_files
             )
 
             db.ingest(corpus, corpus_name)

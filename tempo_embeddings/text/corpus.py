@@ -218,8 +218,8 @@ class Corpus(AbstractCorpus):
                         [
                             passage
                             for window in windows
-                            if window.contains_any(filter_terms)
                             for term in filter_terms
+                            if window.contains(term)
                             for passage in window.highlight(term, exact_match=False)
                         ]
                     )

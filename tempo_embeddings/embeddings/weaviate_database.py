@@ -176,6 +176,11 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         self._client.collections.delete(name)
         self._config.delete_corpus(name)
 
+    def reset(self):
+        """Delete all collections and reset the configuration database."""
+        for collection in self._config.get_corpora():
+            self.delete_collection(collection)
+
     def get_collection_count(self, name) -> int:
         """Returns the size of a given collection"""
         collection = self._client.collections.get(name)

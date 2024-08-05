@@ -99,6 +99,14 @@ class Passage:
             self._unique_id = hex_dig
         return self._unique_id
 
+    def contains(self, token: str) -> bool:
+        """Returns True if the token is contained in the passage. Case-insensitive.
+
+        Args:
+            token (str): a string to search for in the passage.
+        """
+        return token.casefold() in self._text.casefold()
+
     def contains_any(self, tokens: Iterable[str]) -> bool:
         """Returns True if any of the tokens are contained in the passage.
 
@@ -110,9 +118,7 @@ class Passage:
         Returns (bool):
             True if any of the tokens are contained in the passage.
         """
-        return tokens is None or any(
-            token.casefold() in self._text.casefold() for token in tokens
-        )
+        return tokens is None or any(self.contains(token) for token in tokens)
 
     def highlighted_text(
         self,
