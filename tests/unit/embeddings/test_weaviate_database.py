@@ -57,6 +57,10 @@ class TestWeaviateDatabase:
         for vector_name, vector in obj.vector.items():
             assert len(vector) == expected_vector_shapes[vector_name]
 
+    @pytest.skipif(
+        int(platform.python_version_tuple()[1]) < 10,
+        reason="Python 3.10+ required for this test.",
+    )
     def test_ingest(self, weaviate_db_manager, corpus):
         expected_collections = [
             {"name": "TempoEmbeddings", "count": 1, "vector_shape": {}},
