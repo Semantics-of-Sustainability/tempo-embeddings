@@ -49,19 +49,18 @@ class CorpusConfig:
         files = [file for file in self.files() if file.name not in skip_files]
 
         for file in tqdm(files[:max_files], desc=self.directory.name, unit="file"):
-            if file.name not in skip_files:
-                if self.loader_type == "csv":
-                    yield Corpus.from_csv_file(
-                        filepath=file,
-                        text_columns=self.text_columns,
-                        filter_terms=filter_terms,
-                        encoding=self.encoding,
-                        compression=self.compression,
-                        delimiter=self.delimiter,
-                        **kwargs,
-                    )
-                else:
-                    raise NotImplementedError(f"Unrecognized format '{self.file_type}'")
+            if self.loader_type == "csv":
+                yield Corpus.from_csv_file(
+                    filepath=file,
+                    text_columns=self.text_columns,
+                    filter_terms=filter_terms,
+                    encoding=self.encoding,
+                    compression=self.compression,
+                    delimiter=self.delimiter,
+                    **kwargs,
+                )
+            else:
+                raise NotImplementedError(f"Unrecognized format '{self.file_type}'")
 
     def build_corpus(
         self,
