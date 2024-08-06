@@ -10,7 +10,7 @@ from ...conftest import CORPUS_DIR
 
 
 class TestCorpusReader:
-    _CONFIGURED_CORPORA = ["ANP_mini", "ANP", "Parool", "NRC", "StatenGeneraal_clean"]
+    _CONFIGURED_CORPORA = ["ANP_mini", "ANP", "Delpher", "NRC", "StatenGeneraal_clean"]
 
     @pytest.mark.parametrize(
         "corpora, base_dir, must_exist, expected, expected_exception",
