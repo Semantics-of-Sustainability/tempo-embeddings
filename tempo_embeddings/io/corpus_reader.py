@@ -88,11 +88,14 @@ class CorpusReader:
         with open(config_file, "rt") as f:
             corpora_configs: dict[str, dict[str, Any]] = json.load(f)
 
-        self._corpora = {
-            name: CorpusConfig(**(config | {"directory": base_dir / name}))
-            for name, config in corpora_configs.items()
-            if corpora is None or name in corpora
-        }
+        self._corpora = {}
+        for name, config in corpora_configs.items():
+            if corpora is None or name in corpora:
+                directory = base_dir / config.get("sub-directory", "") / name
+
+                self._corpora[name] = CorpusConfig(
+                    **(config | {"directory": directory})
+                )
 
         if corpora is not None:
             for corpus in corpora:

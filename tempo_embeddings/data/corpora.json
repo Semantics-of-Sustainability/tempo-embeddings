@@ -20,7 +20,8 @@
         "delimiter": ";"
     },
     "NRC": {
-        "glob_pattern": "Delpher/RawFiles/NRC/NRC_????.csv.gz",
+        "sub-directory": "Delpher/RawFiles",
+        "glob_pattern": "NRC_????.csv.gz",
         "loader_type": "csv",
         "text_columns": [
             "Content"

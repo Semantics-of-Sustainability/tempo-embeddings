@@ -78,11 +78,14 @@ if __name__ == "__main__":
     parser = arguments_parser()
     args = parser.parse_args()
 
-    corpus_reader = CorpusReader(
-        config_file=settings.CORPORA_CONFIG_FILE,
-        corpora=args.corpora,
-        base_dir=args.corpus_dir,
-    )
+    try:
+        corpus_reader = CorpusReader(
+            config_file=settings.CORPORA_CONFIG_FILE,
+            corpora=args.corpora,
+            base_dir=args.corpus_dir,
+        )
+    except ValueError as e:
+        parser.error(e)
 
     filter_terms = args.filter_terms or [
         line.strip() for line in args.filter_terms_file
