@@ -19,23 +19,22 @@
         "compression": "gzip",
         "delimiter": ";"
     },
-    "Parool": {
-        "glob_pattern": "Parool_????.csv.gz",
+    "NRC": {
+        "glob_pattern": "RawFiles/NRC/NRC_????.csv.gz",
+        "loader_type": "csv",
+        "text_columns": [
+            "Content"
+        ],
+        "compression": "gzip",
+        "delimiter": ";"
+    },
+    "Delpher": {
+        "glob_pattern": "RawFiles/*/*_????.csv.gz",
         "loader_type": "csv",
         "text_columns": [
             "Content"
         ],
         "encoding": "utf-8",
-        "compression": "gzip",
-        "delimiter": ";"
-    },
-    "NRC": {
-        "glob_pattern": "NRC_????.csv.gz",
-        "loader_type": "csv",
-        "text_columns": [
-            "Content"
-        ],
-        "encoding": "iso8859_1",
         "compression": "gzip",
         "delimiter": ";"
     },
