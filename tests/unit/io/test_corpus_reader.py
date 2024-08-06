@@ -10,7 +10,14 @@ from ...conftest import CORPUS_DIR
 
 
 class TestCorpusReader:
-    _CONFIGURED_CORPORA = ["ANP_mini", "ANP", "Delpher", "NRC", "StatenGeneraal_clean"]
+    _CONFIGURED_CORPORA = [
+        "ANP_mini",
+        "ANP",
+        "Delpher",
+        "NRC",
+        "StatenGeneraal",
+        "StatenGeneraal_clean",
+    ]
 
     @pytest.mark.parametrize(
         "corpora, base_dir, must_exist, expected, expected_exception",
@@ -80,3 +87,14 @@ class TestCorpusConfig:
             len(anp_corpus_config.build_corpus(filter_terms=[], skip_files=skip_files))
             == expected_size
         )
+
+    @pytest.mark.parametrize(
+        "skip_files,expected_sizes", [(None, [4893]), (["ANP_1937.csv.gz"], [])]
+    )
+    def test_build_corpora(self, anp_corpus_config, skip_files, expected_sizes):
+        assert [
+            len(corpus)
+            for corpus in anp_corpus_config.build_corpora(
+                filter_terms=[], skip_files=skip_files
+            )
+        ] == expected_sizes

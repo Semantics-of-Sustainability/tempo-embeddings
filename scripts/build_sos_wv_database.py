@@ -10,7 +10,6 @@ from tempo_embeddings import settings
 from tempo_embeddings.embeddings.model import SentenceTransformerModelWrapper
 from tempo_embeddings.embeddings.weaviate_database import WeaviateDatabaseManager
 from tempo_embeddings.io.corpus_reader import CorpusReader
-from tempo_embeddings.text.corpus import Corpus
 
 csv.field_size_limit(1000000000)
 
@@ -78,11 +77,14 @@ if __name__ == "__main__":
     parser = arguments_parser()
     args = parser.parse_args()
 
-    corpus_reader = CorpusReader(
-        config_file=settings.CORPORA_CONFIG_FILE,
-        corpora=args.corpora,
-        base_dir=args.corpus_dir,
-    )
+    try:
+        corpus_reader = CorpusReader(
+            config_file=settings.CORPORA_CONFIG_FILE,
+            corpora=args.corpora,
+            base_dir=args.corpus_dir,
+        )
+    except ValueError as e:
+        parser.error(e)
 
     filter_terms = args.filter_terms or [
         line.strip() for line in args.filter_terms_file
@@ -106,11 +108,10 @@ if __name__ == "__main__":
             ingested_files = set(db.provenances(corpus_name))
             logging.info(f"Skipping {len(ingested_files)} files for '{corpus_name}'.")
 
-            corpus: Corpus = corpus_reader[corpus_name].build_corpus(
+            for corpus in corpus_reader[corpus_name].build_corpora(
                 filter_terms, skip_files=ingested_files, max_files=args.max_files
-            )
-
-            db.ingest(corpus, corpus_name)
+            ):
+                db.ingest(corpus, corpus_name)
 
     if args.filter_terms_file is not None:
         args.filter_terms_file.close()

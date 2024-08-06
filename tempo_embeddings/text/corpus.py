@@ -7,7 +7,6 @@ from typing import Any, Iterable, Optional, TextIO
 
 import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
-from tqdm import tqdm
 
 from ..settings import DEFAULT_ENCODING
 from .abstractcorpus import AbstractCorpus
@@ -55,12 +54,7 @@ class Corpus(AbstractCorpus):
         if batch_size <= 1:
             yield self.passages
         else:
-            for batch_start in tqdm(
-                range(0, len(self.passages), batch_size),
-                desc="Embeddings",
-                unit="batch",
-                total=len(self.passages) // batch_size + 1,
-            ):
+            for batch_start in range(0, len(self.passages), batch_size):
                 yield self.passages[batch_start : batch_start + batch_size]
 
     def save(self, filepath: Path):
@@ -132,15 +126,9 @@ class Corpus(AbstractCorpus):
             return Corpus.from_lines(f, filter_terms=filter_terms)
 
     @classmethod
-    def from_csv_files(cls, files: Iterable[Path], desc: str = None, **kwargs):
+    def from_csv_files(cls, files: Iterable[Path], **kwargs):
         """Read input data from multiple CSV files in a directory."""
-        return sum(
-            (
-                cls.from_csv_file(file, **kwargs)
-                for file in tqdm(files, desc=desc, unit="file")
-            ),
-            Corpus(),
-        )
+        return sum((cls.from_csv_file(file, **kwargs) for file in files), Corpus())
 
     @classmethod
     def from_csv_file(
@@ -159,13 +147,17 @@ class Corpus(AbstractCorpus):
         open_func = gzip.open if compression == "gzip" else open
 
         with open_func(filepath, "rt", encoding=encoding) as f:
-            return cls.from_csv_stream(
-                f,
-                text_columns,
-                filter_terms=filter_terms,
-                nlp_pipeline=nlp_pipeline,
-                **kwargs,
-            )
+            try:
+                return cls.from_csv_stream(
+                    f,
+                    text_columns,
+                    filter_terms=filter_terms,
+                    nlp_pipeline=nlp_pipeline,
+                    **kwargs,
+                )
+            except EOFError as e:
+                logging.error(f"Error reading file '{filepath}': {e}")
+                return Corpus()
 
     @classmethod
     def from_csv_stream(

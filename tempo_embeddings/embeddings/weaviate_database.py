@@ -169,8 +169,6 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                 if not self._client.collections.exists(name):
                     logger.info(f"Removing collection '{name}' to config database")
                     self._config.delete_corpus(name)
-        else:
-            logger.warning("No passages to ingest into collection '%s'", name)
 
     def delete_collection(self, name):
         self._client.collections.delete(name)
