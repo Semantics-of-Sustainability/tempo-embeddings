@@ -39,6 +39,15 @@
         "compression": "gzip",
         "delimiter": ";"
     },
+    "StatenGeneraal": {
+        "glob_pattern": "StatenGeneraal_????.csv",
+        "loader_type": "csv",
+        "text_columns": [
+            "text_clean_str"
+        ],
+        "encoding": "utf-8",
+        "delimiter": "\t"
+    },
     "StatenGeneraal_clean": {
         "glob_pattern": "StatenGeneraal_????.csv",
         "loader_type": "csv",
