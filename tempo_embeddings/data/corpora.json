@@ -7,7 +7,8 @@
         ],
         "encoding": "iso8859_1",
         "compression": "gzip",
-        "delimiter": ";"
+        "delimiter": ";",
+        "language": "nl"
     },
     "ANP": {
         "glob_pattern": "ANP_????.csv.gz",
@@ -17,7 +18,8 @@
         ],
         "encoding": "iso8859_1",
         "compression": "gzip",
-        "delimiter": ";"
+        "delimiter": ";",
+        "language": "nl"
     },
     "NRC": {
         "sub-directory": "Delpher/RawFiles",
@@ -27,7 +29,8 @@
             "Content"
         ],
         "compression": "gzip",
-        "delimiter": ";"
+        "delimiter": ";",
+        "language": "nl"
     },
     "Delpher": {
         "glob_pattern": "RawFiles/*/*_????.csv.gz",
@@ -37,7 +40,8 @@
         ],
         "encoding": "utf-8",
         "compression": "gzip",
-        "delimiter": ";"
+        "delimiter": ";",
+        "language": "nl"
     },
     "StatenGeneraal": {
         "glob_pattern": "StatenGeneraal_????.csv",
@@ -46,7 +50,8 @@
             "text_clean_str"
         ],
         "encoding": "utf-8",
-        "delimiter": "\t"
+        "delimiter": "\t",
+        "language": "nl"
     },
     "StatenGeneraal_clean": {
         "glob_pattern": "StatenGeneraal_????.csv",
@@ -55,6 +60,7 @@
             "text_clean_str"
         ],
         "encoding": "utf-8",
-        "delimiter": "\t"
+        "delimiter": "\t",
+        "language": "nl"
     }
 }

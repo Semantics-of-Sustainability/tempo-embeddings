@@ -1,13 +1,28 @@
 import json
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
+import stanza
 from pydantic import Field
 from pydantic.dataclasses import dataclass
 from tqdm import tqdm
 
 from .. import settings
 from ..text.corpus import Corpus
+
+
+@lru_cache(maxsize=2)
+def nlp_pipeline(lang: Optional[str]) -> stanza.Pipeline:
+    """Return a Stanza pipeline for the given language.
+
+    Args:
+        lang: the language code for the pipeline. Can be None.
+    Returns:
+        stanza.Pipeline: a Stanza pipeline for the given language. None if lang is None.
+    """
+    # TODO: move to device
+    return stanza.Pipeline(lang=lang, processors="tokenize") if lang else None
 
 
 @dataclass
@@ -19,6 +34,8 @@ class CorpusConfig:
     encoding: str = "utf-8"
     delimiter: str = ";"
     compression: Optional[str] = None
+    language: Optional[str] = None  # TODO: validate against Stanza languages
+    """This parameter is used as language for the NLP pipeline."""
 
     def exists(self):
         return self.directory.is_dir()
@@ -40,7 +57,7 @@ class CorpusConfig:
             filter_terms: a list of terms to filter out.
             skip_files: a set of file names to skip. Defaults to None.
             max_files: the maximum number of files to process.
-            **kwargs: additional parameters to pass to the Corpus constructor: window_size, nlp_pipeline.
+            **kwargs: additional parameters to pass to the Corpus constructor: window_size
 
         Yields:
             Corpus: a corpus object, one per corpus file
@@ -57,6 +74,7 @@ class CorpusConfig:
                     encoding=self.encoding,
                     compression=self.compression,
                     delimiter=self.delimiter,
+                    nlp_pipeline=nlp_pipeline(self.language),
                     **kwargs,
                 )
             else:
@@ -76,7 +94,7 @@ class CorpusConfig:
             filter_terms: a list of terms to filter out.
             skip_files: a set of file names to skip. Defaults to None.
             max_files: the maximum number of files to process.
-            **kwargs: additional parameters to pass to the Corpus constructor: window_size, nlp_pipeline.
+            **kwargs: additional parameters to pass to the Corpus constructor: window_size.
 
         Returns:
             Corpus: a corpus object.
@@ -94,6 +112,7 @@ class CorpusConfig:
                 encoding=self.encoding,
                 compression=self.compression,
                 delimiter=self.delimiter,
+                nlp_pipeline=nlp_pipeline(self.language),
                 **kwargs,
             )
         else:

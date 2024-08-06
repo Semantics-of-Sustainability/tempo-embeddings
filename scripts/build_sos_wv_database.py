@@ -34,7 +34,6 @@ def arguments_parser():
 
     parser.add_argument("--window-size", type=int, default=200)
     parser.add_argument("--batch-size", type=int, default=64)
-    parser.add_argument("--use-full-sentences", action="store_true")
     parser.add_argument(
         "--language-model",
         "--lm",
