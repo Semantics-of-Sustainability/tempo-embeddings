@@ -4,6 +4,7 @@ from typing import Any, Iterable, Optional
 
 from pydantic import Field
 from pydantic.dataclasses import dataclass
+from tqdm import tqdm
 
 from .. import settings
 from ..text.corpus import Corpus
@@ -24,6 +25,43 @@ class CorpusConfig:
 
     def files(self):
         return self.directory.glob(self.glob_pattern)
+
+    def build_corpora(
+        self,
+        filter_terms,
+        *,
+        skip_files: Optional[set[str]] = None,
+        max_files: Optional[int] = None,
+        **kwargs,
+    ) -> Iterable[Corpus]:
+        """Build one corpus per file from the configuration.
+
+        Args:
+            filter_terms: a list of terms to filter out.
+            skip_files: a set of file names to skip. Defaults to None.
+            max_files: the maximum number of files to process.
+            **kwargs: additional parameters to pass to the Corpus constructor: window_size, nlp_pipeline.
+
+        Yields:
+            Corpus: a corpus object, one per corpus file
+        """
+        skip_files: set[str] = skip_files or set()
+        files = [file for file in self.files() if file.name not in skip_files]
+
+        for file in tqdm(files[:max_files], desc=self.directory.name, unit="file"):
+            if file.name not in skip_files:
+                if self.loader_type == "csv":
+                    yield Corpus.from_csv_file(
+                        filepath=file,
+                        text_columns=self.text_columns,
+                        filter_terms=filter_terms,
+                        encoding=self.encoding,
+                        compression=self.compression,
+                        delimiter=self.delimiter,
+                        **kwargs,
+                    )
+                else:
+                    raise NotImplementedError(f"Unrecognized format '{self.file_type}'")
 
     def build_corpus(
         self,
@@ -52,7 +90,6 @@ class CorpusConfig:
         if self.loader_type == "csv":
             corpus = Corpus.from_csv_files(
                 files=files,
-                desc=self.directory.name,
                 filter_terms=filter_terms,
                 text_columns=self.text_columns,
                 encoding=self.encoding,

@@ -132,15 +132,9 @@ class Corpus(AbstractCorpus):
             return Corpus.from_lines(f, filter_terms=filter_terms)
 
     @classmethod
-    def from_csv_files(cls, files: Iterable[Path], desc: str = None, **kwargs):
+    def from_csv_files(cls, files: Iterable[Path], **kwargs):
         """Read input data from multiple CSV files in a directory."""
-        return sum(
-            (
-                cls.from_csv_file(file, **kwargs)
-                for file in tqdm(files, desc=desc, unit="file")
-            ),
-            Corpus(),
-        )
+        return sum((cls.from_csv_file(file, **kwargs) for file in files), Corpus())
 
     @classmethod
     def from_csv_file(
