@@ -147,13 +147,17 @@ class Corpus(AbstractCorpus):
         open_func = gzip.open if compression == "gzip" else open
 
         with open_func(filepath, "rt", encoding=encoding) as f:
-            return cls.from_csv_stream(
-                f,
-                text_columns,
-                filter_terms=filter_terms,
-                nlp_pipeline=nlp_pipeline,
-                **kwargs,
-            )
+            try:
+                return cls.from_csv_stream(
+                    f,
+                    text_columns,
+                    filter_terms=filter_terms,
+                    nlp_pipeline=nlp_pipeline,
+                    **kwargs,
+                )
+            except EOFError as e:
+                logging.error(f"Error reading file '{filepath}': {e}")
+                return Corpus()
 
     @classmethod
     def from_csv_stream(
