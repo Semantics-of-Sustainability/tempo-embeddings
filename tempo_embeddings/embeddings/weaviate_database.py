@@ -147,7 +147,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             ):
                 yield group.grouped_by.value
         else:
-            logger.warning(f"Collection '{collection}' not found.")
+            logger.info(f"Collection '{collection}' not found, no files ingested.")
 
     def ingest(self, corpus: Corpus, name: Optional[str] = None):
         name = name or corpus.label
@@ -360,17 +360,26 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
 
     def import_into_collection(self, filename_src: str, collection_name: str):
         collection_tgt = self._client.collections.get(collection_name)
-        with gzip.open(filename_src, "rt", encoding="utf-8") as f:
-            logger.info("Importing into Weaviate '%s' collection...", filename_src)
-            if collection_name not in self.config["existing_collections"]:
-                self.config["existing_collections"].append(collection_name)
-                self._save_config()
-            with collection_tgt.batch.fixed_size(batch_size=self.batch_size) as batch:
+        if collection_name in self:
+            logging.error(f"Collection '{collection_name}' already exists, skipping.")
+        else:
+            with gzip.open(
+                filename_src, "rt", encoding="utf-8"
+            ) as f, collection_tgt.batch.fixed_size(
+                batch_size=self.batch_size
+            ) as batch:
+                logger.info("Importing into Weaviate '%s' collection...", filename_src)
+
                 for line in tqdm(f):
                     item = json.loads(line.strip())
                     item_id = uuid.UUID(item.pop("uuid"))
                     item_vector = item.pop("vector")
                     batch.add_object(properties=item, vector=item_vector, uuid=item_id)
+
+                self._config.add_corpus(
+                    corpus=collection_name, embedder=self.model.name
+                )
+                # FIXME: read the model name from the other config DB.
 
     def validate_config(self) -> None:
         """Validate that the configuration database entries are present as database collections.
