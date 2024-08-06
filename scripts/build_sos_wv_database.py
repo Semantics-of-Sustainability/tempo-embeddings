@@ -33,7 +33,6 @@ def arguments_parser():
         "--reset-db", action="store_true", help="Reset the database, delete all data"
     )
 
-    parser.add_argument("--db-name", type=str, default="testing_db")
     parser.add_argument("--window-size", type=int, default=200)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--use-full-sentences", action="store_true")
