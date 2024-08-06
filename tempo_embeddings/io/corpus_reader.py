@@ -37,6 +37,13 @@ class CorpusConfig:
     language: Optional[str] = None  # TODO: validate against Stanza languages
     """This parameter is used as language for the NLP pipeline."""
 
+    def asdict(self, *, properties: Optional[list[str]] = None):
+        _converters = {"directory": str}
+        return {
+            property: _converters.get(property, lambda x: x)(getattr(self, property))
+            for property in properties or self.__annotations__.keys()
+        }
+
     def exists(self):
         return self.directory.is_dir()
 

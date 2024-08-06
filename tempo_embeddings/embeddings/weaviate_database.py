@@ -64,9 +64,9 @@ class WeaviateConfigDb:
         else:
             raise ValueError(f"Collection '{self._collection_name}' does not exist.")
 
-    def add_corpus(self, corpus: str, embedder: str) -> uuid.UUID:
+    def add_corpus(self, corpus: str, properties: dict[str, Any]) -> uuid.UUID:
         return self._collection.data.insert(
-            properties={WeaviateConfigDb._CORPUS_NAME_FIELD: corpus, "model": embedder},
+            properties={WeaviateConfigDb._CORPUS_NAME_FIELD: corpus} | properties,
             uuid=generate_uuid5(corpus),
             vector={},
         )
@@ -149,13 +149,17 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         else:
             logger.info(f"Collection '{collection}' not found, no files ingested.")
 
-    def ingest(self, corpus: Corpus, name: Optional[str] = None):
+    def ingest(
+        self,
+        corpus: Corpus,
+        name: Optional[str] = None,
+        properties: Optional[dict[str, Any]] = None,
+    ):
         name = name or corpus.label
 
-        # TODO: handle existing collection, updating, continuing
         if len(corpus) > 0:
             if not self._client.collections.exists(name):
-                self._config.add_corpus(corpus=name, embedder=self.model.name)
+                self._config.add_corpus(corpus=name, properties=properties or {})
                 # TODO: allow for embedded vectorizers
                 self._client.collections.create(
                     name, vectorizer_config=wvc.config.Configure.Vectorizer.none()
@@ -355,6 +359,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                 row_dict["vector"] = q.vector["default"]
                 row_dict["uuid"] = str(q.uuid)
                 fileout.write(f"{json.dumps(row_dict)}\n")
+        # TODO: export corpus configuration
 
     def import_into_collection(self, filename_src: str, collection_name: str):
         collection_tgt = self._client.collections.get(collection_name)
@@ -377,7 +382,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                 self._config.add_corpus(
                     corpus=collection_name, embedder=self.model.name
                 )
-                # FIXME: read the model name from the other config DB.
+                # TODO: import the corpus config from the other config DB.
 
     def validate_config(self) -> None:
         """Validate that the configuration database entries are present as database collections.

@@ -33,6 +33,8 @@ def arguments_parser():
     )
 
     parser.add_argument("--window-size", type=int, default=200)
+    # TODO add option to skip sentence splitting
+
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument(
         "--language-model",
@@ -107,10 +109,16 @@ if __name__ == "__main__":
             ingested_files = set(db.provenances(corpus_name))
             logging.info(f"Skipping {len(ingested_files)} files for '{corpus_name}'.")
 
-            for corpus in corpus_reader[corpus_name].build_corpora(
+            corpus_config = corpus_reader[corpus_name]
+            for corpus in corpus_config.build_corpora(
                 filter_terms, skip_files=ingested_files, max_files=args.max_files
             ):
-                db.ingest(corpus, corpus_name)
+                db.ingest(
+                    corpus,
+                    corpus_name,
+                    properties={"embedder": args.language_model}
+                    | corpus_config.asdict(properties=["language"]),
+                )
 
     if args.filter_terms_file is not None:
         args.filter_terms_file.close()
