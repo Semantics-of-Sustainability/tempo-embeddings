@@ -16,6 +16,9 @@ if __name__ == "__main__":
         required=True,
         help="Input file containing a previously exported database",
     )
+    parser.add_argument(
+        "--overwrite", action="store_true", help="Overwrite existing corpus"
+    )
     weaviate_args = parser.add_argument_group("Weaviate arguments")
     weaviate_args.add_argument(
         "--weaviate-host",
@@ -36,6 +39,8 @@ if __name__ == "__main__":
 
     with weaviate.connect_to_local(args.weaviate_host, args.weaviate_port) as client:
         db = WeaviateDatabaseManager(client=client, model=DEFAULT_LANGUAGE_MODEL)
+        if args.overwrite:
+            db.delete_collection(args.corpus)
         db.import_into_collection(args.input, args.corpus)
 
     args.input.close()
