@@ -87,3 +87,14 @@ class TestCorpusConfig:
             len(anp_corpus_config.build_corpus(filter_terms=[], skip_files=skip_files))
             == expected_size
         )
+
+    @pytest.mark.parametrize(
+        "skip_files,expected_sizes", [(None, [4893]), (["ANP_1937.csv.gz"], [])]
+    )
+    def test_build_corpora(self, anp_corpus_config, skip_files, expected_sizes):
+        assert [
+            len(corpus)
+            for corpus in anp_corpus_config.build_corpora(
+                filter_terms=[], skip_files=skip_files
+            )
+        ] == expected_sizes
