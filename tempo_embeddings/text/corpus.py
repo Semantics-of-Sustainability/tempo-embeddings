@@ -7,7 +7,6 @@ from typing import Any, Iterable, Optional, TextIO
 
 import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
-from tqdm import tqdm
 
 from ..settings import DEFAULT_ENCODING
 from .abstractcorpus import AbstractCorpus
@@ -55,12 +54,7 @@ class Corpus(AbstractCorpus):
         if batch_size <= 1:
             yield self.passages
         else:
-            for batch_start in tqdm(
-                range(0, len(self.passages), batch_size),
-                desc="Embeddings",
-                unit="batch",
-                total=len(self.passages) // batch_size + 1,
-            ):
+            for batch_start in range(0, len(self.passages), batch_size):
                 yield self.passages[batch_start : batch_start + batch_size]
 
     def save(self, filepath: Path):
