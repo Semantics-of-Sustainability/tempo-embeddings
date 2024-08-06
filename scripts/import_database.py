@@ -37,3 +37,5 @@ if __name__ == "__main__":
     with weaviate.connect_to_local(args.weaviate_host, args.weaviate_port) as client:
         db = WeaviateDatabaseManager(client=client, model=DEFAULT_LANGUAGE_MODEL)
         db.import_into_collection(args.input, args.corpus)
+
+    args.input.close()

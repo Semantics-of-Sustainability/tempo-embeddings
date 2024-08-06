@@ -111,3 +111,6 @@ if __name__ == "__main__":
             )
 
             db.ingest(corpus, corpus_name)
+
+    if args.filter_terms_file is not None:
+        args.filter_terms_file.close()
