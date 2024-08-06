@@ -60,10 +60,6 @@ class TestWeaviateDatabase:
         for vector_name, vector in obj.vector.items():
             assert len(vector) == expected_vector_shapes[vector_name]
 
-    def assert_object(self, obj, expected):
-        for key, value in expected.items():
-            assert obj[key] == value, f"Unexpected value for '{key}'."
-
     @pytest.mark.skipif(
         int(platform.python_version_tuple()[1]) < 10,
         reason="Python 3.10+ required for this test.",
@@ -116,7 +112,9 @@ class TestWeaviateDatabase:
         assert sorted(db.keys()) == sorted(expected_db.keys()) + ["vector"]
         assert len(db["vector"]) == 768
 
-    def test_import_into_collection(self, weaviate_db_manager_with_data, tmp_path):
+    def test_import_into_collection(
+        self, weaviate_db_manager_with_data, tmp_path, caplog
+    ):
         export_file = tmp_path / "export.json.gz"
         weaviate_db_manager_with_data.export_from_collection("TestCorpus", export_file)
 
@@ -129,6 +127,24 @@ class TestWeaviateDatabase:
             str(o.uuid) for o in client.collections.get("TestCorpus").iterator()
         ] == ["f82c383a-0b66-5ff1-b8c1-bbc070e7ac80"]
         assert "TestCorpus" in weaviate_db_manager_with_data
+
+        assert [
+            str(o.uuid) for o in client.collections.get("TempoEmbeddings").iterator()
+        ] == [generate_uuid5("TestCorpus")]
+
+    def test_import_into_collection_existing(
+        self, weaviate_db_manager_with_data, tmp_path, caplog
+    ):
+        export_file = tmp_path / "export.json.gz"
+        weaviate_db_manager_with_data.export_from_collection("TestCorpus", export_file)
+
+        with caplog.at_level(logging.ERROR):
+            weaviate_db_manager_with_data.import_into_collection(
+                export_file, "TestCorpus"
+            )
+        assert caplog.record_tuples == [
+            ("root", logging.ERROR, "Collection 'TestCorpus' already exists, skipping.")
+        ]
 
     def test_reset(self, weaviate_db_manager_with_data):
         client = weaviate_db_manager_with_data.client
