@@ -15,11 +15,6 @@ except ImportError as e:
         raise e
 
 
-@pytest.mark.xfail(
-    condition=int(platform.python_version_tuple()[1]) < 10,
-    run=False,
-    reason="types.NoneType is not available in Python <3.10",
-)
 class TestSegmenter:
     @pytest.mark.parametrize(
         "segmenter, language, expected_type, expected_exception",
@@ -28,8 +23,28 @@ class TestSegmenter:
             ("wtp", "nl", WtpSegmenter, does_not_raise()),
             # ("wtp", "invalid", WtpSegmenter, pytest.raises(ValueError)),
             ("stanza", "en", StanzaSegmenter, does_not_raise()),
-            (None, "en", NoneType, does_not_raise()),
-            ("invalid", "en", NoneType, pytest.raises(ValueError)),
+            pytest.param(
+                None,
+                "en",
+                NoneType,
+                does_not_raise(),
+                marks=pytest.mark.xfail(
+                    condition=int(platform.python_version_tuple()[1]) < 10,
+                    raises=NameError,
+                    reason="types.NoneType is not available in Python <3.10",
+                ),
+            ),
+            pytest.param(
+                "invalid",
+                "en",
+                NoneType,
+                pytest.raises(ValueError),
+                marks=pytest.mark.xfail(
+                    condition=int(platform.python_version_tuple()[1]) < 10,
+                    raises=NameError,
+                    reason="types.NoneType is not available in Python <3.10",
+                ),
+            ),
         ],
     )
     def test_segmenter(self, segmenter, language, expected_type, expected_exception):
