@@ -1,3 +1,4 @@
+import logging
 import platform
 from contextlib import nullcontext as does_not_raise
 
@@ -5,14 +6,20 @@ import pytest
 
 from tempo_embeddings.text.segmenter import Segmenter, StanzaSegmenter, WtpSegmenter
 
+try:
+    from types import NoneType
+except ImportError as e:
+    if int(platform.python_version_tuple()[1]) < 10:
+        logging.warning("types.NoneType is not available in Python <3.10")
+    else:
+        raise e
+
 
 @pytest.mark.skipif(
     int(platform.python_version_tuple()[1]) < 10,
     reason="types.NoneType is not available in Python <3.10",
 )
 class TestSegmenter:
-    from types import NoneType
-
     @pytest.mark.parametrize(
         "segmenter, language, expected_type, expected_exception",
         [
