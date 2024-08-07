@@ -54,7 +54,7 @@ class WtpSegmenter(Segmenter):
     def __init__(
         self,
         language: str,
-        model: str = settings.WTPSPLIT_DEFAULT_MODEL,
+        model: str = settings.WTPSPLIT_MODEL,
         style_or_domain: str = "-",
     ) -> None:
         super().__init__()

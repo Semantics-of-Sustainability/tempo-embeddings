@@ -36,7 +36,7 @@ class CorpusConfig:
     compression: Optional[str] = None
     language: Optional[str] = None
     """The 'language' parameter is used for the NLP pipeline."""
-    segmenter: Optional[str] = settings.DEFAULT_SEGMENTER
+    segmenter: Optional[str] = settings.SEGMENTER
 
     @model_validator(mode="after")
     def validate_segmenter(self):

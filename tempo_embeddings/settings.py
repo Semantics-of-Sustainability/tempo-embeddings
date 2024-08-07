@@ -47,7 +47,7 @@ DEFAULT_LANGUAGE_MODEL: str = (
 )
 
 ### Segmentation settings
-DEFAULT_SEGMENTER: str = "wtp"
-WTPSPLIT_DEFAULT_MODEL = "sat-3l-sm"
+SEGMENTER: str = os.environ.get("SEGMENTER", "wtp")
+WTPSPLIT_MODEL = os.environ.get("WTPSPLIT_MODEL", "sat-3l-sm")
 
 WEAVIATE_CONFIG_COLLECTION: str = "TempoEmbeddings"
