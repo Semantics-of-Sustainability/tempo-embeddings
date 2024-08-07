@@ -5,6 +5,7 @@ import pytest
 
 from tempo_embeddings.text.corpus import Corpus
 from tempo_embeddings.text.passage import Passage
+from tempo_embeddings.text.segmenter import StanzaSegmenter, WtpSegmenter
 
 CWD = Path(__file__).parent.absolute()
 
@@ -27,6 +28,16 @@ def corpus():
     return Corpus(
         [Passage("test", metadata={"provenance": "test_file"})], label="TestCorpus"
     )
+
+
+@pytest.fixture
+def wtp_segmenter():
+    return WtpSegmenter(language="en")
+
+
+@pytest.fixture
+def stanza_segmenter():
+    return StanzaSegmenter(language="en")
 
 
 CORPUS_DIR: Path = CWD / "data"

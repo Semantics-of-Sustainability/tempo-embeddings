@@ -305,20 +305,21 @@ class Passage:
         cls,
         text: str,
         *,
-        window_size: int = None,
-        window_overlap: int = None,
-        metadata: dict = None,
-        nlp_pipeline: Segmenter = None,
+        window_size: Optional[int] = None,
+        window_overlap: Optional[int] = None,
+        metadata: Optional[dict] = None,
+        nlp_pipeline: Optional[Segmenter] = None,
     ) -> Iterable["Passage"]:
         """Create a Passage from a text string."""
 
         # TODO validate parameters
         # TODO: use window_size on tokens instead of characters
 
+        metadata = metadata or {}
+
         if nlp_pipeline:
             for ix, sentence in enumerate(nlp_pipeline.split(text)):
-                metadata["sentence_index"] = ix
-                yield cls(sentence, metadata)
+                yield cls(sentence, metadata | {"sentence_index": ix})
         elif window_size is None:
             # Single window comprising the entire text
             yield cls(text, metadata)

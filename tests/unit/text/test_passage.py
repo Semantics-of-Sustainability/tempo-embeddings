@@ -108,6 +108,16 @@ class TestPassage:
             == expected
         )
 
+    def test_from_text_wtp_segmenter(self, wtp_segmenter):
+        assert list(
+            Passage.from_text(
+                "This is a test This is another test.", nlp_pipeline=wtp_segmenter
+            )
+        ) == [
+            Passage("This is a test ", metadata={"sentence_index": 0}),
+            Passage("This is another test.", metadata={"sentence_index": 1}),
+        ]
+
     @pytest.mark.parametrize(
         "passage,expected",
         [

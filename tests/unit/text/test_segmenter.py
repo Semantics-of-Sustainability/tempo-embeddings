@@ -33,10 +33,6 @@ class TestSegmenter:
 
 
 class TestWtpSegmenter:
-    @pytest.fixture
-    def segmenter(self):
-        return WtpSegmenter(language="en")
-
     @pytest.mark.parametrize(
         "text, expected",
         [
@@ -46,15 +42,11 @@ class TestWtpSegmenter:
             )
         ],
     )
-    def test_split(self, segmenter, text, expected):
-        assert segmenter.split(text) == expected
+    def test_split(self, wtp_segmenter, text, expected):
+        assert wtp_segmenter.split(text) == expected
 
 
 class TestStanzaSegmenter:
-    @pytest.fixture
-    def segmenter(self):
-        return StanzaSegmenter(language="en")
-
     @pytest.mark.parametrize(
         "text, expected",
         [
@@ -64,5 +56,5 @@ class TestStanzaSegmenter:
             )
         ],
     )
-    def test_split(self, segmenter, text, expected):
-        assert list(segmenter.split(text)) == expected
+    def test_split(self, stanza_segmenter, text, expected):
+        assert list(stanza_segmenter.split(text)) == expected
