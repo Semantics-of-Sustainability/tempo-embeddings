@@ -18,7 +18,6 @@ except ImportError as e:
 @pytest.mark.xfail(
     condition=int(platform.python_version_tuple()[1]) < 10,
     run=False,
-    raises=NameError,
     reason="types.NoneType is not available in Python <3.10",
 )
 class TestSegmenter:
