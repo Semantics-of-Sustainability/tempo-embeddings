@@ -54,7 +54,30 @@ class TestCorpusConfig:
             encoding="iso8859_1",
             compression="gzip",
             delimiter=";",
+            language="nl",
         )
+
+    @pytest.mark.parametrize(
+        "properties, expected",
+        [
+            (
+                None,
+                {
+                    "directory": str(CORPUS_DIR / "ANP"),
+                    "glob_pattern": "ANP_????.csv.gz",
+                    "loader_type": "csv",
+                    "text_columns": ["content"],
+                    "encoding": "iso8859_1",
+                    "compression": "gzip",
+                    "delimiter": ";",
+                    "language": "nl",
+                },
+            ),
+            (["language"], {"language": "nl"}),
+        ],
+    )
+    def test_asdict(self, anp_corpus_config, properties, expected):
+        assert anp_corpus_config.asdict(properties=properties) == expected
 
     def test_exists(self, tmp_corpus_config):
         assert not tmp_corpus_config.exists()
