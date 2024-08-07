@@ -318,7 +318,7 @@ class Passage:
         if nlp_pipeline:
             for ix, sentence in enumerate(nlp_pipeline.split(text)):
                 metadata["sentence_index"] = ix
-                yield cls(sentence.text, metadata)
+                yield cls(sentence, metadata)
         elif window_size is None:
             # Single window comprising the entire text
             yield cls(text, metadata)

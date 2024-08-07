@@ -41,7 +41,10 @@ class CorpusConfig:
     @model_validator(mode="after")
     def validate_segmenter(self):
         if self.segmenter and not self.language:
-            raise ValueError("A language must be specified for the segmenter")
+            raise ValueError(
+                f"Segmenter '{self.segmenter}' was specified, but no language"
+            )
+
         return self
 
     def asdict(self, *, properties: Optional[list[str]] = None):

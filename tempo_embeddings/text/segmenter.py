@@ -1,9 +1,10 @@
 import abc
+import logging
 from functools import lru_cache
-from typing import Iterable
+from typing import Iterable, Optional
 
 import stanza
-import wtsplit
+import wtpsplit
 
 from .. import settings
 
@@ -13,15 +14,35 @@ class Segmenter(abc.ABC):
 
     @abc.abstractmethod
     def split(self, text: str, *, language: str) -> Iterable[str]:
+        """Split the text into sentences.
+
+        Args:
+            text: the text to split.
+        Returns:
+            Iterable[str]: the sentences in the text.
+        """
         return NotImplemented
 
     @classmethod
     @lru_cache(maxsize=4)
-    def segmenter(cls, segmenter: str, language: str, **kwargs):
+    def segmenter(cls, segmenter: Optional[str], language: str, **kwargs):
+        """Return a segmenter of given type for the given language.
+
+        Args:
+            segmenter: the type of segmenter to use.
+            language: the language code for the segmenter.
+        Keyword Args:
+            kwargs: additional arguments for the segmenter.
+        Returns:
+            Segmenter: a segmenter of the given type for the given language.
+        """
         if segmenter == "stanza":
-            _class = StanzaSplitter
+            _class = StanzaSegmenter
         elif segmenter == "wtp":
             _class = WtpSegmenter
+        elif segmenter is None:
+            logging.info("No segmenter specified, using None.")
+            return None
         else:
             raise ValueError(f"Unknown segmenter: {segmenter}")
         return _class(language=language, **kwargs)
@@ -38,7 +59,7 @@ class WtpSegmenter(Segmenter):
     ) -> None:
         super().__init__()
 
-        self._model = wtsplit.SaT(
+        self._model = wtpsplit.SaT(
             model, language=language, style_or_domain=style_or_domain
         )
 
@@ -46,7 +67,7 @@ class WtpSegmenter(Segmenter):
         return self._model.split(text)
 
 
-class StanzaSplitter(Segmenter):
+class StanzaSegmenter(Segmenter):
     """A segmenter that uses the Stanza tokenizer."""
 
     def __init__(self, language: str, *, processors: str = "tokenize") -> None:

@@ -42,7 +42,7 @@ class TestCorpusReader:
 class TestCorpusConfig:
     @pytest.fixture
     def tmp_corpus_config(self, tmp_path):
-        return CorpusConfig(directory=tmp_path / "test_corpus")
+        return CorpusConfig(directory=tmp_path / "test_corpus", segmenter=None)
 
     @pytest.fixture
     def anp_corpus_config(self):
@@ -54,7 +54,8 @@ class TestCorpusConfig:
             encoding="iso8859_1",
             compression="gzip",
             delimiter=";",
-            # language="nl",# Do not set language to prevent sentence splitting
+            language=None,
+            segmenter=None,
         )
 
     @pytest.mark.parametrize(
@@ -71,6 +72,7 @@ class TestCorpusConfig:
                     "compression": "gzip",
                     "delimiter": ";",
                     "language": None,
+                    "segmenter": None,
                 },
             ),
             (["language"], {"language": None}),
