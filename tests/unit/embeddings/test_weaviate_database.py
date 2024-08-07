@@ -2,6 +2,7 @@ import gzip
 import json
 import logging
 import platform
+from contextlib import nullcontext as does_not_raise
 
 import pytest
 
@@ -82,6 +83,33 @@ class TestWeaviateDatabase:
             )
 
         weaviate_db_manager.model.embed_corpus.assert_called_once()
+
+    @pytest.mark.parametrize(
+        "model, embedder_name, expected_exception",
+        [
+            ("mock_model", None, does_not_raise()),
+            (None, "test_model", does_not_raise()),
+            (None, None, pytest.raises(ValueError)),
+        ],
+    )
+    def test_ingest_no_model(
+        self, weaviate_db_manager, corpus, model, embedder_name, expected_exception
+    ):
+        if model is None:
+            weaviate_db_manager.model = None
+
+        expected_embedder = model or embedder_name
+        expected_embedders = [] if expected_embedder is None else [expected_embedder]
+
+        with expected_exception:
+            weaviate_db_manager.ingest(corpus, embedder=embedder_name)
+
+        assert [
+            o.properties["embedder"]
+            for o in weaviate_db_manager.client.collections.get(
+                "TempoEmbeddings"
+            ).iterator()
+        ] == expected_embedders
 
     def test_get_collection_count(self, weaviate_db_manager_with_data):
         assert weaviate_db_manager_with_data.get_collection_count("TestCorpus") == 1
@@ -236,7 +264,7 @@ class TestWeaviateConfigDb:
         corpus_name = "TestCorpus"
         assert corpus_name not in config
 
-        config.add_corpus(corpus_name, "test_model")
+        config.add_corpus(corpus_name, embedder="test_model")
 
         assert corpus_name in config
 
@@ -253,7 +281,14 @@ class TestWeaviateConfigDb:
         corpus_name = "TestCorpus"
         assert list(config.get_corpora()) == []
 
-        config.add_corpus(corpus_name, "test_model")
+        config.add_corpus(
+            corpus_name, embedder="test_model", properties={"language": "en"}
+        )
+
+        assert [
+            o.properties
+            for o in weaviate_client.collections.get("TempoEmbeddings").iterator()
+        ] == [{"corpus": "TestCorpus", "embedder": "test_model", "language": "en"}]
 
         assert list(config.get_corpora()) == [corpus_name]
 
@@ -262,7 +297,7 @@ class TestWeaviateConfigDb:
 
         corpus_name = "TestCorpus"
 
-        config.add_corpus(corpus_name, "test_model")
+        config.add_corpus(corpus_name, embedder="test_model")
         assert corpus_name in config
 
         config.delete_corpus(corpus_name)

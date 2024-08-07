@@ -317,7 +317,6 @@ class Passage:
         if nlp_pipeline:
             doc = nlp_pipeline(text)
             for ix, sentence in enumerate(doc.sentences):
-                print(ix, sentence.text)
                 metadata["sentence_index"] = ix
                 yield cls(sentence.text, metadata)
         elif window_size is None:

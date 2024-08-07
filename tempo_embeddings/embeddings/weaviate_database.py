@@ -64,11 +64,16 @@ class WeaviateConfigDb:
         else:
             raise ValueError(f"Collection '{self._collection_name}' does not exist.")
 
-    def add_corpus(self, corpus: str, embedder: str) -> uuid.UUID:
+    def add_corpus(
+        self, corpus: str, embedder: str, properties: Optional[dict[str, Any]] = None
+    ) -> uuid.UUID:
+        properties = {
+            WeaviateConfigDb._CORPUS_NAME_FIELD: corpus,
+            "embedder": embedder,
+        } | (properties or {})
+
         return self._collection.data.insert(
-            properties={WeaviateConfigDb._CORPUS_NAME_FIELD: corpus, "model": embedder},
-            uuid=generate_uuid5(corpus),
-            vector={},
+            properties=properties, uuid=generate_uuid5(corpus), vector={}
         )
 
     def delete_corpus(self, corpus: str) -> bool:
@@ -149,13 +154,36 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         else:
             logger.info(f"Collection '{collection}' not found, no files ingested.")
 
-    def ingest(self, corpus: Corpus, name: Optional[str] = None):
+    def ingest(
+        self,
+        corpus: Corpus,
+        name: Optional[str] = None,
+        *,
+        embedder: Optional[str] = None,
+        properties: Optional[dict[str, Any]] = None,
+    ):
+        """Ingest a corpus into the database.
+
+        Args:
+            corpus (Corpus): The corpus to ingest
+            name (str, optional): The name of the collection. Defaults to the corpus label.
+            embedder (str, optional): The name of the embedder to use. Defaults to the model name.
+            properties (dict[str, Any], optional): Additional properties to store in the database. Defaults to None.
+        """
+        if embedder is None and self.model is None:
+            raise ValueError(
+                "No embedder specified and no default model set. Either set a model or specify an embedder name."
+            )
+
         name = name or corpus.label
 
-        # TODO: handle existing collection, updating, continuing
         if len(corpus) > 0:
             if not self._client.collections.exists(name):
-                self._config.add_corpus(corpus=name, embedder=self.model.name)
+                self._config.add_corpus(
+                    corpus=name,
+                    embedder=embedder or self.model.name,
+                    properties=properties or {},
+                )
                 # TODO: allow for embedded vectorizers
                 self._client.collections.create(
                     name, vectorizer_config=wvc.config.Configure.Vectorizer.none()
@@ -350,11 +378,17 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         collection_src = self._client.collections.get(collection_name)
         with gzip.open(filename_tgt, "wt", encoding="utf-8") as fileout:
             logger.info("Writing into '%s' file...", filename_tgt)
-            for q in tqdm(collection_src.iterator(include_vector=True)):
+            for q in tqdm(
+                collection_src.iterator(include_vector=True),
+                total=self.get_collection_count(collection_name),
+                unit="record",
+                desc="Exporting",
+            ):
                 row_dict = q.properties
                 row_dict["vector"] = q.vector["default"]
                 row_dict["uuid"] = str(q.uuid)
                 fileout.write(f"{json.dumps(row_dict)}\n")
+        # TODO: export corpus configuration
 
     def import_into_collection(self, filename_src: str, collection_name: str):
         collection_tgt = self._client.collections.get(collection_name)
@@ -368,7 +402,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             ) as batch:
                 logger.info("Importing into Weaviate '%s' collection...", filename_src)
 
-                for line in tqdm(f):
+                for line in tqdm(f, desc="Importing", unit="record"):
                     item = json.loads(line.strip())
                     item_id = uuid.UUID(item.pop("uuid"))
                     item_vector = item.pop("vector")
@@ -377,7 +411,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                 self._config.add_corpus(
                     corpus=collection_name, embedder=self.model.name
                 )
-                # FIXME: read the model name from the other config DB.
+                # TODO: import the corpus config from the other config DB.
 
     def validate_config(self) -> None:
         """Validate that the configuration database entries are present as database collections.
