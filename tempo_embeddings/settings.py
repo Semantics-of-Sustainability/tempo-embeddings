@@ -1,6 +1,7 @@
 import logging
 import os
 from pathlib import Path
+from typing import Optional
 
 DEFAULT_ENCODING = os.environ.get("ENCODING", "utf-8")
 
@@ -49,5 +50,7 @@ DEFAULT_LANGUAGE_MODEL: str = (
 ### Segmentation settings
 SEGMENTER: str = os.environ.get("SEGMENTER", "wtp")
 WTPSPLIT_MODEL = os.environ.get("WTPSPLIT_MODEL", "sat-3l-sm")
+
+DEVICE: Optional[str] = os.environ.get("DEVICE")
 
 WEAVIATE_CONFIG_COLLECTION: str = "TempoEmbeddings"

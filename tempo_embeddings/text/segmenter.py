@@ -15,7 +15,17 @@ class Segmenter(abc.ABC):
 
     @staticmethod
     def get_backend() -> str:
-        if torch.cuda.is_available():
+        """Determine which torch backend to use.
+
+        If a device is specified in the settings, that device is used.
+        Otherwise, try for cuda, then mps. Fall back to cpu.
+
+        Returns:
+            str: the backend to use.
+        """
+        if settings.DEVICE is not None:
+            backend = settings.DEVICE
+        elif torch.cuda.is_available():
             backend = "cuda"
         elif torch.backends.mps.is_available():
             backend = "mps"
