@@ -64,11 +64,16 @@ class WeaviateConfigDb:
         else:
             raise ValueError(f"Collection '{self._collection_name}' does not exist.")
 
-    def add_corpus(self, corpus: str, properties: dict[str, Any]) -> uuid.UUID:
+    def add_corpus(
+        self, corpus: str, embedder: str, properties: Optional[dict[str, Any]] = None
+    ) -> uuid.UUID:
+        properties = {
+            WeaviateConfigDb._CORPUS_NAME_FIELD: corpus,
+            "embedder": embedder,
+        } | (properties or {})
+
         return self._collection.data.insert(
-            properties={WeaviateConfigDb._CORPUS_NAME_FIELD: corpus} | properties,
-            uuid=generate_uuid5(corpus),
-            vector={},
+            properties=properties, uuid=generate_uuid5(corpus), vector={}
         )
 
     def delete_corpus(self, corpus: str) -> bool:
@@ -153,13 +158,32 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         self,
         corpus: Corpus,
         name: Optional[str] = None,
+        *,
+        embedder: Optional[str] = None,
         properties: Optional[dict[str, Any]] = None,
     ):
+        """Ingest a corpus into the database.
+
+        Args:
+            corpus (Corpus): The corpus to ingest
+            name (str, optional): The name of the collection. Defaults to the corpus label.
+            embedder (str, optional): The name of the embedder to use. Defaults to the model name.
+            properties (dict[str, Any], optional): Additional properties to store in the database. Defaults to None.
+        """
+        if embedder is None and self.model is None:
+            raise ValueError(
+                "No embedder specified and no default model set. Either set a model or specify an embedder name."
+            )
+
         name = name or corpus.label
 
         if len(corpus) > 0:
             if not self._client.collections.exists(name):
-                self._config.add_corpus(corpus=name, properties=properties or {})
+                self._config.add_corpus(
+                    corpus=name,
+                    embedder=embedder or self.model.name,
+                    properties=properties or {},
+                )
                 # TODO: allow for embedded vectorizers
                 self._client.collections.create(
                     name, vectorizer_config=wvc.config.Configure.Vectorizer.none()

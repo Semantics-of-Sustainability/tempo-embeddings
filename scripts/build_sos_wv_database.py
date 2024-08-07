@@ -116,8 +116,8 @@ if __name__ == "__main__":
                 db.ingest(
                     corpus,
                     corpus_name,
-                    properties={"embedder": args.language_model}
-                    | corpus_config.asdict(properties=["language"]),
+                    embedder=args.language_model,
+                    properties=corpus_config.asdict(properties=["language"]),
                 )
 
     if args.filter_terms_file is not None:
