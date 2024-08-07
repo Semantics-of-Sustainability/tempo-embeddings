@@ -6,6 +6,7 @@ from typing import Any, Iterable, Optional
 from numpy.typing import ArrayLike
 
 from .highlighting import Highlighting
+from .segmenter import Segmenter
 
 
 class Passage:
@@ -307,7 +308,7 @@ class Passage:
         window_size: int = None,
         window_overlap: int = None,
         metadata: dict = None,
-        nlp_pipeline=None,
+        nlp_pipeline: Segmenter = None,
     ) -> Iterable["Passage"]:
         """Create a Passage from a text string."""
 
@@ -315,8 +316,7 @@ class Passage:
         # TODO: use window_size on tokens instead of characters
 
         if nlp_pipeline:
-            doc = nlp_pipeline(text)
-            for ix, sentence in enumerate(doc.sentences):
+            for ix, sentence in enumerate(nlp_pipeline.split(text)):
                 metadata["sentence_index"] = ix
                 yield cls(sentence.text, metadata)
         elif window_size is None:

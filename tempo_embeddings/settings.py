@@ -46,4 +46,8 @@ DEFAULT_LANGUAGE_MODEL: str = (
     "NetherlandsForensicInstitute/robbert-2022-dutch-sentence-transformers"
 )
 
+### Segmentation settings
+DEFAULT_SEGMENTER: str = "wtp"
+WTPSPLIT_DEFAULT_MODEL = "sat-3l-sm"
+
 WEAVIATE_CONFIG_COLLECTION: str = "TempoEmbeddings"

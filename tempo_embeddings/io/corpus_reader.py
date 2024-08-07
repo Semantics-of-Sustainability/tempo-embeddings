@@ -4,12 +4,13 @@ from pathlib import Path
 from typing import Any, Iterable, Optional
 
 import stanza
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic.dataclasses import dataclass
 from tqdm import tqdm
 
 from .. import settings
 from ..text.corpus import Corpus
+from ..text.segmenter import Segmenter
 
 
 @lru_cache(maxsize=2)
@@ -33,8 +34,15 @@ class CorpusConfig:
     encoding: str = "utf-8"
     delimiter: str = ";"
     compression: Optional[str] = None
-    language: Optional[str] = None  # TODO: validate against Stanza languages
-    """This parameter is used as language for the NLP pipeline."""
+    language: Optional[str] = None
+    """The 'language' parameter is used for the NLP pipeline."""
+    segmenter: Optional[str] = settings.DEFAULT_SEGMENTER
+
+    @model_validator(mode="after")
+    def validate_segmenter(self):
+        if self.segmenter and not self.language:
+            raise ValueError("A language must be specified for the segmenter")
+        return self
 
     def asdict(self, *, properties: Optional[list[str]] = None):
         _converters = {"directory": str}
@@ -80,7 +88,7 @@ class CorpusConfig:
                     encoding=self.encoding,
                     compression=self.compression,
                     delimiter=self.delimiter,
-                    nlp_pipeline=nlp_pipeline(self.language),
+                    nlp_pipeline=Segmenter.segmenter(self.segmenter, self.language),
                     **kwargs,
                 )
             else:
@@ -118,7 +126,7 @@ class CorpusConfig:
                 encoding=self.encoding,
                 compression=self.compression,
                 delimiter=self.delimiter,
-                nlp_pipeline=nlp_pipeline(self.language),
+                nlp_pipeline=Segmenter.segmenter(self.segmenter, self.language),
                 **kwargs,
             )
         else:
