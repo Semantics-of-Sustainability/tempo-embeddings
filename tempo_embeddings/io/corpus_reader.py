@@ -21,7 +21,6 @@ def nlp_pipeline(lang: Optional[str]) -> stanza.Pipeline:
     Returns:
         stanza.Pipeline: a Stanza pipeline for the given language. None if lang is None.
     """
-    # TODO: move to device
     return stanza.Pipeline(lang=lang, processors="tokenize") if lang else None
 
 
