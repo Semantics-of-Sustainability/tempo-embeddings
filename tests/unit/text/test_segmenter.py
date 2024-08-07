@@ -28,6 +28,9 @@ class TestSegmenter:
             else:
                 assert isinstance(_segmenter, expected_type)
 
+    def test_get_backend(self):
+        assert Segmenter.get_backend() in {"cuda", "mps", "cpu"}
+
 
 class TestWtpSegmenter:
     @pytest.fixture

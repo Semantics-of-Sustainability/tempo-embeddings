@@ -4,6 +4,7 @@ from functools import lru_cache
 from typing import Iterable, Optional
 
 import stanza
+import torch
 import wtpsplit
 
 from .. import settings
@@ -11,6 +12,16 @@ from .. import settings
 
 class Segmenter(abc.ABC):
     """An abstract class for segmenting text into units."""
+
+    @staticmethod
+    def get_backend() -> str:
+        if torch.cuda.is_available():
+            backend = "cuda"
+        elif torch.backends.mps.is_available():
+            backend = "mps"
+        else:
+            backend = "cpu"
+        return backend
 
     @abc.abstractmethod
     def split(self, text: str, *, language: str) -> Iterable[str]:
@@ -62,6 +73,10 @@ class WtpSegmenter(Segmenter):
         self._model = wtpsplit.SaT(
             model, language=language, style_or_domain=style_or_domain
         )
+
+        device: str = Segmenter.get_backend()
+        logging.info("Using WtpSegemter on device: %s", device)
+        self._model.half().to(device)
 
     def split(self, text: str) -> list[str]:
         return self._model.split(text)
