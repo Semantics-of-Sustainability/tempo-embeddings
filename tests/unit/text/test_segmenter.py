@@ -1,25 +1,10 @@
-import logging
-import platform
 from contextlib import nullcontext as does_not_raise
 
 import pytest
 
 from tempo_embeddings.text.segmenter import Segmenter, StanzaSegmenter, WtpSegmenter
 
-try:
-    from types import NoneType
-except ImportError as e:
-    if int(platform.python_version_tuple()[1]) < 10:
-        logging.warning("types.NoneType is not available in Python <3.10")
-    else:
-        raise e
 
-
-@pytest.mark.xfail(
-    condition=int(platform.python_version_tuple()[1]) < 10,
-    run=False,
-    reason="types.NoneType is not available in Python <3.10",
-)
 class TestSegmenter:
     @pytest.mark.parametrize(
         "segmenter, language, expected_type, expected_exception",
@@ -28,13 +13,20 @@ class TestSegmenter:
             ("wtp", "nl", WtpSegmenter, does_not_raise()),
             # ("wtp", "invalid", WtpSegmenter, pytest.raises(ValueError)),
             ("stanza", "en", StanzaSegmenter, does_not_raise()),
-            (None, "en", NoneType, does_not_raise()),
-            ("invalid", "en", NoneType, pytest.raises(ValueError)),
+            (None, "en", None, does_not_raise()),
+            ("invalid", "en", None, pytest.raises(ValueError)),
         ],
     )
-    def test_segmenter(self, segmenter, language, expected_type, expected_exception):
+    def test_segmenter(
+        self, segmenter: str, language, expected_type, expected_exception
+    ):
         with expected_exception:
-            assert isinstance(Segmenter.segmenter(segmenter, language), expected_type)
+            _segmenter = Segmenter.segmenter(segmenter, language)
+            if expected_type is None:
+                # FIXME: this is for compatibility with Python 3.9. Python >=3.10 can use NoneType as `expected_type`
+                assert _segmenter is None
+            else:
+                assert isinstance(_segmenter, expected_type)
 
 
 class TestWtpSegmenter:
