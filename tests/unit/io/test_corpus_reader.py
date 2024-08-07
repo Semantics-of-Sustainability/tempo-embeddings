@@ -54,7 +54,7 @@ class TestCorpusConfig:
             encoding="iso8859_1",
             compression="gzip",
             delimiter=";",
-            language="nl",
+            # language="nl",# Do not set language to prevent sentence splitting
         )
 
     @pytest.mark.parametrize(
@@ -70,10 +70,10 @@ class TestCorpusConfig:
                     "encoding": "iso8859_1",
                     "compression": "gzip",
                     "delimiter": ";",
-                    "language": "nl",
+                    "language": None,
                 },
             ),
-            (["language"], {"language": "nl"}),
+            (["language"], {"language": None}),
         ],
     )
     def test_asdict(self, anp_corpus_config, properties, expected):
