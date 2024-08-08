@@ -55,9 +55,10 @@ class WeaviateConfigDb:
             raise KeyError(f"Corpus '{corpus}' not found.")
 
     def __setitem__(self, corpus: str, properties: dict[str, Any]):
-        uuid = properties.pop("uuid", generate_uuid5(corpus))
+        _uuid = generate_uuid5(corpus)
+        uuid = properties.pop("uuid", _uuid)
 
-        if uuid != generate_uuid5(corpus):
+        if uuid != _uuid:
             raise ValueError(
                 f"UUID '{uuid}' does not match expected UUID for corpus '{corpus}'"
             )
@@ -69,7 +70,7 @@ class WeaviateConfigDb:
                 vector={},
             )
         except UnexpectedStatusCodeError as e:
-            logging.error(e)
+            raise ValueError(f"Error inserting corpus '{corpus}': {e}") from e
 
     def _exists(self):
         return self._client.collections.exists(self._collection_name)

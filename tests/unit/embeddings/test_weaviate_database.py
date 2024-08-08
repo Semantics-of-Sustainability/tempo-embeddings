@@ -190,15 +190,8 @@ class TestWeaviateDatabase:
         export_file = tmp_path / "export.json.gz"
         weaviate_db_manager_with_data.export_from_collection("TestCorpus", export_file)
 
-        with caplog.at_level(logging.ERROR):
+        with pytest.raises(ValueError):
             weaviate_db_manager_with_data.import_into_collection(export_file)
-        assert caplog.record_tuples == [
-            (
-                "root",
-                logging.ERROR,
-                "Object was not added! Unexpected status code: 422, with response body: {'error': [{'message': \"id 'e7f46979-b88a-5c7b-9eea-f02c0b800b3e' already exists\"}]}.",
-            )
-        ]
 
     def test_reset(self, weaviate_db_manager_with_data):
         client = weaviate_db_manager_with_data.client
