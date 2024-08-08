@@ -3,10 +3,10 @@ import logging
 from functools import lru_cache
 from typing import Iterable, Optional
 
-import sentence_splitter
 import stanza
 import torch
 import wtpsplit
+from sentence_splitter import SentenceSplitter
 
 from .. import settings
 
@@ -75,12 +75,11 @@ class Segmenter(abc.ABC):
 class SentenceSplitterSegmenter(Segmenter):
     def __init__(self, language: str) -> None:
         super().__init__()
+        self._model = SentenceSplitter(language=language)
         self._language = language
 
     def split(self, text: str) -> Iterable[str]:
-        return sentence_splitter.split_text_into_sentences(
-            text, language=self._language
-        )
+        return self._model.split(text)
 
 
 class WtpSegmenter(Segmenter):
