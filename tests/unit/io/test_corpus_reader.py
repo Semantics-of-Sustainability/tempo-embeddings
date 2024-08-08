@@ -1,3 +1,4 @@
+import json
 from contextlib import nullcontext as does_not_raise
 from pathlib import Path
 from tempfile import gettempdir
@@ -5,19 +6,13 @@ from tempfile import gettempdir
 import pytest
 
 from tempo_embeddings.io.corpus_reader import CorpusConfig, CorpusReader
+from tempo_embeddings.settings import CORPORA_CONFIG_FILE
 
 from ...conftest import CORPUS_DIR
 
 
 class TestCorpusReader:
-    _CONFIGURED_CORPORA = [
-        "ANP_mini",
-        "ANP",
-        "Delpher",
-        "NRC",
-        "StatenGeneraal",
-        "StatenGeneraal_clean",
-    ]
+    _CONFIGURED_CORPORA = json.load(CORPORA_CONFIG_FILE.open("rt")).keys()
 
     @pytest.mark.parametrize(
         "corpora, base_dir, must_exist, expected, expected_exception",
@@ -34,9 +29,7 @@ class TestCorpusReader:
     def test_corpora(self, corpora, base_dir, must_exist, expected, expected_exception):
         with expected_exception:
             reader = CorpusReader(corpora=corpora, base_dir=Path(base_dir))
-            assert sorted(reader.corpora(must_exist=must_exist)) == sorted(
-                expected
-            ), f"Expected corpora not found in {base_dir}"
+            assert sorted(reader.corpora(must_exist=must_exist)) == sorted(expected)
 
 
 class TestCorpusConfig:
