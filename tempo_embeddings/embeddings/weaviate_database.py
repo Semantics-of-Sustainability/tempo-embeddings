@@ -57,6 +57,11 @@ class WeaviateConfigDb:
     def __setitem__(self, corpus: str, properties: dict[str, Any]):
         uuid = properties.pop("uuid", generate_uuid5(corpus))
 
+        if uuid != generate_uuid5(corpus):
+            raise ValueError(
+                f"UUID '{uuid}' does not match expected UUID for corpus '{corpus}'"
+            )
+
         try:
             return self._collection.data.insert(
                 properties={WeaviateConfigDb._CORPUS_NAME_FIELD: corpus} | properties,
