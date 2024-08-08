@@ -10,7 +10,7 @@ from tqdm import tqdm
 import weaviate
 import weaviate.classes as wvc
 from weaviate.classes.query import Filter, MetadataQuery
-from weaviate.exceptions import WeaviateQueryError
+from weaviate.exceptions import UnexpectedStatusCodeError, WeaviateQueryError
 from weaviate.util import generate_uuid5
 
 from ..settings import WEAVIATE_CONFIG_COLLECTION
@@ -47,6 +47,31 @@ class WeaviateConfigDb:
     def __contains__(self, corpus: str):
         return corpus in self.get_corpora()
 
+    def __getitem__(self, corpus: str) -> dict[str, Any]:
+        uuid = generate_uuid5(corpus)
+        if config := self._collection.query.fetch_object_by_id(uuid):
+            return {"uuid": str(uuid)} | config.properties
+        else:
+            raise KeyError(f"Corpus '{corpus}' not found.")
+
+    def __setitem__(self, corpus: str, properties: dict[str, Any]):
+        _uuid = generate_uuid5(corpus)
+        uuid = properties.pop("uuid", _uuid)
+
+        if uuid != _uuid:
+            raise ValueError(
+                f"UUID '{uuid}' does not match expected UUID for corpus '{corpus}'"
+            )
+
+        try:
+            return self._collection.data.insert(
+                properties={WeaviateConfigDb._CORPUS_NAME_FIELD: corpus} | properties,
+                uuid=uuid,
+                vector={},
+            )
+        except UnexpectedStatusCodeError as e:
+            raise ValueError(f"Error inserting corpus '{corpus}': {e}") from e
+
     def _exists(self):
         return self._client.collections.exists(self._collection_name)
 
@@ -72,9 +97,7 @@ class WeaviateConfigDb:
             "embedder": embedder,
         } | (properties or {})
 
-        return self._collection.data.insert(
-            properties=properties, uuid=generate_uuid5(corpus), vector={}
-        )
+        self[corpus] = properties
 
     def delete_corpus(self, corpus: str) -> bool:
         uuid = generate_uuid5(corpus)
@@ -374,44 +397,77 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
     def export_from_collection(
         self, collection_name: str, filepath: str = None
     ) -> None:
+        """Export entire collection in jsonl format.
+
+        The first line is the configuration, the rest are the records.
+
+        Args:
+            collection_name (str): The name of the collection to export
+            filepath (str, optional): The file to write to. Defaults to None.
+        """
         filename_tgt = filepath or f"{collection_name}.json.gz"
         collection_src = self._client.collections.get(collection_name)
+        total_count = collection_src.aggregate.over_all(total_count=True).total_count
+
         with gzip.open(filename_tgt, "wt", encoding="utf-8") as fileout:
             logger.info("Writing into '%s' file...", filename_tgt)
+            json.dump(
+                self._config[collection_name] | {"total_count": total_count}, fileout
+            )
+            fileout.write("\n")
+
             for q in tqdm(
                 collection_src.iterator(include_vector=True),
-                total=self.get_collection_count(collection_name),
+                total=total_count,
                 unit="record",
-                desc="Exporting",
+                desc=f"Exporting '{collection_name}'",
             ):
                 row_dict = q.properties
                 row_dict["vector"] = q.vector["default"]
                 row_dict["uuid"] = str(q.uuid)
-                fileout.write(f"{json.dumps(row_dict)}\n")
-        # TODO: export corpus configuration
+                json.dump(row_dict, fileout)
+                fileout.write("\n")
 
-    def import_into_collection(self, filename_src: str, collection_name: str):
-        collection_tgt = self._client.collections.get(collection_name)
-        if collection_name in self:
-            logging.error(f"Collection '{collection_name}' already exists, skipping.")
-        else:
-            with gzip.open(
-                filename_src, "rt", encoding="utf-8"
-            ) as f, collection_tgt.batch.fixed_size(
+    def import_into_collection(self, filename_src: str):
+        """Import a collection from a jsonl file.
+
+        The first line is expected to be the configuration, the rest are the records.
+
+        Args:
+            filename_src (str): The file to read from
+        Raises:
+            ValueError: If the corpus is already registered in the configuration
+
+        """
+        with gzip.open(filename_src, "rt", encoding="utf-8") as f:
+            logger.info("Importing into Weaviate '%s' collection...", filename_src)
+
+            config_entry: dict[str, str] = json.loads(f.readline())
+            collection_name = config_entry.pop("corpus")
+            total_count = config_entry.pop("total_count", None)
+            self._config[collection_name] = config_entry
+
+            with self._client.collections.get(collection_name).batch.fixed_size(
                 batch_size=self.batch_size
             ) as batch:
-                logger.info("Importing into Weaviate '%s' collection...", filename_src)
-
-                for line in tqdm(f, desc="Importing", unit="record"):
+                for count, line in enumerate(
+                    tqdm(
+                        f,
+                        desc=f"Importing {collection_name}",
+                        unit="record",
+                        total=total_count,
+                    )
+                ):
                     item = json.loads(line.strip())
                     item_id = uuid.UUID(item.pop("uuid"))
                     item_vector = item.pop("vector")
                     batch.add_object(properties=item, vector=item_vector, uuid=item_id)
-
-                self._config.add_corpus(
-                    corpus=collection_name, embedder=self.model.name
+            if count != total_count:
+                logger.warning(
+                    "Total count mismatch: expected %d, but imported %d records",
+                    total_count,
+                    count,
                 )
-                # TODO: import the corpus config from the other config DB.
 
     def validate_config(self) -> None:
         """Validate that the configuration database entries are present as database collections.
