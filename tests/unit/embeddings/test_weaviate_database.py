@@ -128,6 +128,7 @@ class TestWeaviateDatabase:
                 "uuid": "e7f46979-b88a-5c7b-9eea-f02c0b800b3e",
                 "corpus": "TestCorpus",
                 "embedder": "mock_model",
+                "total_count": 1,
             },
             {
                 "provenance": "test_file",

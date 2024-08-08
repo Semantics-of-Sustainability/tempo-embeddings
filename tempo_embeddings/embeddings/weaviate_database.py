@@ -401,15 +401,18 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         """
         filename_tgt = filepath or f"{collection_name}.json.gz"
         collection_src = self._client.collections.get(collection_name)
+        total_count = collection_src.aggregate.over_all(total_count=True).total_count
 
         with gzip.open(filename_tgt, "wt", encoding="utf-8") as fileout:
             logger.info("Writing into '%s' file...", filename_tgt)
-            json.dump(self._config[collection_name], fileout)
+            json.dump(
+                self._config[collection_name] | {"total_count": total_count}, fileout
+            )
             fileout.write("\n")
 
             for q in tqdm(
                 collection_src.iterator(include_vector=True),
-                total=self.get_collection_count(collection_name),
+                total=total_count,
                 unit="record",
                 desc=f"Exporting '{collection_name}'",
             ):
@@ -433,16 +436,30 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
 
             config_entry: dict[str, str] = json.loads(f.readline())
             collection_name = config_entry.pop("corpus")
+            total_count = config_entry.pop("total_count", None)
             self._config[collection_name] = config_entry
 
             with self._client.collections.get(collection_name).batch.fixed_size(
                 batch_size=self.batch_size
             ) as batch:
-                for line in tqdm(f, desc=f"Importing {collection_name}", unit="record"):
+                for count, line in enumerate(
+                    tqdm(
+                        f,
+                        desc=f"Importing {collection_name}",
+                        unit="record",
+                        total=total_count,
+                    )
+                ):
                     item = json.loads(line.strip())
                     item_id = uuid.UUID(item.pop("uuid"))
                     item_vector = item.pop("vector")
                     batch.add_object(properties=item, vector=item_vector, uuid=item_id)
+            if count != total_count:
+                logger.warning(
+                    "Total count mismatch: expected %d, but imported %d records",
+                    total_count,
+                    count,
+                )
 
     def validate_config(self) -> None:
         """Validate that the configuration database entries are present as database collections.
