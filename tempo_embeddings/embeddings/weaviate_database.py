@@ -47,10 +47,10 @@ class WeaviateConfigDb:
     def __contains__(self, corpus: str):
         return corpus in self.get_corpora()
 
-    def __getitem__(self, corpus: str):
-        object = self._collection.query.fetch_object_by_id(generate_uuid5(corpus))
-        if object:
-            return {"uuid": str(object.uuid)} | object.properties
+    def __getitem__(self, corpus: str) -> dict[str, Any]:
+        uuid = generate_uuid5(corpus)
+        if config := self._collection.query.fetch_object_by_id(uuid):
+            return {"uuid": str(uuid)} | config.properties
         else:
             raise KeyError(f"Corpus '{corpus}' not found.")
 
