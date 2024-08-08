@@ -48,7 +48,7 @@ DEFAULT_LANGUAGE_MODEL: str = (
 )
 
 ### Segmentation settings
-SEGMENTER: str = os.environ.get("SEGMENTER", "wtp")
+SEGMENTER: str = os.environ.get("SEGMENTER", "sentence_splitter")
 WTPSPLIT_MODEL = os.environ.get("WTPSPLIT_MODEL", "sat-3l-sm")
 
 DEVICE: Optional[str] = os.environ.get("DEVICE")
