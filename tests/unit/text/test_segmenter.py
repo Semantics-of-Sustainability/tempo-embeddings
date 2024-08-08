@@ -16,7 +16,13 @@ class TestSegmenter:
         [
             ("wtp", "en", WtpSegmenter, does_not_raise()),
             ("wtp", "nl", WtpSegmenter, does_not_raise()),
-            # ("wtp", "invalid", WtpSegmenter, pytest.raises(ValueError)),
+            pytest.param(
+                "wtp",
+                "invalid",
+                WtpSegmenter,
+                pytest.raises(ValueError),
+                marks=pytest.mark.skip(reason="WtpSegmenter falls back to basic model"),
+            ),
             ("sentence_splitter", "nl", SentenceSplitterSegmenter, does_not_raise()),
             ("stanza", "en", StanzaSegmenter, does_not_raise()),
             (None, "en", None, does_not_raise()),
