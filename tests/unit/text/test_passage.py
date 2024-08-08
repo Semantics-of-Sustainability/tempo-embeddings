@@ -2,7 +2,7 @@ import pytest
 
 from tempo_embeddings.text.highlighting import Highlighting
 from tempo_embeddings.text.passage import Passage
-from tempo_embeddings.text.segmenter import Segmenter
+from tempo_embeddings.text.segmenter import SentenceSplitterSegmenter
 
 
 @pytest.fixture
@@ -113,7 +113,7 @@ class TestPassage:
         "segmenter,text,expected",
         [
             (
-                Segmenter.segmenter("sentence_splitter", "en"),
+                SentenceSplitterSegmenter("en"),
                 "This is a test. This is another test.",
                 [
                     Passage("This is a test.", metadata={"sentence_index": 0}),

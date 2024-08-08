@@ -44,17 +44,17 @@ class TestSegmenter:
         "segmenter, text, expected",
         [
             (
-                Segmenter.segmenter("sentence_splitter", "en"),
+                SentenceSplitterSegmenter("en"),
                 "This is a test. This is another test.",
                 ["This is a test.", "This is another test."],
             ),
             (
-                Segmenter.segmenter("wtp", "en"),
+                WtpSegmenter("en"),
                 "This is a test This is another test.",
                 ["This is a test ", "This is another test."],
             ),
             (
-                Segmenter.segmenter("stanza", "en"),
+                StanzaSegmenter("en"),
                 "This is a test This is another test.",
                 ["This is a test", "This is another test."],
             ),
