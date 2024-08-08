@@ -435,6 +435,8 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
 
         Args:
             filename_src (str): The file to read from
+        Raises:
+            ValueError: If the corpus is already registered in the configuration
 
         """
         with gzip.open(filename_src, "rt", encoding="utf-8") as f:

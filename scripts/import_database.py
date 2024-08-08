@@ -1,4 +1,5 @@
 import argparse
+import logging
 
 import weaviate
 from tempo_embeddings.embeddings.weaviate_database import WeaviateDatabaseManager
@@ -39,6 +40,9 @@ if __name__ == "__main__":
         db = WeaviateDatabaseManager(client=client, model=None)
         if args.overwrite:
             db.delete_collection(args.corpus)
-        db.import_into_collection(args.input)
+        try:
+            db.import_into_collection(args.input)
+        except ValueError as e:
+            logging.error(e)
 
     args.input.close()
