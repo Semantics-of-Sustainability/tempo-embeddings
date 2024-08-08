@@ -2,7 +2,12 @@ from contextlib import nullcontext as does_not_raise
 
 import pytest
 
-from tempo_embeddings.text.segmenter import Segmenter, StanzaSegmenter, WtpSegmenter
+from tempo_embeddings.text.segmenter import (
+    Segmenter,
+    SentenceSplitterSegmenter,
+    StanzaSegmenter,
+    WtpSegmenter,
+)
 
 
 class TestSegmenter:
@@ -12,6 +17,7 @@ class TestSegmenter:
             ("wtp", "en", WtpSegmenter, does_not_raise()),
             ("wtp", "nl", WtpSegmenter, does_not_raise()),
             # ("wtp", "invalid", WtpSegmenter, pytest.raises(ValueError)),
+            ("sentence_splitter", "nl", SentenceSplitterSegmenter, does_not_raise()),
             ("stanza", "en", StanzaSegmenter, does_not_raise()),
             (None, "en", None, does_not_raise()),
             ("invalid", "en", None, pytest.raises(ValueError)),
@@ -28,33 +34,28 @@ class TestSegmenter:
             else:
                 assert isinstance(_segmenter, expected_type)
 
-    def test_get_backend(self):
-        assert Segmenter.get_backend() in {"cuda", "mps", "cpu"}
-
-
-class TestWtpSegmenter:
     @pytest.mark.parametrize(
-        "text, expected",
+        "segmenter, text, expected",
         [
             (
+                Segmenter.segmenter("sentence_splitter", "en"),
+                "This is a test. This is another test.",
+                ["This is a test.", "This is another test."],
+            ),
+            (
+                Segmenter.segmenter("wtp", "en"),
                 "This is a test This is another test.",
                 ["This is a test ", "This is another test."],
-            )
-        ],
-    )
-    def test_split(self, wtp_segmenter, text, expected):
-        assert wtp_segmenter.split(text) == expected
-
-
-class TestStanzaSegmenter:
-    @pytest.mark.parametrize(
-        "text, expected",
-        [
+            ),
             (
+                Segmenter.segmenter("stanza", "en"),
                 "This is a test This is another test.",
                 ["This is a test", "This is another test."],
-            )
+            ),
         ],
     )
-    def test_split(self, stanza_segmenter, text, expected):
-        assert list(stanza_segmenter.split(text)) == expected
+    def test_split(self, segmenter, text, expected):
+        assert list(segmenter.split(text)) == expected
+
+    def test_get_backend(self):
+        assert Segmenter.get_backend() in {"cuda", "mps", "cpu"}
