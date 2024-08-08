@@ -6,6 +6,7 @@ from typing import Iterable, Optional
 import stanza
 import torch
 import wtpsplit
+from sentence_splitter import SentenceSplitter
 
 from .. import settings
 
@@ -57,7 +58,9 @@ class Segmenter(abc.ABC):
         Returns:
             Segmenter: a segmenter of the given type for the given language.
         """
-        if segmenter == "stanza":
+        if segmenter == "sentence_splitter":
+            _class = SentenceSplitterSegmenter
+        elif segmenter == "stanza":
             _class = StanzaSegmenter
         elif segmenter == "wtp":
             _class = WtpSegmenter
@@ -67,6 +70,16 @@ class Segmenter(abc.ABC):
         else:
             raise ValueError(f"Unknown segmenter: {segmenter}")
         return _class(language=language, **kwargs)
+
+
+class SentenceSplitterSegmenter(Segmenter):
+    def __init__(self, language: str) -> None:
+        super().__init__()
+        self._model = SentenceSplitter(language=language)
+        self._language = language
+
+    def split(self, text: str) -> Iterable[str]:
+        return self._model.split(text)
 
 
 class WtpSegmenter(Segmenter):
