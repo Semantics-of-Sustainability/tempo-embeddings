@@ -1,9 +1,7 @@
 import argparse
 
 import weaviate
-from tempo_embeddings.embeddings.model import SentenceTransformerModelWrapper
 from tempo_embeddings.embeddings.weaviate_database import WeaviateDatabaseManager
-from tempo_embeddings.settings import DEFAULT_LANGUAGE_MODEL
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -39,13 +37,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     with weaviate.connect_to_local(args.weaviate_host, args.weaviate_port) as client:
-        # FIXME: model is never used, but has to be loaded here
-        db = WeaviateDatabaseManager(
-            client=client,
-            model=SentenceTransformerModelWrapper.from_pretrained(
-                DEFAULT_LANGUAGE_MODEL
-            ),
-        )
+        db = WeaviateDatabaseManager(client=client, model=None)
         if args.overwrite:
             db.delete_collection(args.corpus)
         db.import_into_collection(args.input, args.corpus)
