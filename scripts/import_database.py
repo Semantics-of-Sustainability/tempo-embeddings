@@ -7,7 +7,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         "Import a Weaviate Vector Database for the Semantics of Sustainability Project"
     )
-    parser.add_argument("--corpus", type=str, required=True, help="Corpus to export")
     parser.add_argument(
         "--input",
         "-i",
@@ -40,6 +39,6 @@ if __name__ == "__main__":
         db = WeaviateDatabaseManager(client=client, model=None)
         if args.overwrite:
             db.delete_collection(args.corpus)
-        db.import_into_collection(args.input, args.corpus)
+        db.import_into_collection(args.input)
 
     args.input.close()
