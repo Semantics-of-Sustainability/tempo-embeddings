@@ -382,7 +382,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                 collection_src.iterator(include_vector=True),
                 total=self.get_collection_count(collection_name),
                 unit="record",
-                desc="Exporting",
+                desc=f"Exporting '{collection_name}'",
             ):
                 row_dict = q.properties
                 row_dict["vector"] = q.vector["default"]
@@ -402,7 +402,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             ) as batch:
                 logger.info("Importing into Weaviate '%s' collection...", filename_src)
 
-                for line in tqdm(f, desc="Importing", unit="record"):
+                for line in tqdm(f, desc=f"Importing {collection_name}", unit="record"):
                     item = json.loads(line.strip())
                     item_id = uuid.UUID(item.pop("uuid"))
                     item_vector = item.pop("vector")
