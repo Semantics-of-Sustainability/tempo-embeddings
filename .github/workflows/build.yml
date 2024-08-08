@@ -8,6 +8,9 @@ on:
     branches:
     - main
 
+env:
+  DEVICE: cpu
+
 jobs:
 
   build:

@@ -117,7 +117,9 @@ if __name__ == "__main__":
                     corpus,
                     corpus_name,
                     embedder=args.language_model,
-                    properties=corpus_config.asdict(properties=["language"]),
+                    properties=corpus_config.asdict(
+                        properties=["language", "segmenter"]
+                    ),
                 )
 
     if args.filter_terms_file is not None:
