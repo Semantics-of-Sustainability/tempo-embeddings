@@ -21,6 +21,16 @@
         "delimiter": ";",
         "language": "nl"
     },
+    "AlgemeenDagblad": {
+        "sub-directory": "Delpher/RawFiles",
+        "glob_pattern": "AlgemeenDagblad_????.csv.gz",
+        "loader_type": "csv",
+        "text_columns": [
+            "Content"
+        ],
+        "compression": "gzip",
+        "language": "nl"
+    },
     "NRC": {
         "sub-directory": "Delpher/RawFiles",
         "glob_pattern": "NRC_????.csv.gz",
@@ -29,18 +39,36 @@
             "Content"
         ],
         "compression": "gzip",
-        "delimiter": ";",
         "language": "nl"
     },
-    "Delpher": {
-        "glob_pattern": "RawFiles/*/*_????.csv.gz",
+    "Telegraaf": {
+        "sub-directory": "Delpher/RawFiles",
+        "glob_pattern": "Telegraaf_????.csv.gz",
         "loader_type": "csv",
         "text_columns": [
             "Content"
         ],
-        "encoding": "utf-8",
         "compression": "gzip",
-        "delimiter": ";",
+        "language": "nl"
+    },
+    "Trouw": {
+        "sub-directory": "Delpher/RawFiles",
+        "glob_pattern": "Trouw_????.csv.gz",
+        "loader_type": "csv",
+        "text_columns": [
+            "Content"
+        ],
+        "compression": "gzip",
+        "language": "nl"
+    },
+    "Volkskrant": {
+        "sub-directory": "Delpher/RawFiles",
+        "glob_pattern": "Volkskrant_????.csv.gz",
+        "loader_type": "csv",
+        "text_columns": [
+            "Content"
+        ],
+        "compression": "gzip",
         "language": "nl"
     },
     "StatenGeneraal": {

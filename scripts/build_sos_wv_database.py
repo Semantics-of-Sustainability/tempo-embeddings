@@ -23,6 +23,12 @@ def arguments_parser():
         "--corpus-dir", type=Path, default=settings.CORPUS_DIR, help="Corpora directory"
     )
     parser.add_argument(
+        "--corpus-config-file",
+        type=argparse.FileType("rt"),
+        default=settings.CORPORA_CONFIG_FILE,
+        help="Corpora configuration file",
+    )
+    parser.add_argument(
         "--max-files",
         type=int,
         required=False,
@@ -80,7 +86,7 @@ if __name__ == "__main__":
 
     try:
         corpus_reader = CorpusReader(
-            config_file=settings.CORPORA_CONFIG_FILE,
+            config_file=args.corpus_config_file,
             corpora=args.corpora,
             base_dir=args.corpus_dir,
         )

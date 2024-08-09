@@ -1,0 +1,13 @@
+{
+    "Delpher": {
+        "glob_pattern": "RawFiles/*/*_????.csv.gz",
+        "loader_type": "csv",
+        "text_columns": [
+            "Content"
+        ],
+        "encoding": "utf-8",
+        "compression": "gzip",
+        "delimiter": ";",
+        "language": "nl"
+    }
+}
