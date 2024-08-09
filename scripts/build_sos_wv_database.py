@@ -49,7 +49,7 @@ def arguments_parser():
         default=settings.DEFAULT_LANGUAGE_MODEL,
         help=f"The language model to use, defaults to {settings.DEFAULT_LANGUAGE_MODEL}",
     )
-    filter_terms_args = parser.add_mutually_exclusive_group(required=True)
+    filter_terms_args = parser.add_mutually_exclusive_group(required=False)
     filter_terms_args.add_argument(
         "--filter-terms", type=str, metavar="TERM", nargs="+", help="Filter terms"
     )
@@ -93,9 +93,13 @@ if __name__ == "__main__":
     except ValueError as e:
         parser.error(e)
 
-    filter_terms = args.filter_terms or [
-        line.strip() for line in args.filter_terms_file
-    ]
+    if args.filter_terms:
+        filter_terms = args.filter_terms
+    elif args.filter_terms_file:
+        filter_terms = [line.strip() for line in args.filter_terms_file]
+        args.filter_terms_file.close()
+    else:
+        filter_terms = []
 
     with weaviate.connect_to_local(args.weaviate_host, args.weaviate_port) as client:
         # TODO: model requires a different wrapper class for non-SentenceBert models
@@ -127,6 +131,3 @@ if __name__ == "__main__":
                         properties=["language", "segmenter"]
                     ),
                 )
-
-    if args.filter_terms_file is not None:
-        args.filter_terms_file.close()
