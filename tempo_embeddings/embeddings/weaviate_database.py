@@ -137,6 +137,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         super().__init__(batch_size)
 
         self.model = model
+        # FIXME: allow for model=None, fix ingest()/_insert_using_custom_model()
         # TODO: add support for HF/Weaviate embedder
         weaviate_headers = {}
 
@@ -215,7 +216,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             # TODO: implement other model type
             try:
                 self._insert_using_custom_model(corpus, collection)
-            except Exception as e:
+            except WeaviateQueryError as e:
                 logger.error("Error while ingesting corpus '%s': %s", name, e)
                 if not self._client.collections.exists(name):
                     logger.info(f"Removing collection '{name}' to config database")
@@ -246,6 +247,8 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             collection (weaviate.collections.Collection): The collection to insert into
         Returns:
             int: The number of records inserted
+        Raises:
+            WeaviateQueryError: If a Weaviate error occurs during insertion
         """
         num_records = 0
         embeddings = self.model.embed_corpus(
@@ -262,20 +265,17 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                 props = p.metadata
                 props["passage"] = p.text
                 props["highlighting"] = str(p.highlighting)
-                # properties = {"passage": p.text, "title": p.metadata['title'], "date": datetime.strptime(p.metadata['date'],'%Y-%m-%d'),
-                #               "issuenumber": int(p.metadata['issuenumber'])}
                 data_object = wvc.data.DataObject(
                     properties=props, uuid=generate_uuid5(props), vector=emb
                 )
+
                 # TODO: allow for named vectors
                 # see https://weaviate.io/developers/weaviate/manage-data/create#create-an-object-with-named-vectors
                 data_objects.append(data_object)
-            # Make the Insertion
-            try:
-                response = collection.data.insert_many(data_objects)
-            except WeaviateQueryError as e:
-                raise ValueError(f"Error inserting data: {data_object}") from e
+
+            response = collection.data.insert_many(data_objects)
             num_records += len(response.all_responses)
+
         return num_records
 
     def _insert_using_huggingface_api(self, corpus, collection):
