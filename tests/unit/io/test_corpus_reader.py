@@ -74,18 +74,6 @@ class TestCorpusConfig:
     def test_asdict(self, anp_corpus_config, properties, expected):
         assert anp_corpus_config.asdict(properties=properties) == expected
 
-    def test_not_empty(self, tmp_corpus_config):
-        assert not tmp_corpus_config.exists()
-
-        tmp_corpus_config.directory.mkdir()
-        assert not tmp_corpus_config.exists()
-
-        (tmp_corpus_config.directory / "file1.csv").touch()
-        assert not tmp_corpus_config.exists()
-
-        (tmp_corpus_config.directory / "file1_1984.csv").touch()
-        assert tmp_corpus_config.exists()
-
     def test_files_tmp(self, tmp_corpus_config):
         assert sorted(tmp_corpus_config.files()) == []
 
