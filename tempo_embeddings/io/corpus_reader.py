@@ -54,8 +54,8 @@ class CorpusConfig:
             for property in properties or self.__annotations__.keys()
         }
 
-    def exists(self):
-        return self.directory.is_dir()
+    def not_empty(self):
+        return any(self.files())
 
     def files(self):
         return self.directory.glob(self.glob_pattern)
