@@ -72,13 +72,14 @@
         "language": "nl"
     },
     "StatenGeneraal": {
-        "glob_pattern": "StatenGeneraal_????.csv",
+        "glob_pattern": "StatenGeneraal_????.csv.gz",
         "loader_type": "csv",
         "text_columns": [
-            "text_clean_str"
+            "Content"
         ],
         "encoding": "utf-8",
-        "delimiter": "\t",
+        "compression": "gzip",
+        "delimiter": ";",
         "language": "nl"
     },
     "StatenGeneraal_clean": {
