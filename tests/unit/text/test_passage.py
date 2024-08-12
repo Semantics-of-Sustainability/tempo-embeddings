@@ -1,3 +1,5 @@
+import platform
+
 import pytest
 
 from tempo_embeddings.text.highlighting import Highlighting
@@ -135,6 +137,10 @@ class TestPassage:
     def test_words(self, passage, expected):
         assert list(passage.words()) == expected
 
+    @pytest.mark.skipif(
+        int(platform.python_version_tuple()[1]) < 10,
+        reason="Python 3.10+ required for this test.",
+    )
     def test_from_weaviate_record(self, weaviate_db_manager_with_data):
         expected_passages = [
             Passage(
