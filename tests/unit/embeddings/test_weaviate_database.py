@@ -60,6 +60,12 @@ class TestWeaviateDatabase:
         for vector_name, vector in obj.vector.items():
             assert len(vector) == expected_vector_shapes[vector_name]
 
+    def assert_dict_equals(self, dict1, expected):
+        assert dict1.keys() == expected.keys()
+
+        for key, value in expected.items():
+            assert len(dict1[key]) == value if key == "vector" else dict1[key] == value
+
     @pytest.mark.skipif(
         int(platform.python_version_tuple()[1]) < 10,
         reason="Python 3.10+ required for this test.",
@@ -95,7 +101,7 @@ class TestWeaviateDatabase:
         assert "TestCorpus" not in weaviate_db_manager_with_data._config
 
     def test_export_from_collection(self, weaviate_db_manager_with_data, tmp_path):
-        expected_db = [
+        expected_lines = [
             {
                 "uuid": "e7f46979-b88a-5c7b-9eea-f02c0b800b3e",
                 "corpus": "TestCorpus",
@@ -114,19 +120,12 @@ class TestWeaviateDatabase:
         weaviate_db_manager_with_data.export_from_collection("TestCorpus", export_file)
 
         with gzip.open(export_file) as f:
-            db = [json.loads(line) for line in f]
+            lines = [json.loads(line) for line in f]
 
-        assert len(db) == len(expected_db)
+        assert len(lines) == len(expected_lines)
 
-        for object, expected in zip(db, expected_db):
-            assert len(object) == len(expected)
-
-            for expected_key, expected_value in expected.items():
-                value = object[expected_key]
-                if expected_key == "vector":
-                    value = len(value)
-
-                assert value == expected_value
+        for line, expected_line in zip(lines, expected_lines):
+            self.assert_dict_equals(line, expected_line)
 
     def test_import_from_file(self, weaviate_db_manager_with_data, tmp_path):
         export_file = tmp_path / "export.json.gz"
