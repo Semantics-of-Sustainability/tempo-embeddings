@@ -15,7 +15,6 @@ from weaviate.util import generate_uuid5
 
 from ..settings import WEAVIATE_CONFIG_COLLECTION
 from ..text.corpus import Corpus
-from ..text.highlighting import Highlighting
 from ..text.passage import Passage
 from .model import TransformerModelWrapper
 from .vector_database import VectorDatabaseManagerWrapper
@@ -294,20 +293,6 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             num_records += len(corpus.passages)
         return num_records
 
-    def _create_passage_from_record(self, rec_id, meta, vector):
-        doc = meta.pop("passage")
-        # Get Highlighting
-        highlighting = None
-        hl = meta["highlighting"]
-        if "_" in hl:
-            start, end = [int(x) for x in hl.split("_")]
-            highlighting = Highlighting(start, end)
-            # filter_terms.add(doc[start:end])
-        # Create Passage
-        p = Passage(doc, meta, highlighting, unique_id=rec_id, embedding=vector)
-        p.tokenized_text = doc.split()
-        return p
-
     # pylint: disable-next=too-many-arguments
     def get_corpus(
         self,
@@ -338,21 +323,10 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         response = my_collection.query.fetch_objects(
             limit=limit, filters=db_filters_all, include_vector=include_embeddings
         )
+        passages = [Passage.from_weaviate_record(o) for o in response.objects]
+        label = "; ".join(filter_words) if passages and filter_words else None
 
-        if len(response.objects) > 0:
-            passages = [
-                self._create_passage_from_record(
-                    o.uuid,
-                    o.properties,
-                    o.vector["default"] if include_embeddings else None,
-                )
-                for o in response.objects
-            ]
-            return Corpus(
-                passages, label="; ".join(filter_words) if filter_words else None
-            )
-
-        return Corpus()
+        return Corpus(passages, label)
 
     def query_vector_neighbors(
         self, collection: Collection, vector: list[float], k_neighbors=10
@@ -394,6 +368,42 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                 o.metadata.distance,
             )
 
+    def collection_config(self, collection_name: str) -> dict[str, Any]:
+        """Get a dictionary with the configuration of a collection, including total_count."""
+        # TODO: implement Pydantic config object; inherit to/from CorpusConfig class
+
+        total_count = (
+            self._client.collections.get(collection_name)
+            .aggregate.over_all(total_count=True)
+            .total_count
+        )
+
+        return self._config[collection_name] | {"total_count": total_count}
+
+    def collection_objects(
+        self, collection_name, *, include_vector: bool = True
+    ) -> Iterable[dict[str, Any]]:
+        """Get all objects from the collection serialized as dictionaries.
+
+        - Returns all the properties of the object
+        - Adds the "uuid" field as a string
+        - Adds the "vector" field from the .vector["default"] object field
+
+        Args:
+            collection_name (str): The name of the collection
+            include_vector (bool, optional): Whether to include the vector in the output. Defaults to True.
+        Yields:
+            Iterable[dict[str, Any]]: The objects in the collection serialized as dictionaries
+        """
+
+        for obj in self._client.collections.get(collection_name).iterator(
+            include_vector=include_vector
+        ):
+            yield obj.properties | {
+                "uuid": str(obj.uuid),
+                "vector": obj.vector["default"] if include_vector else None,
+            }
+
     def export_from_collection(
         self, collection_name: str, filepath: str = None
     ) -> None:
@@ -406,29 +416,86 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             filepath (str, optional): The file to write to. Defaults to None.
         """
         filename_tgt = filepath or f"{collection_name}.json.gz"
-        collection_src = self._client.collections.get(collection_name)
-        total_count = collection_src.aggregate.over_all(total_count=True).total_count
 
         with gzip.open(filename_tgt, "wt", encoding="utf-8") as fileout:
             logger.info("Writing into '%s' file...", filename_tgt)
-            json.dump(
-                self._config[collection_name] | {"total_count": total_count}, fileout
-            )
+
+            config = self.collection_config(collection_name)
+
+            json.dump(config, fileout)
             fileout.write("\n")
 
-            for q in tqdm(
-                collection_src.iterator(include_vector=True),
-                total=total_count,
+            for _object in tqdm(
+                self.collection_objects(collection_name),
+                total=config["total_count"],
                 unit="record",
                 desc=f"Exporting '{collection_name}'",
             ):
-                row_dict = q.properties
-                row_dict["vector"] = q.vector["default"]
-                row_dict["uuid"] = str(q.uuid)
-                json.dump(row_dict, fileout)
+                json.dump(_object, fileout)
                 fileout.write("\n")
 
-    def import_into_collection(self, filename_src: str):
+    def import_config(
+        self, config: dict[str, Any], *, skip_keys={"corpus", "total_count"}
+    ):
+        """Import a collection configuration into the configuration database.
+
+        Args:
+            config (dict[str, Any]): The configuration dictionary
+            skip_keys (set[str], optional): Keys to skip when importing. Defaults to {"corpus", "total_count"}.
+        """
+        self._config[config["corpus"]] = {
+            key: config[key] for key in config if key not in skip_keys
+        }
+
+    def import_objects(
+        self,
+        objects: Iterable[dict[str, Any]],
+        collection_name: str,
+        *,
+        total_count: int = None,
+        batch_size: int = 100,
+    ) -> int:
+        """Import a collection of objects into the database.
+
+        Modifies the objects in place by removing the "vector" and "uuid" keys.
+
+        Args:
+            objects (Iterable[dict[str, Any]]): The objects to import
+            collection_name (str): The name of the collection
+            total_count (int, optional): The total number of objects to import. Defaults to None.
+            batch_size (int, optional): The batch size for importing. Defaults to 100.
+        Returns:
+            int: The number of records imported
+        """
+        count = 0
+
+        with self._client.collections.get(collection_name).batch.fixed_size(
+            batch_size=batch_size
+        ) as batch:
+            for _object in tqdm(
+                objects,
+                desc=f"Importing {collection_name}",
+                unit="record",
+                total=total_count,
+            ):
+                batch.add_object(
+                    vector=_object.pop("vector"),
+                    uuid=uuid.UUID(_object.pop("uuid")),
+                    properties=_object,
+                )
+
+                count += 1
+
+        if total_count is not None and count != total_count:
+            logger.warning(
+                "Total count mismatch: expected %d, but imported %d records",
+                total_count,
+                count,
+            )
+
+        return count
+
+    def import_from_file(self, filename_src: str):
         """Import a collection from a jsonl file.
 
         The first line is expected to be the configuration, the rest are the records.
@@ -442,32 +509,16 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         with gzip.open(filename_src, "rt", encoding="utf-8") as f:
             logger.info("Importing into Weaviate '%s' collection...", filename_src)
 
-            config_entry: dict[str, str] = json.loads(f.readline())
-            collection_name = config_entry.pop("corpus")
-            total_count = config_entry.pop("total_count", None)
-            self._config[collection_name] = config_entry
+            config = json.loads(f.readline())
+            collection_name = config["corpus"]
+            total_count = config["total_count"]
+            self.import_config(config)
 
-            with self._client.collections.get(collection_name).batch.fixed_size(
-                batch_size=self.batch_size
-            ) as batch:
-                for count, line in enumerate(
-                    tqdm(
-                        f,
-                        desc=f"Importing {collection_name}",
-                        unit="record",
-                        total=total_count,
-                    )
-                ):
-                    item = json.loads(line.strip())
-                    item_id = uuid.UUID(item.pop("uuid"))
-                    item_vector = item.pop("vector")
-                    batch.add_object(properties=item, vector=item_vector, uuid=item_id)
-            if count != total_count:
-                logger.warning(
-                    "Total count mismatch: expected %d, but imported %d records",
-                    total_count,
-                    count,
-                )
+            self.import_objects(
+                (json.loads(line) for line in f),
+                collection_name,
+                total_count=total_count,
+            )
 
     def validate_config(self) -> None:
         """Validate that the configuration database entries are present as database collections.

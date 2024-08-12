@@ -55,7 +55,7 @@ class AbstractCorpus(ABC):
         """
 
         return not any(passage.embedding is None for passage in self.passages) and any(
-            passage.embedding.any() for passage in self.passages
+            any(passage.embedding) for passage in self.passages
         )
 
     @property

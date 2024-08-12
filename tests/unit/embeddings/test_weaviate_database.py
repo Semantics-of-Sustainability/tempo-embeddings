@@ -6,32 +6,12 @@ import platform
 import pytest
 
 import weaviate
-from tempo_embeddings.embeddings.weaviate_database import (
-    WeaviateConfigDb,
-    WeaviateDatabaseManager,
-)
+from tempo_embeddings.embeddings.weaviate_database import WeaviateConfigDb
+from tempo_embeddings.text.corpus import Corpus
+from tempo_embeddings.text.highlighting import Highlighting
+from tempo_embeddings.text.passage import Passage
 from weaviate.exceptions import WeaviateStartUpError
 from weaviate.util import generate_uuid5
-
-
-@pytest.fixture
-def weaviate_client(tmp_path):
-    client = weaviate.connect_to_embedded(persistence_data_path=tmp_path)
-    yield client
-    client.close()
-
-
-@pytest.fixture
-def weaviate_db_manager(mock_transformer_wrapper, weaviate_client):
-    return WeaviateDatabaseManager(
-        model=mock_transformer_wrapper, client=weaviate_client
-    )
-
-
-@pytest.fixture
-def weaviate_db_manager_with_data(weaviate_db_manager, corpus):
-    weaviate_db_manager.ingest(corpus)
-    return weaviate_db_manager
 
 
 @pytest.mark.xfail(
@@ -60,6 +40,14 @@ class TestWeaviateDatabase:
         for vector_name, vector in obj.vector.items():
             assert len(vector) == expected_vector_shapes[vector_name]
 
+    def assert_dict_equals(self, dict1, expected):
+        assert dict1.keys() == expected.keys()
+
+        for key, value in expected.items():
+            assert (
+                len(dict1[key]) == value if key == "vector" else dict1[key] == value
+            ), f"Mismatch for key '{key}': {dict1[key]} != {value}"
+
     @pytest.mark.skipif(
         int(platform.python_version_tuple()[1]) < 10,
         reason="Python 3.10+ required for this test.",
@@ -86,6 +74,18 @@ class TestWeaviateDatabase:
     def test_get_collection_count(self, weaviate_db_manager_with_data):
         assert weaviate_db_manager_with_data.get_collection_count("TestCorpus") == 1
 
+    def test_get_corpus(self, weaviate_db_manager_with_data):
+        assert weaviate_db_manager_with_data.get_corpus("TestCorpus") == Corpus(
+            [
+                Passage(
+                    "test",
+                    metadata={"provenance": "test_file"},
+                    highlighting=Highlighting(1, 3),
+                )
+            ],
+            label="TestCorpus",
+        )
+
     def test_delete_collection(self, weaviate_db_manager_with_data):
         weaviate_db_manager_with_data.delete_collection("TestCorpus")
 
@@ -95,18 +95,18 @@ class TestWeaviateDatabase:
         assert "TestCorpus" not in weaviate_db_manager_with_data._config
 
     def test_export_from_collection(self, weaviate_db_manager_with_data, tmp_path):
-        expected_db = [
+        expected_lines = [
             {
-                "uuid": "e7f46979-b88a-5c7b-9eea-f02c0b800b3e",
                 "corpus": "TestCorpus",
                 "embedder": "mock_model",
                 "total_count": 1,
+                "uuid": "e7f46979-b88a-5c7b-9eea-f02c0b800b3e",
             },
             {
-                "provenance": "test_file",
+                "highlighting": "1_3",
                 "passage": "test",
-                "highlighting": "None",
-                "uuid": "f82c383a-0b66-5ff1-b8c1-bbc070e7ac80",
+                "provenance": "test_file",
+                "uuid": "5eec7ad3-4802-5c4b-82a5-3456bacec6b0",
                 "vector": 768,  # Only compare vector length
             },
         ]
@@ -114,39 +114,30 @@ class TestWeaviateDatabase:
         weaviate_db_manager_with_data.export_from_collection("TestCorpus", export_file)
 
         with gzip.open(export_file) as f:
-            db = [json.loads(line) for line in f]
+            lines = [json.loads(line) for line in f]
 
-        assert len(db) == len(expected_db)
+        assert len(lines) == len(expected_lines)
 
-        for object, expected in zip(db, expected_db):
-            assert len(object) == len(expected)
+        for line, expected_line in zip(lines, expected_lines):
+            self.assert_dict_equals(line, expected_line)
 
-            for expected_key, expected_value in expected.items():
-                value = object[expected_key]
-                if expected_key == "vector":
-                    value = len(value)
-
-                assert value == expected_value
-
-    def test_import_into_collection(
-        self, weaviate_db_manager_with_data, tmp_path, caplog
-    ):
+    def test_import_from_file(self, weaviate_db_manager_with_data, tmp_path):
         export_file = tmp_path / "export.json.gz"
         weaviate_db_manager_with_data.export_from_collection("TestCorpus", export_file)
 
         weaviate_db_manager_with_data.reset()
 
-        weaviate_db_manager_with_data.import_into_collection(export_file)
+        weaviate_db_manager_with_data.import_from_file(export_file)
         client = weaviate_db_manager_with_data.client
 
         objects = list(
             client.collections.get("TestCorpus").iterator(include_vector=True)
         )
         assert [str(o.uuid) for o in objects] == [
-            "f82c383a-0b66-5ff1-b8c1-bbc070e7ac80"
+            "5eec7ad3-4802-5c4b-82a5-3456bacec6b0"
         ]
         assert [o.properties for o in objects] == [
-            {"provenance": "test_file", "passage": "test", "highlighting": "None"}
+            {"provenance": "test_file", "passage": "test", "highlighting": "1_3"}
         ]
         assert [len(o.vector["default"]) for o in objects] == [768]
 
@@ -156,14 +147,12 @@ class TestWeaviateDatabase:
             "uuid": "e7f46979-b88a-5c7b-9eea-f02c0b800b3e",
         }
 
-    def test_import_into_collection_existing(
-        self, weaviate_db_manager_with_data, tmp_path, caplog
-    ):
+    def test_import_from_file_existing(self, weaviate_db_manager_with_data, tmp_path):
         export_file = tmp_path / "export.json.gz"
         weaviate_db_manager_with_data.export_from_collection("TestCorpus", export_file)
 
         with pytest.raises(ValueError):
-            weaviate_db_manager_with_data.import_into_collection(export_file)
+            weaviate_db_manager_with_data.import_from_file(export_file)
 
     def test_reset(self, weaviate_db_manager_with_data):
         client = weaviate_db_manager_with_data.client

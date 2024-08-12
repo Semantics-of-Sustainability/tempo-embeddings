@@ -3,7 +3,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+import weaviate
+from tempo_embeddings.embeddings.weaviate_database import WeaviateDatabaseManager
 from tempo_embeddings.text.corpus import Corpus
+from tempo_embeddings.text.highlighting import Highlighting
 from tempo_embeddings.text.passage import Passage
 
 CWD = Path(__file__).parent.absolute()
@@ -25,8 +28,35 @@ def mock_transformer_wrapper(mocker):
 @pytest.fixture
 def corpus():
     return Corpus(
-        [Passage("test", metadata={"provenance": "test_file"})], label="TestCorpus"
+        [
+            Passage(
+                "test",
+                metadata={"provenance": "test_file"},
+                highlighting=Highlighting(1, 3),
+            )
+        ],
+        label="TestCorpus",
     )
+
+
+@pytest.fixture
+def weaviate_client(tmp_path):
+    client = weaviate.connect_to_embedded(persistence_data_path=tmp_path)
+    yield client
+    client.close()
+
+
+@pytest.fixture
+def weaviate_db_manager(mock_transformer_wrapper, weaviate_client):
+    return WeaviateDatabaseManager(
+        model=mock_transformer_wrapper, client=weaviate_client
+    )
+
+
+@pytest.fixture
+def weaviate_db_manager_with_data(weaviate_db_manager, corpus):
+    weaviate_db_manager.ingest(corpus)
+    return weaviate_db_manager
 
 
 CORPUS_DIR: Path = CWD / "data"

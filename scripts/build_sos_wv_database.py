@@ -110,10 +110,11 @@ if __name__ == "__main__":
             model=SentenceTransformerModelWrapper.from_pretrained(args.language_model),
             batch_size=args.batch_size,
         )
-        db.validate_config()
 
         if args.reset_db:
             db.reset()
+
+        db.validate_config()
 
         for corpus_name in tqdm(corpora, desc="Reading", unit="corpus"):
             ingested_files = set(db.provenances(corpus_name))
