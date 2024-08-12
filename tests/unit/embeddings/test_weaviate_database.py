@@ -7,6 +7,9 @@ import pytest
 
 import weaviate
 from tempo_embeddings.embeddings.weaviate_database import WeaviateConfigDb
+from tempo_embeddings.text.corpus import Corpus
+from tempo_embeddings.text.highlighting import Highlighting
+from tempo_embeddings.text.passage import Passage
 from weaviate.exceptions import WeaviateStartUpError
 from weaviate.util import generate_uuid5
 
@@ -70,6 +73,18 @@ class TestWeaviateDatabase:
 
     def test_get_collection_count(self, weaviate_db_manager_with_data):
         assert weaviate_db_manager_with_data.get_collection_count("TestCorpus") == 1
+
+    def test_get_corpus(self, weaviate_db_manager_with_data):
+        assert weaviate_db_manager_with_data.get_corpus("TestCorpus") == Corpus(
+            [
+                Passage(
+                    "test",
+                    metadata={"provenance": "test_file"},
+                    highlighting=Highlighting(1, 3),
+                )
+            ],
+            label="TestCorpus",
+        )
 
     def test_delete_collection(self, weaviate_db_manager_with_data):
         weaviate_db_manager_with_data.delete_collection("TestCorpus")

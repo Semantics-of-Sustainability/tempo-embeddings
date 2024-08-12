@@ -323,7 +323,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         response = my_collection.query.fetch_objects(
             limit=limit, filters=db_filters_all, include_vector=include_embeddings
         )
-        passages = [Passage.from_weaviate_record(o for o in response.objects)]
+        passages = [Passage.from_weaviate_record(o) for o in response.objects]
         label = "; ".join(filter_words) if passages and filter_words else None
 
         return Corpus(passages, label)

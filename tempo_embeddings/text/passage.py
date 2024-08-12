@@ -359,8 +359,7 @@ class Passage:
             highlighting=Highlighting.from_string(metadata.pop("highlighting")),
             metadata=metadata,
             unique_id=_object.uuid,
-            embedding=np.array(_object.vector["default"]),
-            # TODO: check if object has a vector
+            embedding=_object.vector.get("default", []),
         )
 
         passage.tokenized_text = text.split()
