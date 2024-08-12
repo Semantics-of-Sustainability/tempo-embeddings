@@ -54,9 +54,6 @@ class CorpusConfig:
             for property in properties or self.__annotations__.keys()
         }
 
-    def exists(self):
-        return self.directory.is_dir()
-
     def files(self):
         return self.directory.glob(self.glob_pattern)
 
@@ -189,5 +186,5 @@ class CorpusReader:
             Iterable[str]: the available corpus names
         """
         for name, config in self._corpora.items():
-            if (not must_exist) or config.exists():
+            if (not must_exist) or any(config.files()):
                 yield name

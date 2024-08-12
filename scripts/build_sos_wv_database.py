@@ -93,6 +93,12 @@ if __name__ == "__main__":
     except ValueError as e:
         parser.error(e)
 
+    corpora = list(corpus_reader.corpora(must_exist=True))
+
+    for corpus in args.corpora or []:
+        if corpus not in corpora:
+            parser.error(f"Corpus '{corpus}' not found in the configuration file.")
+
     filter_terms = args.filter_terms or [
         line.strip() for line in args.filter_terms_file
     ]
@@ -109,9 +115,7 @@ if __name__ == "__main__":
         if args.reset_db:
             db.reset()
 
-        for corpus_name in tqdm(
-            list(corpus_reader.corpora(must_exist=True)), desc="Reading", unit="corpus"
-        ):
+        for corpus_name in tqdm(corpora, desc="Reading", unit="corpus"):
             ingested_files = set(db.provenances(corpus_name))
             logging.info(f"Skipping {len(ingested_files)} files for '{corpus_name}'.")
 
