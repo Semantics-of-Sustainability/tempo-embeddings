@@ -3,7 +3,7 @@ import logging
 import string
 from typing import Any, Iterable, Optional
 
-from numpy.typing import ArrayLike
+import numpy as np
 
 from .highlighting import Highlighting
 from .segmenter import Segmenter
@@ -76,7 +76,7 @@ class Passage:
         self._tokenized_text = value
 
     @embedding.setter
-    def embedding(self, value: ArrayLike):
+    def embedding(self, value: np.typing.ArrayLike):
         # For Chroma DB, this has to be a list of floats; TODO: add a check/conversion in ChromaDatabaseManager
         self._embedding = value
 
@@ -340,3 +340,29 @@ class Passage:
                     _end = _start + window_size
 
                 yield cls(text[_start:_end], metadata)
+
+    @classmethod
+    def from_weaviate_record(cls, _object) -> "Passage":
+        """Create a Passage from a Weaviate object.
+
+        Args:
+            _object: A Weaviate object.
+        Returns:
+            A Passage object.
+        """
+
+        metadata = _object.properties
+        text = metadata.pop("passage")
+
+        passage = cls(
+            text=text,
+            highlighting=Highlighting.from_string(metadata.pop("highlighting")),
+            metadata=metadata,
+            unique_id=_object.uuid,
+            embedding=np.array(_object.vector["default"]),
+            # TODO: check if object has a vector
+        )
+
+        passage.tokenized_text = text.split()
+
+        return passage

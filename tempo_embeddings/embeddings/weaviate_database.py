@@ -15,7 +15,6 @@ from weaviate.util import generate_uuid5
 
 from ..settings import WEAVIATE_CONFIG_COLLECTION
 from ..text.corpus import Corpus
-from ..text.highlighting import Highlighting
 from ..text.passage import Passage
 from .model import TransformerModelWrapper
 from .vector_database import VectorDatabaseManagerWrapper
@@ -294,20 +293,6 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             num_records += len(corpus.passages)
         return num_records
 
-    def _create_passage_from_record(self, rec_id, meta, vector):
-        doc = meta.pop("passage")
-        # Get Highlighting
-        highlighting = None
-        hl = meta["highlighting"]
-        if "_" in hl:
-            start, end = [int(x) for x in hl.split("_")]
-            highlighting = Highlighting(start, end)
-            # filter_terms.add(doc[start:end])
-        # Create Passage
-        p = Passage(doc, meta, highlighting, unique_id=rec_id, embedding=vector)
-        p.tokenized_text = doc.split()
-        return p
-
     # pylint: disable-next=too-many-arguments
     def get_corpus(
         self,
@@ -338,21 +323,10 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         response = my_collection.query.fetch_objects(
             limit=limit, filters=db_filters_all, include_vector=include_embeddings
         )
+        passages = [Passage.from_weaviate_record(o for o in response.objects)]
+        label = "; ".join(filter_words) if passages and filter_words else None
 
-        if len(response.objects) > 0:
-            passages = [
-                self._create_passage_from_record(
-                    o.uuid,
-                    o.properties,
-                    o.vector["default"] if include_embeddings else None,
-                )
-                for o in response.objects
-            ]
-            return Corpus(
-                passages, label="; ".join(filter_words) if filter_words else None
-            )
-
-        return Corpus()
+        return Corpus(passages, label)
 
     def query_vector_neighbors(
         self, collection: Collection, vector: list[float], k_neighbors=10

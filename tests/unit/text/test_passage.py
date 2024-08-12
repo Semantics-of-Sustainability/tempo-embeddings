@@ -134,3 +134,20 @@ class TestPassage:
     )
     def test_words(self, passage, expected):
         assert list(passage.words()) == expected
+
+    def test_from_weaviate_record(self, weaviate_db_manager_with_data):
+        expected_passages = [
+            Passage(
+                "test",
+                metadata={"provenance": "test_file"},
+                highlighting=Highlighting(1, 3),
+            )
+        ]
+        objects = (
+            weaviate_db_manager_with_data._client.collections.get("TestCorpus")
+            .query.fetch_objects(include_vector=True)
+            .objects
+        )
+
+        for _object, expected in zip(objects, expected_passages, strict=True):
+            assert Passage.from_weaviate_record(_object) == expected
