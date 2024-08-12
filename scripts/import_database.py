@@ -41,7 +41,7 @@ if __name__ == "__main__":
         if args.overwrite:
             db.delete_collection(args.corpus)
         try:
-            db.import_into_collection(args.input)
+            db.import_from_file(args.input)
         except ValueError as e:
             logging.error(e)
 

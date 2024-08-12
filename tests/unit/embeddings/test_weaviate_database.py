@@ -128,15 +128,13 @@ class TestWeaviateDatabase:
 
                 assert value == expected_value
 
-    def test_import_into_collection(
-        self, weaviate_db_manager_with_data, tmp_path, caplog
-    ):
+    def test_import_from_file(self, weaviate_db_manager_with_data, tmp_path):
         export_file = tmp_path / "export.json.gz"
         weaviate_db_manager_with_data.export_from_collection("TestCorpus", export_file)
 
         weaviate_db_manager_with_data.reset()
 
-        weaviate_db_manager_with_data.import_into_collection(export_file)
+        weaviate_db_manager_with_data.import_from_file(export_file)
         client = weaviate_db_manager_with_data.client
 
         objects = list(
@@ -156,14 +154,12 @@ class TestWeaviateDatabase:
             "uuid": "e7f46979-b88a-5c7b-9eea-f02c0b800b3e",
         }
 
-    def test_import_into_collection_existing(
-        self, weaviate_db_manager_with_data, tmp_path, caplog
-    ):
+    def test_import_from_file_existing(self, weaviate_db_manager_with_data, tmp_path):
         export_file = tmp_path / "export.json.gz"
         weaviate_db_manager_with_data.export_from_collection("TestCorpus", export_file)
 
         with pytest.raises(ValueError):
-            weaviate_db_manager_with_data.import_into_collection(export_file)
+            weaviate_db_manager_with_data.import_from_file(export_file)
 
     def test_reset(self, weaviate_db_manager_with_data):
         client = weaviate_db_manager_with_data.client
