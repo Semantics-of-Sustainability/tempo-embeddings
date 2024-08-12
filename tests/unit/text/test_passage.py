@@ -5,6 +5,7 @@ import pytest
 from tempo_embeddings.text.highlighting import Highlighting
 from tempo_embeddings.text.passage import Passage
 from tempo_embeddings.text.segmenter import SentenceSplitterSegmenter
+from weaviate.exceptions import WeaviateStartUpError
 
 
 @pytest.fixture
@@ -140,6 +141,11 @@ class TestPassage:
     @pytest.mark.skipif(
         int(platform.python_version_tuple()[1]) < 10,
         reason="Python 3.10+ required for this test.",
+    )
+    @pytest.mark.xfail(
+        platform.system() == "Windows",
+        raises=WeaviateStartUpError,
+        reason="Weaviate Embedded not supported on Windows",
     )
     def test_from_weaviate_record(self, weaviate_db_manager_with_data):
         expected_passages = [
