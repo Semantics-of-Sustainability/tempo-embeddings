@@ -80,19 +80,38 @@ class TestSegmenter:
 
 class TestSentenceSplitter:
     @pytest.mark.parametrize(
-        "text,expected",
+        "text,deduplicate,expected",
         [
             (
                 "This is a test. This is another test.",
+                True,
                 [
                     Passage("This is a test.", metadata={"sentence_index": 0}),
                     Passage("This is another test.", metadata={"sentence_index": 1}),
                 ],
-            )
+            ),
+            (
+                "This is a test. This is a test.",
+                True,
+                [Passage("This is a test.", metadata={"sentence_index": 0})],
+            ),
+            (
+                "This is a test. This is a test.",
+                False,
+                [
+                    Passage("This is a test.", metadata={"sentence_index": 0}),
+                    Passage("This is a test.", metadata={"sentence_index": 1}),
+                ],
+            ),
         ],
     )
-    def test_passages(self, text, expected):
-        assert list(SentenceSplitterSegmenter("en").passages(text)) == expected
+    def test_passages(self, text, deduplicate, expected):
+        assert (
+            list(
+                SentenceSplitterSegmenter("en").passages(text, deduplicate=deduplicate)
+            )
+            == expected
+        )
 
 
 class TestWindowSegmenter:

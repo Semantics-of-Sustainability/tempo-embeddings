@@ -1,6 +1,8 @@
 import abc
 import csv
 import logging
+import re
+from collections import Counter
 from functools import lru_cache
 from posixpath import basename
 from typing import Any, Iterable, Optional
@@ -16,6 +18,8 @@ from .passage import Passage
 
 class Segmenter(abc.ABC):
     """An abstract class for segmenting text into units."""
+
+    _ALPHABET_REGEX = re.compile(r"[^a-zA-Z]")
 
     @staticmethod
     def get_backend() -> str:
@@ -49,9 +53,36 @@ class Segmenter(abc.ABC):
         return NotImplemented
 
     def passages(
-        self, text: str, *, metadata: Optional[dict[str, Any]] = None
+        self,
+        text: str,
+        *,
+        metadata: Optional[dict[str, Any]] = None,
+        deduplicate: bool = True,
     ) -> Iterable[Passage]:
+        """Yield passages from the text.
+
+        Args:
+            text: the text to split into passages.
+            metadata: the metadata to attach to the passages.
+            deduplicate: whether to remove duplicate sentences. Default to True.
+        Yields:
+            Passage: the passages from the text.
+        """
+        if deduplicate:
+            seen: set[str] = Counter()
+
         for idx, sentence in enumerate(self.split(text)):
+            if deduplicate:
+                _sentence = re.sub(self._ALPHABET_REGEX, "", sentence).strip()
+                if seen[_sentence]:
+                    logging.info(
+                        "Duplicate sentence found %d times before: '%s'",
+                        seen[_sentence],
+                        sentence,
+                    )
+                    continue
+                seen[_sentence] += 1
+
             metadata = (metadata or {}) | {"sentence_index": idx}
             yield Passage(sentence, metadata)
 
