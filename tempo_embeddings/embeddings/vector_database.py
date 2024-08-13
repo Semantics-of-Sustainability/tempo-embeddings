@@ -47,6 +47,7 @@ class VectorDatabaseManagerWrapper(ABC):
         umap_verbose: bool = True,
         **umap_args,
     ) -> ArrayLike:
+        # FIXME: use TransformerModelWrapper.compute_embeddings().
         if len(corpus) == 0:
             raise ValueError("Empty corpus passed to compress_embeddings")
 

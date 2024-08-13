@@ -14,8 +14,8 @@ class TestVectorDatabaseManagerWrapper:
         "corpus, expected_exception",
         [
             (Corpus(), pytest.raises(ValueError)),
-            (Corpus(list(Passage.from_text("test text"))), does_not_raise()),
-            (Corpus(list(Passage.from_text("test text")) * 10), does_not_raise()),
+            (Corpus([Passage("test text")]), does_not_raise()),
+            (Corpus([Passage("test text")] * 10), does_not_raise()),
         ],
     )
     def test_compress_embeddings(self, corpus: Corpus, expected_exception):
