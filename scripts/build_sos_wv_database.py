@@ -34,12 +34,16 @@ def arguments_parser():
         required=False,
         help="Maximum number of files to process per corpus. All files if not specified.",
     )
-    parser.add_argument(
+
+    overwrite_args = parser.add_mutually_exclusive_group(required=False)
+    overwrite_args.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Overwrite collections that are already in the database, delete all their data.",
+    )
+    overwrite_args.add_argument(
         "--reset-db", action="store_true", help="Reset the database, delete all data"
     )
-
-    parser.add_argument("--window-size", type=int, default=200)
-    # TODO add option to skip sentence splitting
 
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument(
@@ -117,6 +121,9 @@ if __name__ == "__main__":
         db.validate_config()
 
         for corpus_name in tqdm(corpora, desc="Reading", unit="corpus"):
+            if args.overwrite:
+                db.delete_collection(corpus_name)
+
             ingested_files = set(db.provenances(corpus_name))
             logging.info(f"Skipping {len(ingested_files)} files for '{corpus_name}'.")
 
