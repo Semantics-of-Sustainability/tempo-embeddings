@@ -103,8 +103,8 @@ class Segmenter(abc.ABC):
         Yields:
             Passage: the passages from the CSV file.
         """
-        for column_passages in text_columns:
-            if column_passages not in reader.fieldnames:
+        for column in text_columns:
+            if column not in reader.fieldnames:
                 raise ValueError(
                     f"Text column(s) {text_columns} not found in CSV file '{provenance}'."
                 )
@@ -135,7 +135,7 @@ class Segmenter(abc.ABC):
                     for passage in column_passages:
                         for term in filter_terms:
                             if passage.contains(term):
-                                passages.append(
+                                passages.extend(
                                     passage.highlight(term, exact_match=False)
                                 )
                 else:
