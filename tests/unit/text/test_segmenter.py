@@ -1,7 +1,10 @@
+import csv
 from contextlib import nullcontext as does_not_raise
+from io import StringIO
 
 import pytest
 
+from tempo_embeddings.text.highlighting import Highlighting
 from tempo_embeddings.text.passage import Passage
 from tempo_embeddings.text.segmenter import (
     Segmenter,
@@ -117,6 +120,46 @@ class TestSentenceSplitter:
             )
             == expected
         )
+
+    @pytest.mark.parametrize(
+        "_csv, provenance, filter_terms, expected",
+        [
+            ("content\n", "test provenance", None, []),
+            (
+                "content\nsome text",
+                "test provenance",
+                None,
+                [
+                    Passage(
+                        "some text",
+                        {"provenance": "test provenance", "sentence_index": 0},
+                    )
+                ],
+            ),
+            (
+                "content\nsome filter text",
+                "test provenance",
+                ["filter"],
+                [
+                    Passage(
+                        "some filter text",
+                        {"provenance": "test provenance", "sentence_index": 0},
+                        Highlighting(start=5, end=11),
+                    )
+                ],
+            ),
+            ("content\nsome text", "test provenance", ["filter"], []),
+        ],
+    )
+    def test_passages_from_dict_reader(self, _csv, provenance, filter_terms, expected):
+        passages = SentenceSplitterSegmenter("en").passages_from_dict_reader(
+            csv.DictReader(StringIO(_csv)),
+            provenance=provenance,
+            text_columns=["content"],
+            filter_terms=filter_terms,
+        )
+
+        assert list(passages) == expected
 
 
 class TestWindowSegmenter:
