@@ -10,18 +10,8 @@ from tempo_embeddings.text.subcorpus import Subcorpus
 
 
 class TestCorpus:
-    @pytest.mark.parametrize(
-        "lines,expected",
-        [
-            ([], Corpus()),
-            (["line1", "line2"], Corpus([Passage("line1"), Passage("line2")])),
-        ],
-    )
-    def test_from_lines(self, lines, expected):
-        assert Corpus.from_lines(lines) == expected
-
     def test_add(self):
-        assert Corpus.from_lines(["test1"]) + Corpus.from_lines(["test2"]) == Corpus(
+        assert Corpus([Passage("test1")]) + Corpus([Passage("test2")]) == Corpus(
             [Passage("test1"), Passage("test2")]
         )
 

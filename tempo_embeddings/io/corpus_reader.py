@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, Iterable, Optional
 
 import stanza
-from pydantic import Field, model_validator
+from pydantic import Field
 from pydantic.dataclasses import dataclass
 from tqdm import tqdm
 
@@ -38,15 +38,6 @@ class CorpusConfig:
     """The 'language' parameter is used for the NLP pipeline."""
     segmenter: Optional[str] = settings.SEGMENTER
 
-    @model_validator(mode="after")
-    def validate_segmenter(self):
-        if self.segmenter and not self.language:
-            raise ValueError(
-                f"Segmenter '{self.segmenter}' was specified, but no language"
-            )
-
-        return self
-
     def asdict(self, *, properties: Optional[list[str]] = None):
         _converters = {"directory": str}
         return {
@@ -63,7 +54,7 @@ class CorpusConfig:
         *,
         skip_files: Optional[set[str]] = None,
         max_files: Optional[int] = None,
-        **kwargs,
+        **segmenter_kwargs,
     ) -> Iterable[Corpus]:
         """Build one corpus per file from the configuration.
 
@@ -71,13 +62,17 @@ class CorpusConfig:
             filter_terms: a list of terms to filter out.
             skip_files: a set of file names to skip. Defaults to None.
             max_files: the maximum number of files to process.
-            **kwargs: additional parameters to pass to the Corpus constructor: window_size
+            **segmenter_kwargs: additional parameters to pass to the segmenter
 
         Yields:
             Corpus: a corpus object, one per corpus file
         """
         skip_files: set[str] = skip_files or set()
         files = [file for file in self.files() if file.name not in skip_files]
+
+        segmenter = Segmenter.segmenter(
+            self.segmenter, self.language, **segmenter_kwargs
+        )
 
         for file in tqdm(files[:max_files], desc=self.directory.name, unit="file"):
             if self.loader_type == "csv":
@@ -88,8 +83,7 @@ class CorpusConfig:
                     encoding=self.encoding,
                     compression=self.compression,
                     delimiter=self.delimiter,
-                    nlp_pipeline=Segmenter.segmenter(self.segmenter, self.language),
-                    **kwargs,
+                    segmenter=segmenter,
                 )
             else:
                 raise NotImplementedError(f"Unrecognized format '{self.file_type}'")
@@ -100,7 +94,7 @@ class CorpusConfig:
         *,
         skip_files: Optional[set[str]] = None,
         max_files: Optional[int] = None,
-        **kwargs,
+        **segmenter_kwargs,
     ) -> Corpus:
         """Build a corpus from the configuration.
 
@@ -118,6 +112,10 @@ class CorpusConfig:
             file for file in self.files() if file.name not in skip_files
         ][:max_files]
 
+        segmenter = Segmenter.segmenter(
+            self.segmenter, self.language, **segmenter_kwargs
+        )
+
         if self.loader_type == "csv":
             corpus = Corpus.from_csv_files(
                 files=files,
@@ -126,8 +124,7 @@ class CorpusConfig:
                 encoding=self.encoding,
                 compression=self.compression,
                 delimiter=self.delimiter,
-                nlp_pipeline=Segmenter.segmenter(self.segmenter, self.language),
-                **kwargs,
+                segmenter=segmenter,
             )
         else:
             raise NotImplementedError(f"Unrecognized format '{self.file_type}'")

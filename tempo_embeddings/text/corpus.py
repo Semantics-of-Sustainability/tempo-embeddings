@@ -1,9 +1,8 @@
 import csv
 import gzip
 import logging
-from os.path import basename
 from pathlib import Path
-from typing import Any, Iterable, Optional, TextIO
+from typing import Any, Iterable, Optional
 
 import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -11,6 +10,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from ..settings import DEFAULT_ENCODING
 from .abstractcorpus import AbstractCorpus
 from .passage import Passage
+from .segmenter import Segmenter
 
 
 class Corpus(AbstractCorpus):
@@ -21,13 +21,9 @@ class Corpus(AbstractCorpus):
         self._label: Optional[str] = label
         self._vectorizer: TfidfVectorizer = None
 
-    def __add__(self, other: "Corpus", new_label: str = None) -> "Corpus":
-        if self.has_embeddings() or other.has_embeddings():
-            logging.warning(
-                "Dropping existing embeddings to avoid inconsistent vector spaces."
-            )
-
-        return Corpus(self._passages + other._passages, new_label)
+    def __add__(self, other: "Corpus") -> "Corpus":
+        new_label = self.label if self.label == other.label else None
+        return Corpus(self._passages + other._passages, label=new_label)
 
     def __len__(self) -> int:
         """Return the number of passages in the corpus.
@@ -76,56 +72,6 @@ class Corpus(AbstractCorpus):
         return corpus
 
     @classmethod
-    def from_lines(
-        cls,
-        f: TextIO,
-        *,
-        filter_terms: list[str] = None,
-        metadata: dict = None,
-        window_size: Optional[int] = None,
-        nlp_pipeline=None,
-    ):
-        """Read input data from an open file handler, one sequence per line."""
-
-        windows: Iterable[Passage] = (
-            passage
-            for line in f
-            for passage in Passage.from_text(
-                line,
-                metadata=metadata,
-                window_size=window_size,
-                nlp_pipeline=nlp_pipeline,
-            )
-            if passage.contains_any(filter_terms)
-        )
-
-        if filter_terms:
-            passages = [
-                highlighted
-                for window in windows
-                for term in filter_terms
-                for highlighted in window.highlight(term, exact_match=False)
-            ]
-        else:
-            logging.warning("No filter terms defined, hence no highlighting.")
-            passages = list(windows)
-
-        return Corpus(passages, label="; ".join(filter_terms) if filter_terms else None)
-
-    @classmethod
-    def from_lines_file(
-        cls,
-        filepath: Path,
-        *,
-        filter_terms: list[str] = None,
-        encoding=DEFAULT_ENCODING,
-    ):
-        """Read input data from a file, one sequence per line."""
-
-        with open(filepath, "rt", encoding=encoding) as f:
-            return Corpus.from_lines(f, filter_terms=filter_terms)
-
-    @classmethod
     def from_csv_files(cls, files: Iterable[Path], **kwargs):
         """Read input data from multiple CSV files in a directory."""
         return sum((cls.from_csv_file(file, **kwargs) for file in files), Corpus())
@@ -136,11 +82,11 @@ class Corpus(AbstractCorpus):
         filepath: Path,
         text_columns: list[str],
         *,
+        segmenter: Segmenter,
         filter_terms: list[str] = None,
         encoding=DEFAULT_ENCODING,
         compression: Optional[str] = None,
-        nlp_pipeline=None,
-        **kwargs,
+        **dict_reader_kwargs,
     ):
         """Read input data from a CSV file."""
 
@@ -152,8 +98,8 @@ class Corpus(AbstractCorpus):
                     f,
                     text_columns,
                     filter_terms=filter_terms,
-                    nlp_pipeline=nlp_pipeline,
-                    **kwargs,
+                    segmenter=segmenter,
+                    **dict_reader_kwargs,
                 )
             except EOFError as e:
                 logging.error(f"Error reading file '{filepath}': {e}")
@@ -165,58 +111,16 @@ class Corpus(AbstractCorpus):
         file_handler,
         text_columns: list[str],
         *,
+        segmenter: Segmenter,
         filter_terms: list[str] = None,
-        window_size: int = 1000,
-        window_overlap: int = 0,
-        nlp_pipeline=None,
-        **kwargs,
+        **dict_reader_kwargs,
     ):
-        reader = csv.DictReader(file_handler, **kwargs)
-        for column in text_columns:
-            if column not in reader.fieldnames:
-                raise ValueError(
-                    f"Text column(s) {text_columns} not found in CSV file '{file_handler.name}'."
-                )
+        reader = csv.DictReader(file_handler, **dict_reader_kwargs)
 
-        passages = []
-        for row in reader:
-            # generate separate passage for each text column, sharing the same metadata
-            metadata = {"provenance": basename(file_handler.name)} | {
-                column: row[column]
-                for column in reader.fieldnames
-                # skip blank column names and text columns:
-                if column and column not in text_columns
-            }
-
-            for text_column in text_columns:
-                if filter_terms and not any(
-                    term.casefold() in row[text_column].casefold()
-                    for term in filter_terms
-                ):
-                    # skip document early, before creating Passage objects
-                    continue
-
-                windows: Iterable[Passage] = Passage.from_text(
-                    text=row[text_column],
-                    metadata=metadata,
-                    window_size=window_size,
-                    window_overlap=window_overlap,
-                    nlp_pipeline=nlp_pipeline,
-                )
-
-                if filter_terms:
-                    # Highlight terms in passages
-                    passages.extend(
-                        [
-                            passage
-                            for window in windows
-                            for term in filter_terms
-                            if window.contains(term)
-                            for passage in window.highlight(term, exact_match=False)
-                        ]
-                    )
-
-                else:
-                    passages.extend(windows)
-
+        passages = segmenter.passages_from_dict_reader(
+            reader,
+            provenance=file_handler.name,
+            text_columns=text_columns,
+            filter_terms=filter_terms,
+        )
         return Corpus(passages)
