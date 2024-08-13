@@ -2,7 +2,6 @@ import abc
 import csv
 import logging
 import re
-from collections import Counter
 from functools import lru_cache
 from posixpath import basename
 from typing import Any, Iterable, Optional
@@ -68,22 +67,17 @@ class Segmenter(abc.ABC):
         Yields:
             Passage: the passages from the text.
         """
-        if deduplicate:
-            seen: set[str] = Counter()
+        seen_sentences: set[str] = set()
 
         for idx, sentence in enumerate(self.split(text)):
             if deduplicate:
                 _sentence = (
                     re.sub(self._ALPHABET_REGEX, "", sentence).casefold().strip()
                 )
-                if seen[_sentence]:
-                    logging.info(
-                        "Duplicate sentence found %d times before: '%s'",
-                        seen[_sentence],
-                        sentence,
-                    )
+                if _sentence in seen_sentences:
+                    logging.info("Duplicate sentence found: '%s'", sentence)
                     continue
-                seen[_sentence] += 1
+                seen_sentences.add(_sentence)
 
             metadata = (metadata or {}) | {"sentence_index": idx}
             yield Passage(sentence, metadata)
