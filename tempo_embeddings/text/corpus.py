@@ -21,13 +21,9 @@ class Corpus(AbstractCorpus):
         self._label: Optional[str] = label
         self._vectorizer: TfidfVectorizer = None
 
-    def __add__(self, other: "Corpus", new_label: str = None) -> "Corpus":
-        if self.has_embeddings() or other.has_embeddings():
-            logging.warning(
-                "Dropping existing embeddings to avoid inconsistent vector spaces."
-            )
-
-        return Corpus(self._passages + other._passages, new_label)
+    def __add__(self, other: "Corpus") -> "Corpus":
+        new_label = self.label if self.label == other.label else None
+        return Corpus(self._passages + other._passages, label=new_label)
 
     def __len__(self) -> int:
         """Return the number of passages in the corpus.
