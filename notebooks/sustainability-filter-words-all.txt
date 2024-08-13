@@ -1,3 +1,4 @@
+duurzaam
 extractie
 winning
 exploratie
@@ -44,20 +45,20 @@ Kern-energie-produktie
 Windkracht
 Windenergie
 Windenergiebranche
-windturbine 
+windturbine
 windstroom
 Zonne-energie
-Zonnewarmte 
+Zonnewarmte
 zonnestraling
 geothermische energie (aardwarmte)
 waterkracht
 Waterkrachtcentrale
 Waterkrachtwerken
-Waterstof 
+Waterstof
 Waterstofenergie
 hydroturbine
 Getijden-energie
-Ethanol-produktie 
+Ethanol-produktie
 Ethanol
 Esso
 Shell
@@ -67,14 +68,14 @@ De Stichting Natuur en Milieu
 IEA
 Internationale Energie Agentschap
 IAEA
-Internationale Atoomenergie Agentschap 
+Internationale Atoomenergie Agentschap
 milieuproblemen
 Milieunormen
-Milieubeweging 
+Milieubeweging
 Milieu-aspecten
 milieueffecten
 Milieumaatregelen
-Milieuvriendelijk 
+Milieuvriendelijk
 Milieubeleid
 milieuoogpunt
 koolzuur
