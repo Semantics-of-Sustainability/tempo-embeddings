@@ -62,7 +62,7 @@ class CorpusConfig:
             filter_terms: a list of terms to filter out.
             skip_files: a set of file names to skip. Defaults to None.
             max_files: the maximum number of files to process.
-            **kwargs: additional parameters to pass to the segmenter
+            **segmenter_kwargs: additional parameters to pass to the segmenter
 
         Yields:
             Corpus: a corpus object, one per corpus file
