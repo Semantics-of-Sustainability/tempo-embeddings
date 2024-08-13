@@ -73,7 +73,9 @@ class Segmenter(abc.ABC):
 
         for idx, sentence in enumerate(self.split(text)):
             if deduplicate:
-                _sentence = re.sub(self._ALPHABET_REGEX, "", sentence).strip()
+                _sentence = (
+                    re.sub(self._ALPHABET_REGEX, "", sentence).casefold().strip()
+                )
                 if seen[_sentence]:
                     logging.info(
                         "Duplicate sentence found %d times before: '%s'",

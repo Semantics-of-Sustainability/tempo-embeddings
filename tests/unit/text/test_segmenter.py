@@ -96,6 +96,11 @@ class TestSentenceSplitter:
                 [Passage("This is a test.", metadata={"sentence_index": 0})],
             ),
             (
+                "This is a test. THIS is a test.",
+                True,
+                [Passage("This is a test.", metadata={"sentence_index": 0})],
+            ),
+            (
                 "This is a test. This is a test.",
                 False,
                 [
