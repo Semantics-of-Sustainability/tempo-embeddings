@@ -3,10 +3,9 @@ import logging
 import string
 from typing import Any, Iterable, Optional
 
-import numpy as np
+import numpy.typing as npt
 
 from .highlighting import Highlighting
-from .segmenter import Segmenter
 
 
 class Passage:
@@ -76,7 +75,7 @@ class Passage:
         self._tokenized_text = value
 
     @embedding.setter
-    def embedding(self, value: np.typing.ArrayLike):
+    def embedding(self, value: npt.ArrayLike):
         # For Chroma DB, this has to be a list of floats; TODO: add a check/conversion in ChromaDatabaseManager
         self._embedding = value
 
@@ -299,47 +298,6 @@ class Passage:
             full_word_spans=self.full_word_spans,
             char2tokens=self.char2tokens,
         )
-
-    @classmethod
-    def from_text(
-        cls,
-        text: str,
-        *,
-        window_size: Optional[int] = None,
-        window_overlap: Optional[int] = None,
-        metadata: Optional[dict] = None,
-        nlp_pipeline: Optional[Segmenter] = None,
-    ) -> Iterable["Passage"]:
-        """Create a Passage from a text string."""
-
-        # TODO validate parameters
-        # TODO: use window_size on tokens instead of characters
-
-        metadata = metadata or {}
-
-        if nlp_pipeline:
-            for ix, sentence in enumerate(nlp_pipeline.split(text)):
-                yield cls(sentence, metadata | {"sentence_index": ix})
-        elif window_size is None:
-            # Single window comprising the entire text
-            yield cls(text, metadata)
-        else:
-            if window_overlap is None:
-                window_overlap = int(window_size / 10)
-
-            for start in range(0, len(text), window_size - window_overlap):
-                try:
-                    # Expand window to first preceeding whitespace
-                    _start = text.rindex(" ", 0, start) + 1
-                except ValueError:
-                    _start = start
-                try:
-                    # Expand window to next succeeding whitespace
-                    _end = text.index(" ", _start + window_size)
-                except ValueError:
-                    _end = _start + window_size
-
-                yield cls(text[_start:_end], metadata)
 
     @classmethod
     def from_weaviate_record(cls, _object) -> "Passage":
