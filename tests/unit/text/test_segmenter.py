@@ -116,29 +116,36 @@ class TestSentenceSplitter:
 
 class TestWindowSegmenter:
     @pytest.mark.parametrize(
-        "text,window_size,window_overlap,expected,expected_exception",
+        "text,window_size,window_overlap,expected",
         [
-            (
-                "test text",
-                None,
-                None,
-                [Passage("test text")],
-                pytest.raises(ValueError),
-            ),
+            ("test text", None, None, [Passage("test text", {"sentence_index": 0})]),
             (
                 "test text",
                 5,
                 None,
-                [Passage("test"), Passage("text")],
-                does_not_raise(),
+                [
+                    Passage("test", {"sentence_index": 0}),
+                    Passage("text", {"sentence_index": 1}),
+                ],
             ),
-            ("test text", 5, 0, [Passage("test"), Passage("text")], does_not_raise()),
+            (
+                "test text",
+                5,
+                0,
+                [
+                    Passage("test", {"sentence_index": 0}),
+                    Passage("text", {"sentence_index": 1}),
+                ],
+            ),
             (
                 "test text",
                 5,
                 2,
-                [Passage("test"), Passage("t tex"), Passage("text")],
-                does_not_raise(),
+                [
+                    Passage("test", {"sentence_index": 0}),
+                    Passage("t tex", {"sentence_index": 1}),
+                    Passage("text", {"sentence_index": 2}),
+                ],
             ),
         ],
     )

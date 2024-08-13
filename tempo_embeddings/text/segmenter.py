@@ -251,5 +251,3 @@ class WindowSegmenter(Segmenter):
                     _end = _start + self._window_size
 
                 yield text[_start:_end]
-
-            yield text[_end:]  # TODO: is this necessary?
