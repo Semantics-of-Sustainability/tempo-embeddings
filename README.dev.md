@@ -18,7 +18,7 @@ python3 -m pip install --upgrade pip setuptools
 # install tempo_embeddings as an editable package
 python3 -m pip install --no-cache-dir --editable .
 # install development dependencies
-python3 -m pip install --no-cache-dir --editable .[dev]
+python3 -m pip install --no-cache-dir --editable ".[dev]"
 ```
 
 Afterwards check that the install directory is present in the `PATH` environment variable.
