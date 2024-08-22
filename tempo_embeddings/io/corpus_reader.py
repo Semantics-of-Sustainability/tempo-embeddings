@@ -1,9 +1,7 @@
 import json
-from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
-import stanza
 from pydantic import Field
 from pydantic.dataclasses import dataclass
 from tqdm import tqdm
@@ -11,18 +9,6 @@ from tqdm import tqdm
 from .. import settings
 from ..text.corpus import Corpus
 from ..text.segmenter import Segmenter
-
-
-@lru_cache(maxsize=2)
-def nlp_pipeline(lang: Optional[str]) -> stanza.Pipeline:
-    """Return a Stanza pipeline for the given language.
-
-    Args:
-        lang: the language code for the pipeline. Can be None.
-    Returns:
-        stanza.Pipeline: a Stanza pipeline for the given language. None if lang is None.
-    """
-    return stanza.Pipeline(lang=lang, processors="tokenize") if lang else None
 
 
 @dataclass
