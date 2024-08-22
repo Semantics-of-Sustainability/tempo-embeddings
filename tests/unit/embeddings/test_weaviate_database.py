@@ -86,6 +86,13 @@ class TestWeaviateDatabase:
             label="TestCorpus",
         )
 
+    def test_get_corpus_with_neighbors(self, weaviate_db_manager_with_data):
+        # FIXME: in this case, the Corpus.query_vector_neighbors() method only returns one neighbor, presumably due to a distance threshold
+        corpus = weaviate_db_manager_with_data.get_corpus(
+            "TestCorpus", limit=1, k_neighbors=5
+        )
+        assert len(corpus) == 2
+
     def test_delete_collection(self, weaviate_db_manager_with_data):
         weaviate_db_manager_with_data.delete_collection("TestCorpus")
 

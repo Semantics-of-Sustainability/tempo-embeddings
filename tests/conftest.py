@@ -33,7 +33,9 @@ def corpus():
                 "test",
                 metadata={"provenance": "test_file"},
                 highlighting=Highlighting(1, 3),
+                embedding=np.random.rand(768),
             )
+            for _ in range(5)
         ],
         label="TestCorpus",
     )

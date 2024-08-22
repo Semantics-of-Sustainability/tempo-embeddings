@@ -301,7 +301,22 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         where_obj: dict[str, Any] = None,
         include_embeddings: bool = False,
         limit: int = 10000,
+        k_neighbors: Optional[int] = None,
     ) -> Corpus:
+        """Get a corpus from the database with optional filters and expansions by adjacency.
+
+        Args:
+            collection (str): the collection name
+            filter_words (list[str], optional): Only include passage that contain any of these words. Defaults to None.
+            where_obj (dict[str, Any], optional): Additional filter criteria, such as 'year_from' and 'year_to'Ï. Defaults to None.
+            include_embeddings (bool, optional): If true, include the embeddings to the output. Defaults to False.
+            limit (int, optional): The maximum number of passages in the initial corpus. Defaults to 10000.
+            k_neighbors (Optional[int], optional): Retrieve k additional passages by shortest embedding distance for each passage. Defaults to None.
+
+        Returns:
+            Corpus: A corpus object
+
+        """
         my_collection = self._client.collections.get(collection)
 
         db_filter_words = (
@@ -318,19 +333,33 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         else:
             db_filters_all = db_filter_words
 
-        limit = limit if limit > 0 else None
-
         response = my_collection.query.fetch_objects(
-            limit=limit, filters=db_filters_all, include_vector=include_embeddings
+            limit=limit or None,
+            filters=db_filters_all,
+            include_vector=include_embeddings or bool(k_neighbors),
         )
-        passages = [Passage.from_weaviate_record(o) for o in response.objects]
+        passages: list[Passage] = [
+            Passage.from_weaviate_record(o) for o in response.objects
+        ]
         label = "; ".join(filter_words) if passages and filter_words else None
+        corpus = Corpus(passages, label)
 
-        return Corpus(passages, label)
+        # TODO: move this to a separate method method:
+        if k_neighbors:
+            corpus.passages.extend(
+                set(
+                    self.query_vector_neighbors(
+                        collection, corpus.centroid().tolist(), k_neighbors
+                    )
+                )
+            )
+
+        return corpus
 
     def query_vector_neighbors(
         self, collection: Collection, vector: list[float], k_neighbors=10
     ) -> Iterable[tuple[Passage, float]]:
+        # TODO: the (minimum) number of neighbors is limited by the Weaviate server configuration
         wv_collection = self._client.collections.get(collection)
         response = wv_collection.query.near_vector(
             near_vector=vector,
@@ -340,13 +369,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         )
 
         for o in response.objects:
-            text = o.properties.pop("passage")
-            yield (
-                Passage(
-                    text, o.properties, embedding=o.vector["default"], unique_id=o.uuid
-                ),
-                o.metadata.distance,
-            )
+            yield Passage.from_weaviate_record(o), o.metadata.distance
 
     def query_text_neighbors(
         self, collection: Collection, text: list[float], k_neighbors=10
