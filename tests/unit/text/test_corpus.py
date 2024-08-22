@@ -167,6 +167,29 @@ class TestCorpus:
         pd.testing.assert_frame_equal(corpus.embeddings_as_df(), expected)
 
     @pytest.mark.parametrize(
+        "embeddings, sample_size, centroid_based_sample",
+        [
+            (np.array([[1, 2], [3, 4], [5, 6]], dtype=np.float64), None, True),
+            (np.array([[1, 2], [3, 4], [5, 6]], dtype=np.float64), None, False),
+            (np.array([[1, 2], [3, 4], [5, 6]], dtype=np.float64), 1, True),
+            (np.array([[1, 2], [3, 4], [5, 6]], dtype=np.float64), 2, False),
+        ],
+    )
+    def test_to_dataframe(self, embeddings, sample_size, centroid_based_sample):
+        corpus = Corpus([Passage("test" + str(i)) for i in range(embeddings.shape[0])])
+        corpus.embeddings = embeddings
+        df = corpus.to_dataframe(sample_size, centroid_based_sample)
+        if sample_size is None:
+            assert df.shape[0] == len(embeddings)
+        elif centroid_based_sample:
+            assert (
+                df.iloc[0]["x"] == embeddings[1][0]
+                and df.iloc[0]["y"] == embeddings[1][1]
+            )
+        else:
+            assert df.shape[0] == sample_size
+
+    @pytest.mark.parametrize(
         "passages,expected",
         [
             ([], False),
