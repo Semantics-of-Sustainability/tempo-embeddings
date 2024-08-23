@@ -26,19 +26,21 @@ def mock_transformer_wrapper(mocker):
 
 
 @pytest.fixture
-def corpus():
-    return Corpus(
-        [
-            Passage(
-                f"test text {str(i)}",
-                metadata={"provenance": "test_file"},
-                highlighting=Highlighting(1, 3),
-                embedding=np.random.rand(768).tolist(),
-            )
-            for i in range(TEST_CORPUS_SIZE)
-        ],
-        label="TestCorpus",
-    )
+def test_passages():
+    return [
+        Passage(
+            f"test text {str(i)}",
+            metadata={"provenance": "test_file"},
+            highlighting=Highlighting(1, 3),
+            embedding=np.random.rand(768).tolist(),
+        )
+        for i in range(TEST_CORPUS_SIZE)
+    ]
+
+
+@pytest.fixture
+def corpus(test_passages):
+    return Corpus(test_passages, label="TestCorpus")
 
 
 @pytest.fixture

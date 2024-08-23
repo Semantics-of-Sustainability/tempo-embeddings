@@ -103,25 +103,21 @@ class TestPassage:
     def test_words(self, passage, expected):
         assert list(passage.words()) == expected
 
-    @pytest.mark.skipif(not STRICT, reason="Python 3.10+ required for this test.")
     @pytest.mark.xfail(
         platform.system() == "Windows",
         raises=WeaviateStartUpError,
         reason="Weaviate Embedded not supported on Windows",
     )
-    def test_from_weaviate_record(self, weaviate_db_manager_with_data):
-        expected_passages = [
-            Passage(
-                "test",
-                metadata={"provenance": "test_file"},
-                highlighting=Highlighting(1, 3),
-            )
-        ]
+    def test_from_weaviate_record(self, weaviate_db_manager_with_data, test_passages):
         objects = (
             weaviate_db_manager_with_data._client.collections.get("TestCorpus")
             .query.fetch_objects(include_vector=True)
             .objects
         )
 
-        for _object, expected in zip(objects, expected_passages, strict=True):
+        for _object, expected in zip(
+            sorted(objects, key=lambda o: o.properties["passage"]),
+            test_passages,
+            **STRICT,
+        ):
             assert Passage.from_weaviate_record(_object) == expected
