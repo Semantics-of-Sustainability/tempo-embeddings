@@ -2,6 +2,7 @@ import platform
 
 import pytest
 
+from tempo_embeddings.settings import STRICT
 from tempo_embeddings.text.highlighting import Highlighting
 from tempo_embeddings.text.passage import Passage
 from weaviate.exceptions import WeaviateStartUpError
@@ -102,10 +103,7 @@ class TestPassage:
     def test_words(self, passage, expected):
         assert list(passage.words()) == expected
 
-    @pytest.mark.skipif(
-        int(platform.python_version_tuple()[1]) < 10,
-        reason="Python 3.10+ required for this test.",
-    )
+    @pytest.mark.skipif(not STRICT, reason="Python 3.10+ required for this test.")
     @pytest.mark.xfail(
         platform.system() == "Windows",
         raises=WeaviateStartUpError,

@@ -2,6 +2,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import torch
 
 import weaviate
 from tempo_embeddings.embeddings.weaviate_database import WeaviateDatabaseManager
@@ -11,15 +12,14 @@ from tempo_embeddings.text.passage import Passage
 
 CWD = Path(__file__).parent.absolute()
 
+TEST_CORPUS_SIZE = 5
+
 
 @pytest.fixture
 def mock_transformer_wrapper(mocker):
-    def array_generator(shape=(1, 768)):
-        yield np.random.rand(*shape)
-
     mock_model = mocker.Mock()
-    mock_model.embed_corpus.return_value = array_generator()
-    mock_model.batch_size = 1
+    mock_model.embed_corpus.return_value = [torch.rand(TEST_CORPUS_SIZE, 768)]
+    mock_model.batch_size = TEST_CORPUS_SIZE
     mock_model.name = "mock_model"
 
     return mock_model
@@ -30,12 +30,12 @@ def corpus():
     return Corpus(
         [
             Passage(
-                "test",
+                f"test text {str(i)}",
                 metadata={"provenance": "test_file"},
                 highlighting=Highlighting(1, 3),
-                embedding=np.random.rand(768),
+                embedding=np.random.rand(768).tolist(),
             )
-            for _ in range(5)
+            for i in range(TEST_CORPUS_SIZE)
         ],
         label="TestCorpus",
     )

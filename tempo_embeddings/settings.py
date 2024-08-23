@@ -1,5 +1,6 @@
 import logging
 import os
+import platform
 from pathlib import Path
 from typing import Optional
 
@@ -54,3 +55,6 @@ WTPSPLIT_MODEL = os.environ.get("WTPSPLIT_MODEL", "sat-3l-sm")
 DEVICE: Optional[str] = os.environ.get("DEVICE")
 
 WEAVIATE_CONFIG_COLLECTION: str = "TempoEmbeddings"
+
+STRICT = {"strict": True} if int(platform.python_version_tuple()[1]) >= 10 else {}
+"""Optional argument for zip() to enforce strict mode in Python 3.10+."""

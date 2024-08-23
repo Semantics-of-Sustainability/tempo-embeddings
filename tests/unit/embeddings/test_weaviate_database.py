@@ -3,15 +3,16 @@ import json
 import logging
 import platform
 
+import numpy as np
 import pytest
 
 import weaviate
 from tempo_embeddings.embeddings.weaviate_database import WeaviateConfigDb
-from tempo_embeddings.text.corpus import Corpus
-from tempo_embeddings.text.highlighting import Highlighting
-from tempo_embeddings.text.passage import Passage
+from tempo_embeddings.settings import STRICT
 from weaviate.exceptions import WeaviateStartUpError
 from weaviate.util import generate_uuid5
+
+from ...conftest import TEST_CORPUS_SIZE
 
 
 @pytest.mark.xfail(
@@ -40,22 +41,23 @@ class TestWeaviateDatabase:
         for vector_name, vector in obj.vector.items():
             assert len(vector) == expected_vector_shapes[vector_name]
 
-    def assert_dict_equals(self, dict1, expected):
+    def assert_dict_equals(
+        self, dict1, expected, *, length_only_fields={"vector", "uuid"}
+    ):
         assert dict1.keys() == expected.keys()
 
         for key, value in expected.items():
             assert (
-                len(dict1[key]) == value if key == "vector" else dict1[key] == value
+                len(dict1[key]) == len(value)
+                if key in length_only_fields
+                else dict1[key] == value
             ), f"Mismatch for key '{key}': {dict1[key]} != {value}"
 
-    @pytest.mark.skipif(
-        int(platform.python_version_tuple()[1]) < 10,
-        reason="Python 3.10+ required for this test.",
-    )
+    @pytest.mark.skipif(not STRICT, reason="Python 3.10+ required for this test.")
     def test_ingest(self, weaviate_db_manager, corpus):
         expected_collections = [
             {"name": "TempoEmbeddings", "count": 1, "vector_shape": {}},
-            {"name": "TestCorpus", "count": 1, "vector_shape": {"default": 768}},
+            {"name": "TestCorpus", "count": 5, "vector_shape": {"default": 768}},
         ]
 
         weaviate_db_manager.ingest(corpus)
@@ -72,26 +74,26 @@ class TestWeaviateDatabase:
         weaviate_db_manager.model.embed_corpus.assert_called_once()
 
     def test_get_collection_count(self, weaviate_db_manager_with_data):
-        assert weaviate_db_manager_with_data.get_collection_count("TestCorpus") == 1
+        assert (
+            weaviate_db_manager_with_data.get_collection_count("TestCorpus")
+            == TEST_CORPUS_SIZE
+        )
 
     def test_get_corpus(self, weaviate_db_manager_with_data):
-        assert weaviate_db_manager_with_data.get_corpus("TestCorpus") == Corpus(
-            [
-                Passage(
-                    "test",
-                    metadata={"provenance": "test_file"},
-                    highlighting=Highlighting(1, 3),
-                )
-            ],
-            label="TestCorpus",
+        corpus = weaviate_db_manager_with_data.get_corpus("TestCorpus")
+        assert len(corpus.passages) == TEST_CORPUS_SIZE
+        assert corpus.label == "TestCorpus"
+        assert all(
+            passage.metadata == {"provenance": "test_file"}
+            for passage in corpus.passages
         )
 
-    def test_get_corpus_with_neighbors(self, weaviate_db_manager_with_data):
+    @pytest.mark.parametrize("k", [1])
+    def test_expand_corpus(self, weaviate_db_manager_with_data, corpus, k):
         # FIXME: in this case, the Corpus.query_vector_neighbors() method only returns one neighbor, presumably due to a distance threshold
-        corpus = weaviate_db_manager_with_data.get_corpus(
-            "TestCorpus", limit=1, k_neighbors=5
-        )
-        assert len(corpus) == 2
+        expected_length = len(corpus) + k
+        corpus = weaviate_db_manager_with_data.expand_corpus(corpus, k)
+        assert len(corpus) == expected_length
 
     def test_delete_collection(self, weaviate_db_manager_with_data):
         weaviate_db_manager_with_data.delete_collection("TestCorpus")
@@ -102,31 +104,41 @@ class TestWeaviateDatabase:
         assert "TestCorpus" not in weaviate_db_manager_with_data._config
 
     def test_export_from_collection(self, weaviate_db_manager_with_data, tmp_path):
-        expected_lines = [
-            {
-                "corpus": "TestCorpus",
-                "embedder": "mock_model",
-                "total_count": 1,
-                "uuid": "e7f46979-b88a-5c7b-9eea-f02c0b800b3e",
-            },
+        expected_config_line = {
+            "corpus": "TestCorpus",
+            "embedder": "mock_model",
+            "total_count": TEST_CORPUS_SIZE,
+            "uuid": "e7f46979-b88a-5c7b-9eea-f02c0b800b3e",
+        }
+        expected_passage_lines = [
             {
                 "highlighting": "1_3",
-                "passage": "test",
+                "passage": f"test text {i}",
                 "provenance": "test_file",
                 "uuid": "5eec7ad3-4802-5c4b-82a5-3456bacec6b0",
-                "vector": 768,  # Only compare vector length
-            },
+                "vector": np.zeros(768),
+            }
+            for i in range(TEST_CORPUS_SIZE)
         ]
+
         export_file = tmp_path / "export.json.gz"
         weaviate_db_manager_with_data.export_from_collection("TestCorpus", export_file)
 
         with gzip.open(export_file) as f:
             lines = [json.loads(line) for line in f]
 
-        assert len(lines) == len(expected_lines)
+        self.assert_dict_equals(
+            lines.pop(0), expected_config_line, length_only_fields={"vector"}
+        )
 
-        for line, expected_line in zip(lines, expected_lines):
-            self.assert_dict_equals(line, expected_line)
+        for line, expected_line in zip(
+            sorted(lines, key=lambda line: line["passage"]),
+            expected_passage_lines,
+            **STRICT,
+        ):
+            self.assert_dict_equals(
+                line, expected_line, length_only_fields={"vector", "uuid"}
+            )
 
     def test_import_from_file(self, weaviate_db_manager_with_data, tmp_path):
         export_file = tmp_path / "export.json.gz"
@@ -140,13 +152,18 @@ class TestWeaviateDatabase:
         objects = list(
             client.collections.get("TestCorpus").iterator(include_vector=True)
         )
-        assert [str(o.uuid) for o in objects] == [
-            "5eec7ad3-4802-5c4b-82a5-3456bacec6b0"
+        assert [len(str(o.uuid)) for o in objects] == [
+            len("0f83cbd4-e727-509c-a169-2d5ffba95f36")
+        ] * TEST_CORPUS_SIZE
+        assert sorted([o.properties for o in objects], key=lambda o: o["passage"]) == [
+            {
+                "provenance": "test_file",
+                "passage": f"test text {str(i)}",
+                "highlighting": "1_3",
+            }
+            for i in range(TEST_CORPUS_SIZE)
         ]
-        assert [o.properties for o in objects] == [
-            {"provenance": "test_file", "passage": "test", "highlighting": "1_3"}
-        ]
-        assert [len(o.vector["default"]) for o in objects] == [768]
+        assert [len(o.vector["default"]) for o in objects] == [768] * TEST_CORPUS_SIZE
 
         assert weaviate_db_manager_with_data._config["TestCorpus"] == {
             "corpus": "TestCorpus",
