@@ -213,6 +213,28 @@ class TestCorpus:
     def test_has_embeddings(self, passages, expected):
         assert Corpus(passages).has_embeddings() == expected
 
+    @pytest.mark.parametrize(
+        "corpus, expected_exception",
+        [
+            (Corpus(), pytest.raises(ValueError)),
+            (Corpus([Passage("test text")]), does_not_raise()),
+            (Corpus([Passage("test text")] * 10), does_not_raise()),
+        ],
+    )
+    def test_compress_embeddings(self, corpus: Corpus, expected_exception):
+        # generate random embedding vectors
+        for passage in corpus.passages:
+            passage.embedding = np.random.rand(10).tolist()
+
+        with expected_exception:
+            compressed = corpus.compress_embeddings()
+
+            assert compressed.shape == (len(corpus), 2)
+
+            if len(corpus) == 1:
+                # For single samples, the output should be zeros
+                assert_equal(compressed, np.zeros((len(corpus), 2)))
+
 
 class TestSubCorpus:
     def test_passages(self):

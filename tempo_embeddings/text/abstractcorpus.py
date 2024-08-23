@@ -13,6 +13,7 @@ from scipy.sparse import csr_matrix
 from scipy.spatial.distance import cosine
 from sklearn.cluster import HDBSCAN
 from sklearn.feature_extraction.text import TfidfVectorizer
+from umap.umap_ import UMAP
 
 from ..settings import OUTLIERS_LABEL
 from .passage import Passage
@@ -92,6 +93,17 @@ class AbstractCorpus(ABC):
     def centroid(self) -> ArrayLike:
         """The mean for all passage embeddings."""
         return np.array(self.embeddings).mean(axis=0)
+
+    def compress_embeddings(self, **umap_args):
+        """Compress the embeddings of the corpus using UMAP.
+
+        Args:
+            umap_args: Additional arguments to pass to UMAP.
+        Returns:
+            ArrayLike: the compressed embeddings.
+        """
+        umap = UMAP(**umap_args)
+        return umap.fit_transform(self.embeddings)
 
     def texts(self) -> Iterable[str]:
         return (passage.text for passage in self._passages)

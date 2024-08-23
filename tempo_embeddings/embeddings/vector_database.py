@@ -1,9 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Any, TypeVar, Union
 
-from numpy.typing import ArrayLike
-from umap.umap_ import UMAP
-
 from ..text.corpus import Corpus
 
 Collection = TypeVar("Collection")
@@ -40,18 +37,3 @@ class VectorDatabaseManagerWrapper(ABC):
         where_obj: dict[str, Any],
     ):
         return NotImplemented
-
-    @staticmethod
-    def compress_embeddings(
-        corpus: Corpus,
-        umap_verbose: bool = True,
-        **umap_args,
-    ) -> ArrayLike:
-        # FIXME: use TransformerModelWrapper.compute_embeddings().
-        if len(corpus) == 0:
-            raise ValueError("Empty corpus passed to compress_embeddings")
-
-        umap = UMAP(verbose=umap_verbose, **umap_args)
-        compressed = umap.fit_transform([p.embedding for p in corpus.passages])
-
-        return compressed

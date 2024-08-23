@@ -3,10 +3,8 @@ import logging
 from enum import Enum, auto
 from typing import Iterable, Optional
 
-import numpy as np
 import torch
 from accelerate import Accelerator
-from numpy.typing import ArrayLike
 from tokenizers import Encoding
 from transformers import (
     AutoModel,
@@ -15,7 +13,6 @@ from transformers import (
     RobertaModel,
     XmodModel,
 )
-from umap.umap_ import UMAP
 
 from ..text.corpus import Corpus
 from ..text.passage import Passage
@@ -181,37 +178,6 @@ class TransformerModelWrapper(abc.ABC):
             token_embeddings = embedding[first_token : last_token + 1]
             token_embedding = torch.mean(token_embeddings, axis=0)
         return token_embedding
-
-    def compute_embeddings(
-        self,
-        corpus: "Corpus",
-        store_tokenizations: bool = True,
-        umap_verbose: bool = True,
-        **umap_args,
-    ) -> dict[str, ArrayLike]:
-        # TODO: add relevant UMAP arguments with reasonable defaults
-
-        """Computes the embeddings for highlightings in all passages in a corpus.
-
-        Args:
-            corpus: The corpus to compute token embeddings for
-            store_tokenizations: if True, passage tokenizations are kept in memory
-            umap_verbose: if True (default), print UMAP progress
-            **umap_args: other keyword arguments to the UMAP algorithm,
-                see https://umap-learn.readthedocs.io/en/latest/parameters.html
-        """
-
-        embeddings: ArrayLike = np.concatenate(
-            [tensor.cpu() for tensor in self.embed_corpus(corpus, store_tokenizations)],
-            axis=0,
-        )
-
-        assert embeddings.shape[0] == len(
-            corpus
-        ), f"Embeddings shape is {embeddings.shape}, corpus length is {len(corpus)}."
-
-        umap = UMAP(verbose=umap_verbose, **umap_args)
-        return umap.fit_transform(embeddings)
 
     @classmethod
     def from_pretrained(
