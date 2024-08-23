@@ -265,9 +265,10 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                 [tensor.tolist() for tensor in embeddings_batch],
                 **STRICT,
             ):
-                props = passage.metadata
-                props["passage"] = passage.text
-                props["highlighting"] = str(passage.highlighting)
+                props = passage.metadata | {
+                    "passage": passage.text,
+                    "highlighting": str(passage.highlighting),
+                }
                 data_object = wvc.data.DataObject(
                     properties=props, uuid=generate_uuid5(props), vector=embedding
                 )
