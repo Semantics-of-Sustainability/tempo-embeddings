@@ -9,6 +9,8 @@ import pytest
 import weaviate
 from tempo_embeddings.embeddings.weaviate_database import WeaviateConfigDb
 from tempo_embeddings.settings import STRICT
+from tempo_embeddings.text.corpus import Corpus
+from tempo_embeddings.text.passage import Passage
 from weaviate.exceptions import WeaviateStartUpError
 from weaviate.util import generate_uuid5
 
@@ -88,12 +90,15 @@ class TestWeaviateDatabase:
             for passage in corpus.passages
         )
 
-    @pytest.mark.parametrize("k", [1])
-    def test_expand_corpus(self, weaviate_db_manager_with_data, corpus, k):
-        # FIXME: in this case, the Corpus.query_vector_neighbors() method only returns one neighbor, presumably due to a distance threshold
-        expected_length = len(corpus) + k
-        corpus = weaviate_db_manager_with_data.expand_corpus(corpus, k)
-        assert len(corpus) == expected_length
+    @pytest.mark.parametrize("k", [1, 2, 5])
+    def test_neighbour_passages(self, weaviate_db_manager_with_data, corpus, k):
+        sub_corpus_size = 2
+        sub_corpus = Corpus(corpus.passages[:sub_corpus_size])
+
+        neighbours: list[Passage] = weaviate_db_manager_with_data.neighbour_passages(
+            sub_corpus, k
+        )
+        assert len(neighbours) == min(k, TEST_CORPUS_SIZE - sub_corpus_size)
 
     def test_delete_collection(self, weaviate_db_manager_with_data):
         weaviate_db_manager_with_data.delete_collection("TestCorpus")
