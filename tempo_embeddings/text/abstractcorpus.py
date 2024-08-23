@@ -1,3 +1,4 @@
+import random
 import string
 import sys
 from abc import ABC, abstractmethod
@@ -126,39 +127,54 @@ class AbstractCorpus(ABC):
         for passage in self.passages:
             passage.set_metadata(key, value)
 
-    def to_dataframe(self, sample_size=None, centroid_based_sample=False):
+    def to_dataframe(
+        self, sample_size=None, centroid_based_sample=False
+    ) -> pd.DataFrame:
         """Transforms the Key Cluster information in a pandas Dataframe.
 
         Args:
             sample_size (int, optional): If provided it only returns the 'sample_size' otherwise all points are returned.
               Defaults to None.
-            centroid_based_sample (bool): If True, the sample comprises the closest points to the centroid 
-                If False the sample is taken randomly. This is ignored if no sample_size was provided.
+            centroid_based_sample (bool): If True, the sample comprises the closest points to the centroid
+                If False the sample is taken randomly.
 
         Returns:
             a Pandas Dataframe
+
+        Raises:
+            ValueError: If centroid_based_sample is True but sample_size is not provided.
         """
+        if centroid_based_sample and not sample_size:
+            raise ValueError(
+                "centroid_based_sample cannot be True if sample_size is not provided."
+            )
+
+        if centroid_based_sample:
+            distances = self.distances(normalize=True)
+            indices = np.argsort(distances)[:sample_size]
+            sample = [self.passages[i] for i in indices]
+            sample_distances = distances[indices]
+        elif sample_size:
+            sample = random.sample(self.passages, sample_size)
+        else:
+            sample = self.passages
 
         rows = []
-        for p in self.passages:
-            row = {"ID_DB": p.get_unique_id(), "text": p.text, "datapoint": p.embedding}
-            for key in p.metadata.keys():
-                row[key] = p.metadata[key]
-            rows.append(row)
-        
-        cluster_df =  pd.DataFrame(rows)
-
-        if sample_size is not None and sample_size > 0:
+        for i, passage in enumerate(sample):
+            row = passage.metadata | {
+                "ID_DB": passage.get_unique_id(),
+                "text": passage.text,
+            }
             if centroid_based_sample:
-                centroid_x, centroid_y = self.centroid()
-                cluster_df[['x', 'y']] = pd.DataFrame(cluster_df['datapoint'].tolist(), index=cluster_df.index)
-                cluster_df['distance_to_centroid'] = np.sqrt((cluster_df['x'] - centroid_x) ** 2 + (cluster_df['y'] - centroid_y) ** 2)
-                df_sorted = cluster_df.sort_values(by='distance_to_centroid').drop(columns=['datapoint'])
-                cluster_df = df_sorted.head(sample_size)
-            else:
-                cluster_df = cluster_df.sample(sample_size)
+                row["distance_to_centroid"] = sample_distances[i]
 
-        return cluster_df
+            if len(passage.embedding) == 2:
+                row["x"] = passage.embedding[0]
+                row["y"] = passage.embedding[1]
+
+            rows.append(row)
+
+        return pd.DataFrame(rows)
 
     def hover_datas(
         self, metadata_fields: Optional[list[str]] = None

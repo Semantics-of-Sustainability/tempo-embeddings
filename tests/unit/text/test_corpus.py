@@ -1,3 +1,5 @@
+from contextlib import nullcontext as does_not_raise
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -167,27 +169,31 @@ class TestCorpus:
         pd.testing.assert_frame_equal(corpus.embeddings_as_df(), expected)
 
     @pytest.mark.parametrize(
-        "embeddings, sample_size, centroid_based_sample",
+        "sample_size, centroid_based_sample, expected_exception",
         [
-            (np.array([[1, 2], [3, 4], [5, 6]], dtype=np.float64), None, True),
-            (np.array([[1, 2], [3, 4], [5, 6]], dtype=np.float64), None, False),
-            (np.array([[1, 2], [3, 4], [5, 6]], dtype=np.float64), 1, True),
-            (np.array([[1, 2], [3, 4], [5, 6]], dtype=np.float64), 2, False),
+            (None, True, pytest.raises(ValueError)),
+            (None, False, None),
+            (1, True, None),
+            (2, False, None),
         ],
     )
-    def test_to_dataframe(self, embeddings, sample_size, centroid_based_sample):
+    def test_to_dataframe(self, sample_size, centroid_based_sample, expected_exception):
+        embeddings = np.array([[1, 2], [3, 4], [5, 6]], dtype=np.float64)
         corpus = Corpus([Passage("test" + str(i)) for i in range(embeddings.shape[0])])
         corpus.embeddings = embeddings
-        df = corpus.to_dataframe(sample_size, centroid_based_sample)
-        if sample_size is None:
-            assert df.shape[0] == len(embeddings)
-        elif centroid_based_sample:
-            assert (
-                df.iloc[0]["x"] == embeddings[1][0]
-                and df.iloc[0]["y"] == embeddings[1][1]
-            )
-        else:
-            assert df.shape[0] == sample_size
+        with expected_exception or does_not_raise():
+            df = corpus.to_dataframe(sample_size, centroid_based_sample)
+
+        if expected_exception is None:
+            if sample_size is None:
+                assert df.shape[0] == len(embeddings)
+            elif centroid_based_sample:
+                assert (
+                    df.iloc[0]["x"] == embeddings[1][0]
+                    and df.iloc[0]["y"] == embeddings[1][1]
+                )
+            else:
+                assert df.shape[0] == sample_size
 
     @pytest.mark.parametrize(
         "passages,expected",
