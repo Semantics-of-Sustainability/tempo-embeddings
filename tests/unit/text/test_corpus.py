@@ -169,25 +169,33 @@ class TestCorpus:
         pd.testing.assert_frame_equal(corpus.embeddings_as_df(), expected)
 
     @pytest.mark.parametrize(
-        "sample_size, centroid_based_sample, expected_exception",
+        "sample_size, compress, centroid_based_sample, expected_exception",
         [
-            (None, True, pytest.raises(ValueError)),
-            (None, False, None),
-            (1, True, None),
-            (2, False, None),
+            (None, False, True, pytest.raises(ValueError)),
+            (None, False, False, None),
+            (1, False, True, None),
+            (2, False, False, None),
+            (2, True, False, None),
         ],
     )
-    def test_to_dataframe(self, sample_size, centroid_based_sample, expected_exception):
+    def test_to_dataframe(
+        self, sample_size, compress, centroid_based_sample, expected_exception
+    ):
         embeddings = np.array([[1, 2], [3, 4], [5, 6]], dtype=np.float64)
         corpus = Corpus([Passage("test" + str(i)) for i in range(embeddings.shape[0])])
         corpus.embeddings = embeddings
+
+        if compress:
+            # emulate compressed 2d embeddings
+            corpus._embeddings_2d = embeddings.copy()
+
         with expected_exception or does_not_raise():
             df = corpus.to_dataframe(sample_size, centroid_based_sample)
 
         if expected_exception is None:
             if sample_size is None:
                 assert df.shape[0] == len(embeddings)
-            elif centroid_based_sample:
+            elif centroid_based_sample and compress:
                 assert (
                     df.iloc[0]["x"] == embeddings[1][0]
                     and df.iloc[0]["y"] == embeddings[1][1]
@@ -214,37 +222,34 @@ class TestCorpus:
         assert Corpus(passages).has_embeddings() == expected
 
     @pytest.mark.parametrize(
-        "corpus, in_place, expected_exception",
+        "corpus, expected_exception",
         [
-            (Corpus(), False, pytest.raises(ValueError)),
-            (Corpus([Passage("test text")]), False, does_not_raise()),
+            (Corpus(), pytest.raises(ValueError)),
+            (Corpus([Passage("test text")]), does_not_raise()),
             (
                 Corpus([Passage(f"test text {str(i)}") for i in range(10)]),
-                False,
                 does_not_raise(),
             ),
             (
                 Corpus([Passage(f"test text {str(i)}") for i in range(10)]),
-                True,
                 does_not_raise(),
             ),
         ],
     )
-    def test_compress_embeddings(self, corpus: Corpus, in_place, expected_exception):
+    def test_compress_embeddings(self, corpus: Corpus, expected_exception):
         # generate random embedding vectors
         for passage in corpus.passages:
             passage.embedding = np.random.rand(10).tolist()
 
         with expected_exception:
-            compressed = corpus.compress_embeddings(in_place=in_place)
+            compressed = corpus.compress_embeddings()
 
         if corpus.passages:
             assert compressed.shape == (len(corpus), 2)
 
-            if in_place:
-                np.testing.assert_array_equal(corpus.embeddings, compressed)
-            else:
-                assert corpus.embeddings.shape == (len(corpus), 10)
+            np.testing.assert_array_equal(corpus.embeddings_2d, compressed)
+
+            assert corpus.embeddings.shape == (len(corpus), 10)
 
             if len(corpus) == 1:
                 # For single samples, the output should be zeros

@@ -21,6 +21,8 @@ class Corpus(AbstractCorpus):
         self._label: Optional[str] = label
         self._vectorizer: TfidfVectorizer = None
 
+        self._embeddings_2d = None
+
     def __add__(self, other: "Corpus") -> "Corpus":
         new_label = self.label if self.label == other.label else None
         return Corpus(self._passages + other._passages, label=new_label)
@@ -45,6 +47,10 @@ class Corpus(AbstractCorpus):
         if self._vectorizer is None:
             self._vectorizer = AbstractCorpus.tfidf_vectorizer(self.passages)
         return self._vectorizer
+
+    @property
+    def embeddings_2d(self):
+        return self._embeddings_2d
 
     def batches(self, batch_size: int) -> Iterable[list[Passage]]:
         if batch_size <= 1:

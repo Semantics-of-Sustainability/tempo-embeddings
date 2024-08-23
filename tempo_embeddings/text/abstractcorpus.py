@@ -92,22 +92,22 @@ class AbstractCorpus(ABC):
 
     def centroid(self) -> ArrayLike:
         """The mean for all passage embeddings."""
+        # TODO: use 2d embeddings if available
         return np.array(self.embeddings).mean(axis=0)
 
-    def compress_embeddings(self, *, in_place: bool = False, **umap_args):
-        """Compress the embeddings of the corpus using UMAP.
+    def compress_embeddings(self, **umap_args):
+        """Compress the embeddings of the corpus using UMAP and stores them in the corpus
 
         Args:
-            in_place: If True, replace the current embeddings with the compressed ones.
             umap_args: Additional arguments to pass to UMAP.
         Returns:
             ArrayLike: the compressed embeddings.
         """
         umap = UMAP(**umap_args)
-        embeddings = umap.fit_transform(self.embeddings)
-        if in_place:
-            self.embeddings = embeddings
-        return embeddings
+
+        # FIXME: self._embeddings_2d is not initialized in AbstractCorpus
+        self._embeddings_2d = umap.fit_transform(self.embeddings)
+        return self._embeddings_2d
 
     def texts(self) -> Iterable[str]:
         return (passage.text for passage in self._passages)
@@ -184,9 +184,9 @@ class AbstractCorpus(ABC):
             if centroid_based_sample:
                 row["distance_to_centroid"] = sample_distances[i]
 
-            if len(passage.embedding) == 2:
-                row["x"] = passage.embedding[0]
-                row["y"] = passage.embedding[1]
+            if self._embeddings_2d is not None:
+                row["x"] = self._embeddings_2d[i, 0]
+                row["y"] = self._embeddings_2d[i, 1]
 
             rows.append(row)
 
@@ -221,6 +221,7 @@ class AbstractCorpus(ABC):
         centroid = self.centroid()
 
         # TODO: can this be vectorized?
+        # TODO: use 2d embeddings if available
         distances: ArrayLike = np.array(
             [cosine(centroid, embedding) for embedding in self.embeddings]
         )
