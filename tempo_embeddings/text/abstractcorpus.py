@@ -94,16 +94,20 @@ class AbstractCorpus(ABC):
         """The mean for all passage embeddings."""
         return np.array(self.embeddings).mean(axis=0)
 
-    def compress_embeddings(self, **umap_args):
+    def compress_embeddings(self, *, in_place: bool = False, **umap_args):
         """Compress the embeddings of the corpus using UMAP.
 
         Args:
+            in_place: If True, replace the current embeddings with the compressed ones.
             umap_args: Additional arguments to pass to UMAP.
         Returns:
             ArrayLike: the compressed embeddings.
         """
         umap = UMAP(**umap_args)
-        return umap.fit_transform(self.embeddings)
+        embeddings = umap.fit_transform(self.embeddings)
+        if in_place:
+            self.embeddings = embeddings
+        return embeddings
 
     def texts(self) -> Iterable[str]:
         return (passage.text for passage in self._passages)
