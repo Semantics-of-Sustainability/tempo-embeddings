@@ -41,6 +41,10 @@ class Subcorpus(AbstractCorpus):
     def passages(self) -> list[Passage]:
         return [self._parent_corpus.passages[i] for i in self._indices]
 
+    def compress_embeddings(self) -> np.ndarray:
+        # UMAP should be fitted on all embeddings of the parent corpus
+        raise NotImplementedError("Subcorpus does not support compress_embeddings")
+
     def extend(self, passages: list[Passage]) -> list[int]:
         """Add multiple passages to the corpus.
 

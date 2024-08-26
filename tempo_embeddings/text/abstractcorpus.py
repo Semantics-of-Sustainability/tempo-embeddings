@@ -113,7 +113,6 @@ class AbstractCorpus(ABC):
         Raises:
             ValueError: If the corpus has zero or exactly one embeddings.
         """
-        # FIXME: for a SubCorpus, UMAP should be fitted on all embeddings of the parent corpus
         if self._umap is None or recompute:
             self._umap = UMAP(**umap_args).fit(self.embeddings)
             self._embeddings_2d = self._umap.transform(self.embeddings)
