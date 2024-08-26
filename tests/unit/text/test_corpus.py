@@ -18,6 +18,11 @@ class TestCorpus:
             [Passage("test1"), Passage("test2")]
         )
 
+    def test_extend(self):
+        corpus = Corpus([Passage("test1")])
+        assert corpus.extend([Passage("test2")]) == range(1, 2)
+        assert corpus.passages == [Passage("test1"), Passage("test2")]
+
     @pytest.mark.parametrize(
         "corpus,metadata_fields,expected",
         [
@@ -256,6 +261,15 @@ class TestSubCorpus:
         subcorpus = Subcorpus(parent_corpus, [0], label="test")
         assert subcorpus.passages == [parent_corpus.passages[0]]
         assert subcorpus.passages[0] is parent_corpus.passages[0]
+
+    def test_extend(self):
+        parent_corpus = Corpus([Passage("text 1"), Passage("text 2")])
+
+        subcorpus = Subcorpus(parent_corpus, [0], label="test")
+
+        assert subcorpus.extend([Passage("text 3")]) == range(2, 3)
+        assert subcorpus.passages == [Passage("text 1"), Passage("text 3")]
+        assert subcorpus._indices == [0, 2]
 
     def test_add(self):
         parent_corpus = Corpus([Passage("text 1"), Passage("text 2")])
