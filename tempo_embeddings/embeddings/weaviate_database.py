@@ -1,8 +1,8 @@
 import gzip
 import json
 import logging
-import platform
 import uuid
+from collections import Counter
 from typing import Any, Iterable, Optional, TypeVar
 
 from tqdm import tqdm
@@ -13,7 +13,7 @@ from weaviate.classes.query import Filter, MetadataQuery
 from weaviate.exceptions import UnexpectedStatusCodeError, WeaviateQueryError
 from weaviate.util import generate_uuid5
 
-from ..settings import WEAVIATE_CONFIG_COLLECTION
+from ..settings import STRICT, WEAVIATE_CONFIG_COLLECTION
 from ..text.corpus import Corpus
 from ..text.passage import Passage
 from .model import TransformerModelWrapper
@@ -250,22 +250,27 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             WeaviateQueryError: If a Weaviate error occurs during insertion
         """
         num_records = 0
-        embeddings = self.model.embed_corpus(
-            corpus, store_tokenizations=True, batch_size=self.batch_size
-        )
-        for batch_pass, batch_embeds in zip(
-            corpus.batches(self.batch_size), embeddings
+        for passages_batch, embeddings_batch in zip(
+            corpus.batches(self.batch_size),
+            self.model.embed_corpus(
+                corpus, store_tokenizations=True, batch_size=self.batch_size
+            ),
+            **STRICT,
         ):
-            logger.debug("Batch pass... %s | %s", type(batch_pass), type(batch_embeds))
-            logger.debug("NODE: %s", platform.node())
             data_objects = []
             # Prepare Insertion Batch...
-            for p, emb in zip(batch_pass, [tensor.tolist() for tensor in batch_embeds]):
-                props = p.metadata
-                props["passage"] = p.text
-                props["highlighting"] = str(p.highlighting)
+            for passage, embedding in zip(
+                passages_batch,
+                # split the tensor into a list of lists:
+                [tensor.tolist() for tensor in embeddings_batch],
+                **STRICT,
+            ):
+                props = passage.metadata | {
+                    "passage": passage.text,
+                    "highlighting": str(passage.highlighting),
+                }
                 data_object = wvc.data.DataObject(
-                    properties=props, uuid=generate_uuid5(props), vector=emb
+                    properties=props, uuid=generate_uuid5(props), vector=embedding
                 )
 
                 # TODO: allow for named vectors
@@ -302,6 +307,19 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         include_embeddings: bool = False,
         limit: int = 10000,
     ) -> Corpus:
+        """Get a corpus from the database with optional filters.
+
+        Args:
+            collection (str): the collection name
+            filter_words (list[str], optional): Only include passage that contain any of these words. Defaults to None.
+            where_obj (dict[str, Any], optional): Additional filter criteria, such as 'year_from' and 'year_to'Ï. Defaults to None.
+            include_embeddings (bool, optional): If true, include the embeddings to the output. Defaults to False.
+            limit (int, optional): The maximum number of passages in the initial corpus. Defaults to 10000.
+
+        Returns:
+            Corpus: A corpus object
+
+        """
         my_collection = self._client.collections.get(collection)
 
         db_filter_words = (
@@ -318,19 +336,49 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         else:
             db_filters_all = db_filter_words
 
-        limit = limit if limit > 0 else None
-
         response = my_collection.query.fetch_objects(
-            limit=limit, filters=db_filters_all, include_vector=include_embeddings
+            limit=limit or None,
+            filters=db_filters_all,
+            include_vector=include_embeddings,
         )
-        passages = [Passage.from_weaviate_record(o) for o in response.objects]
-        label = "; ".join(filter_words) if passages and filter_words else None
-
+        passages: list[Passage] = [
+            Passage.from_weaviate_record(o) for o in response.objects
+        ]
+        label = "; ".join(filter_words) if passages and filter_words else collection
         return Corpus(passages, label)
 
+    def neighbour_passages(
+        self, corpus: Corpus, k: int, collections: Optional[list[str]] = None
+    ) -> list[Passage]:
+        """Find passages to expand a corpus with the k-nearest neighbors of the centroid of the corpus.
+
+        Args:
+            corpus (Corpus): The corpus to expand, edited in-place
+            k (int): The number of neighbors to add per collection
+            collections (Optional[list[str]], optional): The collections to query. Defaults to all available collections.
+
+        Returns:
+            A list of unique passages that were not part of the original corpus
+        """
+        passages: Counter[Passage, float] = Counter()
+        _corpus_passages = set(corpus.passages)
+        for collection in collections or self.get_available_collections():
+            centroid = corpus.centroid(use_2d_embeddings=False).tolist()
+
+            for passage, distance in self.query_vector_neighbors(
+                collection, centroid, k + len(_corpus_passages)
+            ):
+                if passage not in _corpus_passages:
+                    passages[passage] = min(passages[passage], distance)
+
+        return [passage for passage, _ in passages.most_common()[-k:]]
+
     def query_vector_neighbors(
-        self, collection: Collection, vector: list[float], k_neighbors=10
+        self, collection: str, vector: list[float], k_neighbors=10
     ) -> Iterable[tuple[Passage, float]]:
+        # TODO: the (minimum) number of neighbors is limited by the Weaviate server configuration
+        # TODO: use autocut: https://weaviate.io/developers/weaviate/search/similarity#autocut
+
         wv_collection = self._client.collections.get(collection)
         response = wv_collection.query.near_vector(
             near_vector=vector,
@@ -340,13 +388,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         )
 
         for o in response.objects:
-            text = o.properties.pop("passage")
-            yield (
-                Passage(
-                    text, o.properties, embedding=o.vector["default"], unique_id=o.uuid
-                ),
-                o.metadata.distance,
-            )
+            yield Passage.from_weaviate_record(o), o.metadata.distance
 
     def query_text_neighbors(
         self, collection: Collection, text: list[float], k_neighbors=10

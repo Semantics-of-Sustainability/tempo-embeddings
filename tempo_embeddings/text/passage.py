@@ -88,6 +88,7 @@ class Passage:
         self._char2tokens = value
 
     def get_unique_id(self) -> str:
+        # TODO: use self.__hash__() instead of this method?
         if not self._unique_id:
             meta_sorted = (
                 sorted(self.metadata.items(), key=lambda x: x[0])
@@ -311,10 +312,15 @@ class Passage:
 
         metadata = _object.properties
         text = metadata.pop("passage")
+        highlighting = (
+            Highlighting.from_string(metadata.pop("highlighting"))
+            if "highlighting" in metadata
+            else None
+        )
 
         passage = cls(
             text=text,
-            highlighting=Highlighting.from_string(metadata.pop("highlighting")),
+            highlighting=highlighting,
             metadata=metadata,
             unique_id=_object.uuid,
             embedding=_object.vector.get("default", []),

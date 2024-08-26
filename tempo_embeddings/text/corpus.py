@@ -17,6 +17,8 @@ class Corpus(AbstractCorpus):
     """A Corpus implementation that holds the concrecte passages and embedings."""
 
     def __init__(self, passages: list[Passage] = None, label: Optional[Any] = None):
+        super().__init__()
+
         self._passages: list[Passage] = passages or []
         self._label: Optional[str] = label
         self._vectorizer: TfidfVectorizer = None
@@ -34,7 +36,7 @@ class Corpus(AbstractCorpus):
         return len(self._passages)
 
     def __repr__(self) -> str:
-        return f"Corpus({self._label!r}, {self._passages[:10]!r})"
+        return f"Corpus({self._label!r}, {len(self._passages)} passages)"
 
     @property
     def passages(self) -> list[Passage]:
@@ -45,6 +47,25 @@ class Corpus(AbstractCorpus):
         if self._vectorizer is None:
             self._vectorizer = AbstractCorpus.tfidf_vectorizer(self.passages)
         return self._vectorizer
+
+    def extend(self, passages: list[Passage]) -> list[int]:
+        """Add multiple passages to the corpus.
+
+        Args:
+            passages: The passages to add to the corpus.
+        Returns:
+            the indices in the corpus where the new passages were added, to be used in SubCorpus objects.
+        Raises:
+            ValueError: If a passage is already in the corpus
+        """
+        start_index = len(self._passages)
+        self._passages.extend(passages)
+
+        if self._umap:
+            # Compute all UMAP embeddings with existing UMAP model
+            self._embeddings_2d = self._umap.transform(self.embeddings)
+
+        return range(start_index, len(self._passages))
 
     def batches(self, batch_size: int) -> Iterable[list[Passage]]:
         if batch_size <= 1:

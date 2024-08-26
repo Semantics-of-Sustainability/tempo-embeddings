@@ -1,7 +1,10 @@
+from contextlib import nullcontext as does_not_raise
+
 import numpy as np
 import pandas as pd
 import pytest
 from numpy.testing import assert_equal
+from umap.umap_ import UMAP
 
 from tempo_embeddings.text.corpus import Corpus
 from tempo_embeddings.text.highlighting import Highlighting
@@ -14,6 +17,11 @@ class TestCorpus:
         assert Corpus([Passage("test1")]) + Corpus([Passage("test2")]) == Corpus(
             [Passage("test1"), Passage("test2")]
         )
+
+    def test_extend(self):
+        corpus = Corpus([Passage("test1")])
+        assert corpus.extend([Passage("test2")]) == range(1, 2)
+        assert corpus.passages == [Passage("test1"), Passage("test2")]
 
     @pytest.mark.parametrize(
         "corpus,metadata_fields,expected",
@@ -161,33 +169,43 @@ class TestCorpus:
             ),
         ],
     )
-    def test_embeddings_as_df(self, embeddings, expected):
+    def test_coordinates(self, embeddings, expected):
         corpus = Corpus([Passage("test" + str(i)) for i in range(embeddings.shape[0])])
-        corpus.embeddings = embeddings
-        pd.testing.assert_frame_equal(corpus.embeddings_as_df(), expected)
+        corpus.embeddings_2d = embeddings
+        pd.testing.assert_frame_equal(corpus.coordinates(), expected)
 
     @pytest.mark.parametrize(
-        "embeddings, sample_size, centroid_based_sample",
+        "sample_size, centroid_based_sample, expected_exception",
         [
-            (np.array([[1, 2], [3, 4], [5, 6]], dtype=np.float64), None, True),
-            (np.array([[1, 2], [3, 4], [5, 6]], dtype=np.float64), None, False),
-            (np.array([[1, 2], [3, 4], [5, 6]], dtype=np.float64), 1, True),
-            (np.array([[1, 2], [3, 4], [5, 6]], dtype=np.float64), 2, False),
+            (None, True, pytest.raises(ValueError)),
+            (None, False, None),
+            (1, True, None),
+            (2, False, None),
+            (2, False, None),
         ],
     )
-    def test_to_dataframe(self, embeddings, sample_size, centroid_based_sample):
+    def test_to_dataframe(self, sample_size, centroid_based_sample, expected_exception):
+        embeddings = np.array([[1, 2], [3, 4], [5, 6]], dtype=np.float64)
         corpus = Corpus([Passage("test" + str(i)) for i in range(embeddings.shape[0])])
         corpus.embeddings = embeddings
-        df = corpus.to_dataframe(sample_size, centroid_based_sample)
-        if sample_size is None:
-            assert df.shape[0] == len(embeddings)
-        elif centroid_based_sample:
-            assert (
-                df.iloc[0]["x"] == embeddings[1][0]
-                and df.iloc[0]["y"] == embeddings[1][1]
-            )
-        else:
-            assert df.shape[0] == sample_size
+
+        # emulate compressed 2d embeddings
+        corpus._embeddings_2d = embeddings.copy()
+        corpus._umap = UMAP()  # Set unfitted dummy UMAP to prevent re-computation
+
+        with expected_exception or does_not_raise():
+            df = corpus.to_dataframe(sample_size, centroid_based_sample)
+
+        if expected_exception is None:
+            if sample_size is None:
+                assert df.shape[0] == len(embeddings)
+            elif centroid_based_sample:
+                assert (
+                    df.iloc[0]["x"] == embeddings[1][0]
+                    and df.iloc[0]["y"] == embeddings[1][1]
+                )
+            else:
+                assert df.shape[0] == sample_size
 
     @pytest.mark.parametrize(
         "passages,expected",
@@ -207,6 +225,34 @@ class TestCorpus:
     def test_has_embeddings(self, passages, expected):
         assert Corpus(passages).has_embeddings() == expected
 
+    @pytest.mark.parametrize(
+        "corpus, expected_exception",
+        [
+            (Corpus(), pytest.raises(ValueError)),
+            (Corpus([Passage("test text")]), pytest.raises(ValueError)),
+            (Corpus([Passage(f"test text {str(i)}") for i in range(10)]), None),
+            (Corpus([Passage(f"test text {str(i)}") for i in range(10)]), None),
+        ],
+    )
+    def test_compress_embeddings(self, corpus: Corpus, expected_exception):
+        # generate random embedding vectors
+        for passage in corpus.passages:
+            passage.embedding = np.random.rand(10).tolist()
+
+        with expected_exception or does_not_raise():
+            compressed = corpus.compress_embeddings()
+
+        if expected_exception is None:
+            assert compressed.shape == (len(corpus), 2)
+
+            np.testing.assert_array_equal(corpus.embeddings_2d, compressed)
+
+            assert corpus.embeddings.shape == (len(corpus), 10)
+
+            if len(corpus) == 1:
+                # For single samples, the output should be zeros
+                assert_equal(compressed, np.zeros((len(corpus), 2)))
+
 
 class TestSubCorpus:
     def test_passages(self):
@@ -215,6 +261,15 @@ class TestSubCorpus:
         subcorpus = Subcorpus(parent_corpus, [0], label="test")
         assert subcorpus.passages == [parent_corpus.passages[0]]
         assert subcorpus.passages[0] is parent_corpus.passages[0]
+
+    def test_extend(self):
+        parent_corpus = Corpus([Passage("text 1"), Passage("text 2")])
+
+        subcorpus = Subcorpus(parent_corpus, [0], label="test")
+
+        assert subcorpus.extend([Passage("text 3")]) == range(2, 3)
+        assert subcorpus.passages == [Passage("text 1"), Passage("text 3")]
+        assert subcorpus._indices == [0, 2]
 
     def test_add(self):
         parent_corpus = Corpus([Passage("text 1"), Passage("text 2")])
