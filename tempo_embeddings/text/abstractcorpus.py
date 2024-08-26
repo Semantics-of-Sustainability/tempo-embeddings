@@ -1,6 +1,5 @@
 import random
 import string
-import sys
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from functools import lru_cache
@@ -15,11 +14,17 @@ from sklearn.cluster import HDBSCAN
 from sklearn.feature_extraction.text import TfidfVectorizer
 from umap.umap_ import UMAP
 
-from ..settings import OUTLIERS_LABEL
+from ..settings import OUTLIERS_LABEL, STRICT
 from .passage import Passage
 
 
 class AbstractCorpus(ABC):
+    def __init__(self) -> None:
+        super().__init__()
+
+        self._embeddings_2d = None
+        """Stores the 2d embeddings of the corpus."""
+
     @property
     @abstractmethod
     def passages(self) -> list[Passage]:
@@ -31,21 +36,8 @@ class AbstractCorpus(ABC):
 
     @embeddings.setter
     def embeddings(self, embeddings: ArrayLike):
-        try:
-            for row, passage in zip(embeddings, self._passages, strict=True):
-                passage.embedding = row
-        except TypeError as e:
-            # TODO: remove this block once we drop support for Python < 3.10
-            if sys.version_info.minor < 10:
-                if len(embeddings) == len(self._passages):
-                    for row, passage in zip(embeddings, self._passages):
-                        passage.embedding = row
-                else:
-                    raise ValueError(
-                        f"embeddings must have the same length as passages: {len(embeddings)} != {len(self._passages)}"
-                    ) from e
-            else:
-                raise e
+        for row, passage in zip(embeddings, self._passages, **STRICT):
+            passage.embedding = row
 
     def has_embeddings(self) -> bool:
         """Check if the corpus has embeddings.
@@ -92,8 +84,12 @@ class AbstractCorpus(ABC):
 
     def centroid(self) -> ArrayLike:
         """The mean for all passage embeddings."""
-        # TODO: use 2d embeddings if available
+        # TODO: optionally use 2d embeddings
         return np.array(self.embeddings).mean(axis=0)
+
+    @property
+    def embeddings_2d(self):
+        return self._embeddings_2d
 
     def compress_embeddings(self, **umap_args):
         """Compress the embeddings of the corpus using UMAP and stores them in the corpus
@@ -352,6 +348,7 @@ class AbstractCorpus(ABC):
         return texts
 
     def cluster(self, **kwargs):
+        # TODO: optionally use 2d embeddings
         cluster_labels: list[int] = (
             HDBSCAN(**kwargs).fit_predict(self.embeddings).astype(int).tolist()
         )

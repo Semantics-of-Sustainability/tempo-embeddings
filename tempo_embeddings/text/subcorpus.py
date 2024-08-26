@@ -13,6 +13,8 @@ class Subcorpus(AbstractCorpus):
     def __init__(
         self, parent_corpus: "Corpus", indices: list[int], label: Optional[str] = None
     ) -> None:
+        super().__init__()
+
         self._parent_corpus = parent_corpus
         self._indices = indices
         self._label = label
