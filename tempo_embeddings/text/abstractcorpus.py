@@ -1,3 +1,4 @@
+import logging
 import random
 import string
 from abc import ABC, abstractmethod
@@ -94,6 +95,10 @@ class AbstractCorpus(ABC):
     @property
     def embeddings_2d(self) -> Optional[np.ndarray]:
         return self._embeddings_2d
+
+    @embeddings_2d.setter
+    def embeddings_2d(self, value: np.ndarray):
+        self._embeddings_2d = value
 
     def compress_embeddings(self, *, recompute: bool = False, **umap_args):
         """Compress the embeddings of the corpus using UMAP and stores them in the corpus
@@ -200,6 +205,25 @@ class AbstractCorpus(ABC):
             rows.append(row)
 
         return pd.DataFrame(rows)
+
+    def coordinates(self) -> pd.DataFrame:
+        """Returns the coordinates of the corpus.
+
+        Returns:
+            pd.DataFrame: The coordinates of the corpus.
+        """
+
+        if self._embeddings_2d is None:
+            logging.warning("No 2D embeddings available.")
+            df = pd.DataFrame()
+        else:
+            df = pd.DataFrame(
+                {
+                    "x": [e[0] for e in self._embeddings_2d],
+                    "y": [e[1] for e in self._embeddings_2d],
+                }
+            )
+        return df
 
     def hover_datas(
         self, metadata_fields: Optional[list[str]] = None

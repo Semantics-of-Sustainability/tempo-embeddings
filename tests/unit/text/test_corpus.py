@@ -164,10 +164,10 @@ class TestCorpus:
             ),
         ],
     )
-    def test_embeddings_as_df(self, embeddings, expected):
+    def test_coordinates(self, embeddings, expected):
         corpus = Corpus([Passage("test" + str(i)) for i in range(embeddings.shape[0])])
-        corpus.embeddings = embeddings
-        pd.testing.assert_frame_equal(corpus.embeddings_as_df(), expected)
+        corpus.embeddings_2d = embeddings
+        pd.testing.assert_frame_equal(corpus.coordinates(), expected)
 
     @pytest.mark.parametrize(
         "sample_size, centroid_based_sample, expected_exception",

@@ -91,7 +91,7 @@ class BokehInteractiveVisualizer(BokehVisualizer):
                 )
 
         return pd.concat(
-            (hover_data.astype({self._YEAR_COLUMN: int}), cluster.to_dataframe()),
+            (hover_data.astype({self._YEAR_COLUMN: int}), cluster.coordinates()),
             axis="columns",
         ).assign(label=cluster.label)
 

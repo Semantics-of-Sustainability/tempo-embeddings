@@ -36,7 +36,7 @@ class Corpus(AbstractCorpus):
         return len(self._passages)
 
     def __repr__(self) -> str:
-        return f"Corpus({self._label!r}, {self._passages[:10]!r})"
+        return f"Corpus({self._label!r}, {len(self._passages)} passages)"
 
     @property
     def passages(self) -> list[Passage]:
