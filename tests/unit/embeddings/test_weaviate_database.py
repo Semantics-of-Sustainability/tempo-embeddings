@@ -55,7 +55,6 @@ class TestWeaviateDatabase:
                 else dict1[key] == value
             ), f"Mismatch for key '{key}': {dict1[key]} != {value}"
 
-    @pytest.mark.skipif(not STRICT, reason="Python 3.10+ required for this test.")
     def test_ingest(self, weaviate_db_manager, corpus):
         expected_collections = [
             {"name": "TempoEmbeddings", "count": 1, "vector_shape": {}},
@@ -66,7 +65,7 @@ class TestWeaviateDatabase:
         for collection, expected in zip(
             weaviate_db_manager.client.collections.list_all(),
             expected_collections,
-            strict=True,
+            **STRICT,
         ):
             self.assert_collection(
                 weaviate_db_manager.client.collections.get(collection),
