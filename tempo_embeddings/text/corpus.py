@@ -48,6 +48,25 @@ class Corpus(AbstractCorpus):
             self._vectorizer = AbstractCorpus.tfidf_vectorizer(self.passages)
         return self._vectorizer
 
+    def extend(self, passages: list[Passage]) -> list[int]:
+        """Add multiple passages to the corpus.
+
+        Args:
+            passages: The passages to add to the corpus.
+        Returns:
+            the indices in the corpus where the new passages were added, to be used in SubCorpus objects.
+        Raises:
+            ValueError: If a passage is already in the corpus
+        """
+        start_index = len(self._passages)
+        self._passages.extend(passages)
+
+        if self._umap:
+            # Compute all UMAP embeddings with existing UMAP model
+            self._embeddings_2d = self._umap.transform(self.embeddings)
+
+        return range(start_index, len(self._passages))
+
     def batches(self, batch_size: int) -> Iterable[list[Passage]]:
         if batch_size <= 1:
             yield self.passages
