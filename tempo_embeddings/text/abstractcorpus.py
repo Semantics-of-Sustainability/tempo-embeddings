@@ -7,7 +7,6 @@ from typing import Any, Iterable, Optional
 
 import numpy as np
 import pandas as pd
-from numpy.typing import ArrayLike
 from scipy.sparse import csr_matrix
 from scipy.spatial.distance import cosine
 from sklearn.cluster import HDBSCAN
@@ -25,17 +24,20 @@ class AbstractCorpus(ABC):
         self._embeddings_2d = None
         """Stores the 2d embeddings of the corpus."""
 
+        self._umap: UMAP = None
+        """The UMAP model that can be re-used to compress embeddings that are added later."""
+
     @property
     @abstractmethod
     def passages(self) -> list[Passage]:
         return NotImplemented
 
     @property
-    def embeddings(self) -> ArrayLike:
+    def embeddings(self) -> np.ndarray:
         return np.array([p.embedding for p in self.passages])
 
     @embeddings.setter
-    def embeddings(self, embeddings: ArrayLike):
+    def embeddings(self, embeddings: np.ndarray):
         for row, passage in zip(embeddings, self._passages, **STRICT):
             passage.embedding = row
 
@@ -51,6 +53,14 @@ class AbstractCorpus(ABC):
         return not any(passage.embedding is None for passage in self.passages) and any(
             any(passage.embedding) for passage in self.passages
         )
+
+    def _select_embeddings(self, use_2d_embeddings: bool, recompute: bool = False):
+        if use_2d_embeddings:
+            self.compress_embeddings(recompute=recompute)
+            embeddings = self._embeddings_2d
+        else:
+            embeddings = self.embeddings
+        return embeddings
 
     @property
     @abstractmethod
@@ -82,27 +92,35 @@ class AbstractCorpus(ABC):
     def __contains__(self, passage: Passage) -> bool:
         return passage in self._passages
 
-    def centroid(self) -> ArrayLike:
+    def centroid(self, use_2d_embeddings: bool = True) -> np.ndarray:
         """The mean for all passage embeddings."""
-        # TODO: optionally use 2d embeddings
-        return np.array(self.embeddings).mean(axis=0)
+        return np.array(self._select_embeddings(use_2d_embeddings)).mean(axis=0)
 
     @property
-    def embeddings_2d(self):
+    def embeddings_2d(self) -> Optional[np.ndarray]:
         return self._embeddings_2d
 
-    def compress_embeddings(self, **umap_args):
+    def compress_embeddings(self, *, recompute: bool = False, **umap_args):
         """Compress the embeddings of the corpus using UMAP and stores them in the corpus
 
         Args:
+            recompute: If True, recomputes the UMAP model even if it has already been computed.
             umap_args: Additional arguments to pass to UMAP.
-        Returns:
-            ArrayLike: the compressed embeddings.
-        """
-        umap = UMAP(**umap_args)
 
-        # FIXME: self._embeddings_2d is not initialized in AbstractCorpus
-        self._embeddings_2d = umap.fit_transform(self.embeddings)
+        Returns:
+            np.ndarray: the compressed embeddings.
+
+        Raises:
+            ValueError: If the corpus has zero or exactly one embeddings.
+        """
+        if self._umap is None or recompute:
+            self._umap = UMAP(**umap_args).fit(self.embeddings)
+            self._embeddings_2d = self._umap.transform(self.embeddings)
+
+        assert (
+            self._embeddings_2d is not None
+        ), "UMAP embeddings have not been computed."
+
         return self._embeddings_2d
 
     def texts(self) -> Iterable[str]:
@@ -162,23 +180,22 @@ class AbstractCorpus(ABC):
             )
 
         if centroid_based_sample:
-            distances = self.distances(normalize=True)
-            indices = np.argsort(distances)[:sample_size]
-            sample = [self.passages[i] for i in indices]
-            sample_distances = distances[indices]
+            distances = self.distances(normalize=False)
+            sample_indices = np.argsort(distances)[:sample_size]
         elif sample_size:
-            sample = random.sample(self.passages, sample_size)
+            sample_indices = random.sample(range(len(self.passages)), sample_size)
         else:
-            sample = self.passages
+            sample_indices = range(len(self.passages))
 
         rows = []
-        for i, passage in enumerate(sample):
+        for i in sample_indices:
+            passage = self.passages[i]
             row = passage.metadata | {
                 "ID_DB": passage.get_unique_id(),
                 "text": passage.text,
             }
             if centroid_based_sample:
-                row["distance_to_centroid"] = sample_distances[i]
+                row["distance_to_centroid"] = distances[i]
 
             if self._embeddings_2d is not None:
                 row["x"] = self._embeddings_2d[i, 0]
@@ -206,20 +223,22 @@ class AbstractCorpus(ABC):
             for passage in self.passages
         ]
 
-    def distances(self, normalize: bool) -> ArrayLike:
+    def distances(self, normalize: bool, use_2d_embeddings: bool = True) -> np.ndarray:
         """Compute the distances between the passages and the centroid of the corpus.
 
         Args:
             normalize (bool): Normalize the distances vector.
+            use_2d_embeddings (bool): If True, use the 2d embeddings for computing the distances.
 
         Returns: an array with the distances per passage in this corpus.
         """
-        centroid = self.centroid()
+        centroid = self.centroid(use_2d_embeddings=use_2d_embeddings)
 
         # TODO: can this be vectorized?
-        # TODO: use 2d embeddings if available
-        distances: ArrayLike = np.array(
-            [cosine(centroid, embedding) for embedding in self.embeddings]
+
+        embeddings = self._select_embeddings(use_2d_embeddings)
+        distances: np.ndarray = np.array(
+            [cosine(centroid, embedding) for embedding in embeddings]
         )
 
         if normalize:
@@ -303,7 +322,7 @@ class AbstractCorpus(ABC):
         ), f"tf_idfs shape ({tf_idfs.shape}) does not match expected shape."
 
         ### Weigh in vector distances
-        distances: ArrayLike = self.distances(normalize=True)
+        distances: np.ndarray = self.distances(normalize=True)
         weights = np.ones(distances.shape[0]) - distances
 
         assert (
@@ -322,7 +341,7 @@ class AbstractCorpus(ABC):
         """Returns a sparse matrix for the TF-IDF of all passages in the corpus.
 
         Returns:
-            ArrayLike: a sparse matrix of n_passages x n_words
+            np.ndarray: a sparse matrix of n_passages x n_words
         """
         return self.vectorizer.transform(self.passages)
 
@@ -347,10 +366,10 @@ class AbstractCorpus(ABC):
         assert all(text.strip() for text in texts), "Empty text."
         return texts
 
-    def cluster(self, **kwargs):
-        # TODO: optionally use 2d embeddings
+    def cluster(self, use_2d_embeddings: bool = True, **kwargs):
+        embeddings = self._select_embeddings(use_2d_embeddings)
         cluster_labels: list[int] = (
-            HDBSCAN(**kwargs).fit_predict(self.embeddings).astype(int).tolist()
+            HDBSCAN(**kwargs).fit_predict(embeddings).astype(int).tolist()
         )
         clusters: dict[int, int] = defaultdict(list)
         for i, label in enumerate(cluster_labels):

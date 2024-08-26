@@ -363,8 +363,10 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         passages: Counter[Passage, float] = Counter()
         _corpus_passages = set(corpus.passages)
         for collection in collections or self.get_available_collections():
+            centroid = corpus.centroid(use_2d_embeddings=False).tolist()
+
             for passage, distance in self.query_vector_neighbors(
-                collection, corpus.centroid().tolist(), k + len(_corpus_passages)
+                collection, centroid, k + len(_corpus_passages)
             ):
                 if passage not in _corpus_passages:
                     passages[passage] = min(passages[passage], distance)

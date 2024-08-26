@@ -19,6 +19,9 @@ class Subcorpus(AbstractCorpus):
         self._indices = indices
         self._label = label
 
+    def _embeddings_2d(self):
+        return self._parent_corpus.embeddings_2d[self._indices]
+
     def __repr__(self) -> str:
         return f"Subcorpus({self._label!r}, {self._indices[:10]!r})"
 
