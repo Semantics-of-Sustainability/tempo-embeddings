@@ -64,14 +64,27 @@ class BokehInteractiveVisualizer(BokehVisualizer):
         self._data: pd.DataFrame = self._create_data()
         self._source: ColumnDataSource = ColumnDataSource(self._data)
 
+    def _generate_tooltips(self, *, hover_width: str = "500px"):
+        text_line: str = f"""
+            <p style="width: {hover_width}; word-wrap: break-word">
+                <b>Text:</b><br>
+                @text
+            </p>
+            """
+        metadata_lines: list[str] = [
+            f"<b>{column}</b>: @{column}" for column in self._metadata_fields
+        ]
+        label_line: str = f"""
+            <b>Corpus Label:</b> "@{self._LABEL_FIELD}"
+            """
+        separator_line: str = "-" * 100
+
+        return "<br>".join([text_line] + metadata_lines + [label_line, separator_line])
+
     def _init_figure(self, height: int, width: int):
-        tool_tips = [
-            ("corpus", f"@{self._LABEL_FIELD}"),
-            ("text", "@text"),
-        ] + [(column, "@" + column) for column in self._metadata_fields]
-
-        self._figure = figure(height=height, width=width, tooltips=tool_tips)
-
+        self._figure = figure(
+            height=height, width=width, tooltips=self._generate_tooltips()
+        )
         self._figure.add_layout(Legend(), "right")
 
     def _create_data(self) -> pd.DataFrame:
