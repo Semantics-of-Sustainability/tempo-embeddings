@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Iterable, Optional
 
 import joblib
+import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 from ..settings import DEFAULT_ENCODING
@@ -33,7 +34,7 @@ class Corpus(AbstractCorpus):
         Returns:
             int: The number of passages in the corpus.
         """
-        return len(self._passages)
+        return len(self.passages)
 
     def __repr__(self) -> str:
         return f"Corpus({self._label!r}, {len(self._passages)} passages)"
@@ -60,13 +61,16 @@ class Corpus(AbstractCorpus):
         """
         start_index = len(self._passages)
         self._passages.extend(passages)
+        end_index = len(self._passages)
 
         if self._umap:
-            # Compute all UMAP embeddings with existing UMAP model
-            # FIXME: this recomputes all embeddings, not just the new ones
-            self._embeddings_2d = self._umap.transform(self.embeddings)
+            self.embeddings_2d = np.append(
+                self.embeddings_2d,
+                self._umap.transform(self.embeddings[start_index:end_index]),
+                axis=0,
+            )
 
-        return range(start_index, len(self._passages))
+        return range(start_index, end_index)
 
     def batches(self, batch_size: int) -> Iterable[list[Passage]]:
         if batch_size <= 1:
