@@ -57,7 +57,7 @@ class BokehInteractiveVisualizer(BokehVisualizer):
         super().__init__(*clusters)
 
         self._metadata_fields = metadata_fields or list(
-            {cluster.metadata_fields() for cluster in clusters}
+            {field for cluster in clusters for field in cluster.metadata_fields()}
         )
         self._init_figure(height, width)
 
