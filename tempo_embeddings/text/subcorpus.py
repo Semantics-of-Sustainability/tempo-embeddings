@@ -1,6 +1,7 @@
 from typing import TYPE_CHECKING, Optional
 
 import numpy as np
+from umap.umap_ import UMAP
 
 from .abstractcorpus import AbstractCorpus
 from .passage import Passage
@@ -25,6 +26,11 @@ class Subcorpus(AbstractCorpus):
     def embeddings_2d(self) -> Optional[np.ndarray]:
         return self._parent_corpus.embeddings_2d[self._indices]
 
+    @property
+    def umap(self) -> UMAP:
+        """Return the UMAP model of the parent corpus."""
+        return self._parent_corpus.umap
+
     def __repr__(self) -> str:
         return f"Subcorpus({self._label!r}, {self._indices[:10]!r})"
 
@@ -41,9 +47,23 @@ class Subcorpus(AbstractCorpus):
     def passages(self) -> list[Passage]:
         return [self._parent_corpus.passages[i] for i in self._indices]
 
-    def compress_embeddings(self) -> np.ndarray:
-        # UMAP should be fitted on all embeddings of the parent corpus
-        raise NotImplementedError("Subcorpus does not support compress_embeddings")
+    def compress_embeddings(
+        self, *, recompute: bool = False, **umap_args
+    ) -> np.ndarray:
+        """Compress the embeddings of the subcorpus using UMAP.
+
+        The UMAP model is based on all passages in the parent corpus.
+
+        Args:
+            recompute: Whether to recompute the UMAP model.
+            **umap_args: Additional arguments for the UMAP model.
+        Returns:
+            The compressed embeddings of this subcorpus.
+        """
+        compressed = self._parent_corpus.compress_embeddings(
+            recompute=recompute, **umap_args
+        )
+        return compressed[self._indices]
 
     def extend(self, passages: list[Passage]) -> list[int]:
         """Add multiple passages to the corpus.

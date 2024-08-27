@@ -58,7 +58,7 @@ class AbstractCorpus(ABC):
     def _select_embeddings(self, use_2d_embeddings: bool, recompute: bool = False):
         if use_2d_embeddings:
             self.compress_embeddings(recompute=recompute)
-            embeddings = self._embeddings_2d
+            embeddings = self.embeddings_2d
         else:
             embeddings = self.embeddings
         return embeddings
@@ -90,7 +90,8 @@ class AbstractCorpus(ABC):
 
     def centroid(self, use_2d_embeddings: bool = True) -> np.ndarray:
         """The mean for all passage embeddings."""
-        return np.array(self._select_embeddings(use_2d_embeddings)).mean(axis=0)
+        embeddings = self._select_embeddings(use_2d_embeddings)
+        return np.array(embeddings).mean(axis=0)
 
     @property
     def embeddings_2d(self) -> Optional[np.ndarray]:
@@ -99,6 +100,15 @@ class AbstractCorpus(ABC):
     @embeddings_2d.setter
     def embeddings_2d(self, value: np.ndarray):
         self._embeddings_2d = value
+
+    @property
+    def umap(self) -> UMAP:
+        return self._umap
+
+    def _compute_umap(self, **umap_args):
+        if self.umap:
+            logging.warning("UMAP model already exists. Overwriting.")
+        self._umap = UMAP(**umap_args).fit(self.embeddings)
 
     def compress_embeddings(self, *, recompute: bool = False, **umap_args):
         """Compress the embeddings of the corpus using UMAP and stores them in the corpus
@@ -114,14 +124,15 @@ class AbstractCorpus(ABC):
             ValueError: If the corpus has zero or exactly one embeddings.
         """
         if self._umap is None or recompute:
-            self._umap = UMAP(**umap_args).fit(self.embeddings)
-            self._embeddings_2d = self._umap.transform(self.embeddings)
+            self._compute_umap(**umap_args)
+            self.embeddings_2d = self._umap.transform(self.embeddings)
 
-        assert (
-            self._embeddings_2d is not None
-        ), "UMAP embeddings have not been computed."
+        if self.embeddings_2d.shape[0] != len(self):
+            raise RuntimeError(
+                f"{self.embeddings_2d.shape[0]} UMAP embeddings have been computed, but there are {len(self)} passages."
+            )
 
-        return self._embeddings_2d
+        return self.embeddings_2d
 
     def texts(self) -> Iterable[str]:
         return (passage.text for passage in self._passages)
@@ -197,9 +208,9 @@ class AbstractCorpus(ABC):
             if centroid_based_sample:
                 row["distance_to_centroid"] = distances[i]
 
-            if self._embeddings_2d is not None:
-                row["x"] = self._embeddings_2d[i, 0]
-                row["y"] = self._embeddings_2d[i, 1]
+            if self.embeddings_2d is not None:
+                row["x"] = self.embeddings_2d[i, 0]
+                row["y"] = self.embeddings_2d[i, 1]
 
             rows.append(row)
 
@@ -212,14 +223,14 @@ class AbstractCorpus(ABC):
             pd.DataFrame: The coordinates of the corpus.
         """
 
-        if self._embeddings_2d is None:
+        if self.embeddings_2d is None:
             logging.warning("No 2D embeddings available.")
             df = pd.DataFrame()
         else:
             df = pd.DataFrame(
                 {
-                    "x": [e[0] for e in self._embeddings_2d],
-                    "y": [e[1] for e in self._embeddings_2d],
+                    "x": [e[0] for e in self.embeddings_2d],
+                    "y": [e[1] for e in self.embeddings_2d],
                 }
             )
         return df

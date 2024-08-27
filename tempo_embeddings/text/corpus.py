@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Iterable, Optional
 
 import joblib
+import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 from ..settings import DEFAULT_ENCODING
@@ -33,7 +34,7 @@ class Corpus(AbstractCorpus):
         Returns:
             int: The number of passages in the corpus.
         """
-        return len(self._passages)
+        return len(self.passages)
 
     def __repr__(self) -> str:
         return f"Corpus({self._label!r}, {len(self._passages)} passages)"
@@ -51,21 +52,28 @@ class Corpus(AbstractCorpus):
     def extend(self, passages: list[Passage]) -> list[int]:
         """Add multiple passages to the corpus.
 
+        If a UMAP model is already present, 2D embeddings are computed for the new passages.
+
+        Note: The UMAP model is *not* retrained with the added passages.
+        In order to do so, call the corpus object's `compress_embeddings(recompute=True)` after adding new passages.
+
         Args:
             passages: The passages to add to the corpus.
         Returns:
             the indices in the corpus where the new passages were added, to be used in SubCorpus objects.
-        Raises:
-            ValueError: If a passage is already in the corpus
         """
         start_index = len(self._passages)
         self._passages.extend(passages)
+        end_index = len(self._passages)
 
         if self._umap:
-            # Compute all UMAP embeddings with existing UMAP model
-            self._embeddings_2d = self._umap.transform(self.embeddings)
+            self.embeddings_2d = np.append(
+                self.embeddings_2d,
+                self._umap.transform(self.embeddings[start_index:end_index]),
+                axis=0,
+            )
 
-        return range(start_index, len(self._passages))
+        return range(start_index, end_index)
 
     def batches(self, batch_size: int) -> Iterable[list[Passage]]:
         if batch_size <= 1:
