@@ -123,7 +123,7 @@ class AbstractCorpus(ABC):
             ValueError: If the corpus has zero or exactly one embeddings.
         """
         if self._umap is None or recompute:
-            self._umap = UMAP(**umap_args).fit(self.embeddings)
+            self._compute_umap(**umap_args)
             self.embeddings_2d = self._umap.transform(self.embeddings)
 
         assert self.embeddings_2d is not None, "UMAP embeddings have not been computed."
