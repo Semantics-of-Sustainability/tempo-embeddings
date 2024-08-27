@@ -58,7 +58,7 @@ class AbstractCorpus(ABC):
     def _select_embeddings(self, use_2d_embeddings: bool, recompute: bool = False):
         if use_2d_embeddings:
             self.compress_embeddings(recompute=recompute)
-            embeddings = self._embeddings_2d
+            embeddings = self.embeddings_2d
         else:
             embeddings = self.embeddings
         return embeddings
@@ -90,7 +90,8 @@ class AbstractCorpus(ABC):
 
     def centroid(self, use_2d_embeddings: bool = True) -> np.ndarray:
         """The mean for all passage embeddings."""
-        return np.array(self._select_embeddings(use_2d_embeddings)).mean(axis=0)
+        embeddings = self._select_embeddings(use_2d_embeddings)
+        return np.array(embeddings).mean(axis=0)
 
     @property
     def embeddings_2d(self) -> Optional[np.ndarray]:
@@ -204,9 +205,9 @@ class AbstractCorpus(ABC):
             if centroid_based_sample:
                 row["distance_to_centroid"] = distances[i]
 
-            if self._embeddings_2d is not None:
-                row["x"] = self._embeddings_2d[i, 0]
-                row["y"] = self._embeddings_2d[i, 1]
+            if self.embeddings_2d is not None:
+                row["x"] = self.embeddings_2d[i, 0]
+                row["y"] = self.embeddings_2d[i, 1]
 
             rows.append(row)
 
@@ -219,14 +220,14 @@ class AbstractCorpus(ABC):
             pd.DataFrame: The coordinates of the corpus.
         """
 
-        if self._embeddings_2d is None:
+        if self.embeddings_2d is None:
             logging.warning("No 2D embeddings available.")
             df = pd.DataFrame()
         else:
             df = pd.DataFrame(
                 {
-                    "x": [e[0] for e in self._embeddings_2d],
-                    "y": [e[1] for e in self._embeddings_2d],
+                    "x": [e[0] for e in self.embeddings_2d],
+                    "y": [e[1] for e in self.embeddings_2d],
                 }
             )
         return df

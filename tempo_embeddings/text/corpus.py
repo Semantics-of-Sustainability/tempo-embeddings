@@ -63,6 +63,7 @@ class Corpus(AbstractCorpus):
 
         if self._umap:
             # Compute all UMAP embeddings with existing UMAP model
+            # FIXME: this recomputes all embeddings, not just the new ones
             self._embeddings_2d = self._umap.transform(self.embeddings)
 
         return range(start_index, len(self._passages))
