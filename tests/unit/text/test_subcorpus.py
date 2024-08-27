@@ -46,3 +46,10 @@ class TestSubCorpus:
         np.testing.assert_array_equal(subcorpus.embeddings_2d, compressed)
 
         assert corpus.embeddings_2d.shape == (len(corpus), 2)
+
+    def test_umap(self, corpus):
+        subcorpus = Subcorpus(corpus, [0])
+        assert subcorpus.umap is corpus.umap
+
+        corpus.compress_embeddings()
+        assert subcorpus.umap is corpus.umap
