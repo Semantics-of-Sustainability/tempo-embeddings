@@ -1,0 +1,40 @@
+# Changes here will be overwritten by Copier
+AddPackageDetails: true
+SelectCitation:
+- AddCitationFile_flag
+- AddCFFConvert_flag
+SelectCodeQualityFeatures:
+- SelectGitHubActions_flag
+- AddLinting_flag
+- AddPreCommit_flag
+- AddSonarCloud_flag
+- AddEditorConfig_flag
+SelectCommunityFeatures:
+- AddCodeConduct_flag
+- AddContributing_flag
+SelectDocumentationFeatures:
+- AddOnlineDocumentation_flag
+- AddDevDoc_flag
+SelectGitHubActions:
+- AddGitHubActionBuild_flag
+- AddGitHubActionDocumentation_flag
+- AddLinkCheck_flag
+SelectPublishReleaseFeatures:
+- SelectCitation_flag
+- AddChangeLog_flag
+- AddZenodo_flag
+- not_implemented_keywords
+_commit: 0.5.0-291-ge14ae78
+_src_path: https://github.com/nlesc/python-template.git
+code_of_conduct_email: c.schnober@esciencecenter.nl
+copyright_holder: ''
+email: c.schnober@esciencecenter.nl
+full_name: Carsten Schnober
+github_organization: https://github.com/Semantics-of-Sustainability/
+keyword1: NLP, Semantics, Embeddings
+keyword2: ''
+license: Apache-2.0
+package_name: tempo_embeddings
+package_short_description: A library for analysing (temporal) word embeddings.
+template_profile: recommended
+version: 0.1.0
