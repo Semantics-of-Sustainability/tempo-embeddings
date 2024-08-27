@@ -1,5 +1,6 @@
 import abc
 import logging
+from typing import Optional
 
 import pandas as pd
 from bokeh.client import push_session
@@ -96,6 +97,12 @@ class BokehInteractiveVisualizer(BokehVisualizer):
         hover_data: list[dict[str, str]] = pd.DataFrame(
             cluster.hover_datas(self._metadata_fields)
         )
+        if self._YEAR_COLUMN in hover_data.columns:
+            hover_data[self._YEAR_COLUMN] = hover_data[self._YEAR_COLUMN].astype(int)
+        else:
+            logging.warning(
+                f"Column '{self._YEAR_COLUMN}' not found in cluster '{cluster.label}'."
+            )
 
         for _column in self._metadata_fields:
             if _column not in hover_data.columns:
@@ -103,10 +110,9 @@ class BokehInteractiveVisualizer(BokehVisualizer):
                     "Column '%s' not found in cluster '%s'.", _column, cluster.label
                 )
 
-        return pd.concat(
-            (hover_data.astype({self._YEAR_COLUMN: int}), cluster.coordinates()),
-            axis="columns",
-        ).assign(label=cluster.label)
+        return pd.concat((hover_data, cluster.coordinates()), axis="columns").assign(
+            label=cluster.label
+        )
 
     def _add_circles(self):
         palette = self._select_palette()
@@ -129,11 +135,15 @@ class BokehInteractiveVisualizer(BokehVisualizer):
             if cluster.label == OUTLIERS_LABEL:
                 glyph.muted = True
 
-    def _year_slider(self) -> RangeSlider:
+    def _year_slider(self) -> Optional[RangeSlider]:
         def callback(attr, old, new):  # noqa: unused-argument
             self._source.data = self._data.loc[
                 self._data.year.between(new[0], new[1])
             ].to_dict(orient="list")
+
+        if self._YEAR_COLUMN not in self._data.columns:
+            logging.warning("No year data found. Skipping year slider.")
+            return None
 
         min_year: int = self._data[self._YEAR_COLUMN].min()
         max_year: int = self._data[self._YEAR_COLUMN].max()
@@ -166,9 +176,13 @@ class BokehInteractiveVisualizer(BokehVisualizer):
     def _create_layout(self):
         self._add_circles()
         self._setup_legend()
-        slider = self._year_slider()
 
-        return column(self._figure, slider)
+        children = [self._figure]
+
+        if slider := self._year_slider():
+            children.append(slider)
+
+        return column(*children)
 
     def create_document(self, doc):
         """Wrapper function for updating a document object.
