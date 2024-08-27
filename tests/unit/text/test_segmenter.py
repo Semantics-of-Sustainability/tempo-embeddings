@@ -17,6 +17,58 @@ from tempo_embeddings.text.segmenter import (
 
 class TestSegmenter:
     @pytest.mark.parametrize(
+        "sentence,max_sentence_length,expected",
+        [
+            ("This is a test.", 200, ["This is a test."]),
+            ("This is; a test.", 200, ["This is; a test."]),
+            ("This is; a test.", 5, ["This is;", "a test."]),
+            ("This is a test.", 5, ["This is a test."]),
+        ],
+    )
+    def test_split_sentence(self, sentence, max_sentence_length, expected):
+        sentences = SentenceSplitterSegmenter(
+            language="en",
+            min_sentence_length=0,
+            max_sentence_length=max_sentence_length,
+        )._split_sentence(sentence)
+
+        assert list(sentences) == expected
+
+    @pytest.mark.parametrize(
+        "sentences,min_sentence_length,expected",
+        [
+            (["This is a sentence."], 0, ["This is a sentence."]),
+            (
+                ["This is a sentence.", "This is another sentence."],
+                0,
+                ["This is a sentence.", "This is another sentence."],
+            ),
+            (
+                ["This is a sentence.", "This is another sentence."],
+                5,
+                ["This is a sentence.", "This is another sentence."],
+            ),
+            (
+                ["This is a sentence.", "This is another sentence."],
+                20,
+                ["This is a sentence. This is another sentence."],
+            ),
+            pytest.param(
+                ["This is a sentence.", "Short."],
+                19,
+                ["This is a sentence. Short."],
+                marks=pytest.mark.xfail(reason="Trailing short sentence."),
+            ),
+        ],
+    )
+    def test_merge_sentences(self, sentences, min_sentence_length, expected):
+        merged = SentenceSplitterSegmenter(
+            language="en", min_sentence_length=min_sentence_length
+        )._merge_sentences(sentences)
+
+        assert list(merged) == expected
+
+    @pytest.mark.parametrize(
         "segmenter, language, kwargs, expected_type, expected_exception",
         [
             ("wtp", "en", {}, WtpSegmenter, does_not_raise()),
@@ -58,17 +110,17 @@ class TestSegmenter:
         "segmenter, text, expected",
         [
             (
-                SentenceSplitterSegmenter("en"),
+                SentenceSplitterSegmenter("en", min_sentence_length=5),
                 "This is a test. This is another test.",
                 ["This is a test.", "This is another test."],
             ),
             (
-                WtpSegmenter("en"),
+                WtpSegmenter("en", min_sentence_length=5),
                 "This is a test This is another test.",
-                ["This is a test ", "This is another test."],
+                ["This is a test", "This is another test."],
             ),
             (
-                StanzaSegmenter("en"),
+                StanzaSegmenter("en", min_sentence_length=5),
                 "This is a test This is another test.",
                 ["This is a test", "This is another test."],
             ),
@@ -114,12 +166,10 @@ class TestSentenceSplitter:
         ],
     )
     def test_passages(self, text, deduplicate, expected):
-        assert (
-            list(
-                SentenceSplitterSegmenter("en").passages(text, deduplicate=deduplicate)
-            )
-            == expected
+        passages = SentenceSplitterSegmenter("en", min_sentence_length=5).passages(
+            text, deduplicate=deduplicate
         )
+        assert list(passages) == expected
 
     @pytest.mark.parametrize(
         "_csv, provenance, filter_terms, expected",
