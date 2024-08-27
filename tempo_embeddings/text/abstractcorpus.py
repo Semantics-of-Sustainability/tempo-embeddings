@@ -100,6 +100,15 @@ class AbstractCorpus(ABC):
     def embeddings_2d(self, value: np.ndarray):
         self._embeddings_2d = value
 
+    @property
+    def umap(self) -> UMAP:
+        return self._umap
+
+    def _compute_umap(self, **umap_args):
+        if self.umap:
+            logging.warning("UMAP model already exists. Overwriting.")
+        self._umap = UMAP(**umap_args).fit(self.embeddings)
+
     def compress_embeddings(self, *, recompute: bool = False, **umap_args):
         """Compress the embeddings of the corpus using UMAP and stores them in the corpus
 
@@ -115,13 +124,11 @@ class AbstractCorpus(ABC):
         """
         if self._umap is None or recompute:
             self._umap = UMAP(**umap_args).fit(self.embeddings)
-            self._embeddings_2d = self._umap.transform(self.embeddings)
+            self.embeddings_2d = self._umap.transform(self.embeddings)
 
-        assert (
-            self._embeddings_2d is not None
-        ), "UMAP embeddings have not been computed."
+        assert self.embeddings_2d is not None, "UMAP embeddings have not been computed."
 
-        return self._embeddings_2d
+        return self.embeddings_2d
 
     def texts(self) -> Iterable[str]:
         return (passage.text for passage in self._passages)

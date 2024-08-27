@@ -9,7 +9,6 @@ from umap.umap_ import UMAP
 from tempo_embeddings.text.corpus import Corpus
 from tempo_embeddings.text.highlighting import Highlighting
 from tempo_embeddings.text.passage import Passage
-from tempo_embeddings.text.subcorpus import Subcorpus
 
 
 class TestCorpus:
@@ -252,34 +251,3 @@ class TestCorpus:
             if len(corpus) == 1:
                 # For single samples, the output should be zeros
                 assert_equal(compressed, np.zeros((len(corpus), 2)))
-
-
-class TestSubCorpus:
-    def test_passages(self):
-        parent_corpus = Corpus([Passage("text 1"), Passage("text 2")])
-
-        subcorpus = Subcorpus(parent_corpus, [0], label="test")
-        assert subcorpus.passages == [parent_corpus.passages[0]]
-        assert subcorpus.passages[0] is parent_corpus.passages[0]
-
-    def test_extend(self):
-        parent_corpus = Corpus([Passage("text 1"), Passage("text 2")])
-
-        subcorpus = Subcorpus(parent_corpus, [0], label="test")
-
-        assert subcorpus.extend([Passage("text 3")]) == range(2, 3)
-        assert subcorpus.passages == [Passage("text 1"), Passage("text 3")]
-        assert subcorpus._indices == [0, 2]
-
-    def test_add(self):
-        parent_corpus = Corpus([Passage("text 1"), Passage("text 2")])
-
-        subcorpus1 = Subcorpus(parent_corpus, [0], label="test1")
-        subcorpus2 = Subcorpus(parent_corpus, [1], label="test2")
-        assert subcorpus1 + subcorpus2 == Subcorpus(
-            parent_corpus, [0, 1], label="test1+test2"
-        )
-
-        with pytest.raises(ValueError) as exc_info:
-            subcorpus1 + Subcorpus(Corpus(), [0], label="test1")  # noqa: expression-not-assigned
-            assert exc_info == "Cannot merge sub-corpora with different parent corpora."
