@@ -127,7 +127,10 @@ class AbstractCorpus(ABC):
             self._compute_umap(**umap_args)
             self.embeddings_2d = self._umap.transform(self.embeddings)
 
-        assert self.embeddings_2d is not None, "UMAP embeddings have not been computed."
+        if self.embeddings_2d.shape[0] != len(self):
+            raise RuntimeError(
+                f"{self.embeddings_2d.shape[0]} UMAP embeddings have been computed, but there are {len(self)} passages."
+            )
 
         return self.embeddings_2d
 

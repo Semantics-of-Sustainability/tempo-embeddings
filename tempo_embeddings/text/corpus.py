@@ -52,12 +52,15 @@ class Corpus(AbstractCorpus):
     def extend(self, passages: list[Passage]) -> list[int]:
         """Add multiple passages to the corpus.
 
+        If a UMAP model is already present, 2D embeddings are computed for the new passages.
+
+        Note: The UMAP model is *not* retrained with the added passages.
+        In order to do so, call the corpus object's `compress_embeddings(recompute=True)` after adding new passages.
+
         Args:
             passages: The passages to add to the corpus.
         Returns:
             the indices in the corpus where the new passages were added, to be used in SubCorpus objects.
-        Raises:
-            ValueError: If a passage is already in the corpus
         """
         start_index = len(self._passages)
         self._passages.extend(passages)
