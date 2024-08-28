@@ -47,6 +47,16 @@ class Segmenter(abc.ABC):
         min_sentence_length: int = 20,
         max_sentence_length: int = 1000,
     ) -> None:
+        """The common constructor for inheriting segmenters.
+
+        Args:
+            language: the language code for the segmenter. Specifics depend on the segmenter.
+            min_sentence_length: the minimum length of a sentence in characters. Defaults to 20.
+            max_sentence_length: the maximum length of a sentence in characters. Defaults to 1000.
+
+        Raises:
+            ValueError: if min_sentence_length >= max_sentence_length.
+        """
         if min_sentence_length >= max_sentence_length:
             raise ValueError(
                 f"Minimum sentence length ({min_sentence_length}) must be less than maximum sentence length ({max_sentence_length})."
@@ -56,12 +66,11 @@ class Segmenter(abc.ABC):
         self._max_sentence_length = max_sentence_length
 
     @abc.abstractmethod
-    def split(self, text: str, *, min_sentence_length: int = 20) -> Iterable[str]:
+    def split(self, text: str) -> Iterable[str]:
         """Split the text into sentences.
 
         Args:
             text: the text to split.
-            min_sentence_length: the minimum length of a sentence. Defaults to 20.
         Returns:
             Iterable[str]: the sentences in the text.
         """
@@ -72,7 +81,6 @@ class Segmenter(abc.ABC):
 
         Args:
             sentences (list[str]): the sentences to merge.
-            min_sentence_length (int): the minimum length of a sentence. Defaults to 20.
         Yields:
             str: the merged sentences.
         """
@@ -145,8 +153,7 @@ class Segmenter(abc.ABC):
             str: the sentences after merging and splitting.
         """
         merged_sentences = self._merge_sentences(list(sentences))
-        split_sentences = self._split_sentences(merged_sentences)
-        return split_sentences
+        return self._split_sentences(merged_sentences)
 
     def passages(
         self,
@@ -322,6 +329,12 @@ class WindowSegmenter(Segmenter):
         **kwargs,
     ) -> None:
         super().__init__(language=language, **kwargs)
+
+        for arg in ("min_sentence_length", "max_sentence_length"):
+            if arg in kwargs:
+                logging.warning(
+                    f"{self.__class__.__name__} does not use '{arg}' argument."
+                )
 
         self._window_size = window_size
 

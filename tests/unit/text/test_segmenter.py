@@ -1,4 +1,5 @@
 import csv
+import logging
 from contextlib import nullcontext as does_not_raise
 from io import StringIO
 
@@ -247,8 +248,20 @@ class TestWindowSegmenter:
             ),
         ],
     )
-    def test_passages(self, text, window_size, window_overlap, expected):
-        segmenter = WindowSegmenter(
-            None, window_size=window_size, window_overlap=window_overlap
-        )
-        assert list(segmenter.passages(text)) == expected
+    def test_passages(self, text, window_size, window_overlap, expected, caplog):
+        with caplog.at_level(logging.WARNING):
+            passages = WindowSegmenter(
+                min_sentence_length=0,
+                window_size=window_size,
+                window_overlap=window_overlap,
+            ).passages(text)
+
+        assert caplog.record_tuples == [
+            (
+                "root",
+                logging.WARNING,
+                "WindowSegmenter does not use 'min_sentence_length' argument.",
+            )
+        ]
+
+        assert list(passages) == expected
