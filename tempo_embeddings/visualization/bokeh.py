@@ -1,5 +1,6 @@
 import abc
 import logging
+from typing import Optional
 
 import pandas as pd
 from bokeh.client import push_session
@@ -57,21 +58,34 @@ class BokehInteractiveVisualizer(BokehVisualizer):
         super().__init__(*clusters)
 
         self._metadata_fields = metadata_fields or list(
-            {cluster.metadata_fields() for cluster in clusters}
+            {field for cluster in clusters for field in cluster.metadata_fields()}
         )
         self._init_figure(height, width)
 
         self._data: pd.DataFrame = self._create_data()
         self._source: ColumnDataSource = ColumnDataSource(self._data)
 
+    def _generate_tooltips(self, *, hover_width: str = "500px"):
+        text_line: str = f"""
+            <p style="width: {hover_width}; word-wrap: break-word">
+                <b>Text:</b><br>
+                @text
+            </p>
+            """
+        metadata_lines: list[str] = [
+            f"<b>{column}</b>: @{column}" for column in self._metadata_fields
+        ]
+        label_line: str = f"""
+            <b>Corpus Label:</b> "@{self._LABEL_FIELD}"
+            """
+        separator_line: str = "-" * 100
+
+        return "<br>".join([text_line] + metadata_lines + [label_line, separator_line])
+
     def _init_figure(self, height: int, width: int):
-        tool_tips = [
-            ("corpus", f"@{self._LABEL_FIELD}"),
-            ("text", "@text"),
-        ] + [(column, "@" + column) for column in self._metadata_fields]
-
-        self._figure = figure(height=height, width=width, tooltips=tool_tips)
-
+        self._figure = figure(
+            height=height, width=width, tooltips=self._generate_tooltips()
+        )
         self._figure.add_layout(Legend(), "right")
 
     def _create_data(self) -> pd.DataFrame:
@@ -83,6 +97,12 @@ class BokehInteractiveVisualizer(BokehVisualizer):
         hover_data: list[dict[str, str]] = pd.DataFrame(
             cluster.hover_datas(self._metadata_fields)
         )
+        if self._YEAR_COLUMN in hover_data.columns:
+            hover_data[self._YEAR_COLUMN] = hover_data[self._YEAR_COLUMN].astype(int)
+        else:
+            logging.warning(
+                f"Column '{self._YEAR_COLUMN}' not found in cluster '{cluster.label}'."
+            )
 
         for _column in self._metadata_fields:
             if _column not in hover_data.columns:
@@ -90,10 +110,9 @@ class BokehInteractiveVisualizer(BokehVisualizer):
                     "Column '%s' not found in cluster '%s'.", _column, cluster.label
                 )
 
-        return pd.concat(
-            (hover_data.astype({self._YEAR_COLUMN: int}), cluster.coordinates()),
-            axis="columns",
-        ).assign(label=cluster.label)
+        return pd.concat((hover_data, cluster.coordinates()), axis="columns").assign(
+            label=cluster.label
+        )
 
     def _add_circles(self):
         palette = self._select_palette()
@@ -116,11 +135,15 @@ class BokehInteractiveVisualizer(BokehVisualizer):
             if cluster.label == OUTLIERS_LABEL:
                 glyph.muted = True
 
-    def _year_slider(self) -> RangeSlider:
+    def _year_slider(self) -> Optional[RangeSlider]:
         def callback(attr, old, new):  # noqa: unused-argument
             self._source.data = self._data.loc[
                 self._data.year.between(new[0], new[1])
             ].to_dict(orient="list")
+
+        if self._YEAR_COLUMN not in self._data.columns:
+            logging.warning("No year data found. Skipping year slider.")
+            return None
 
         min_year: int = self._data[self._YEAR_COLUMN].min()
         max_year: int = self._data[self._YEAR_COLUMN].max()
@@ -153,9 +176,13 @@ class BokehInteractiveVisualizer(BokehVisualizer):
     def _create_layout(self):
         self._add_circles()
         self._setup_legend()
-        slider = self._year_slider()
 
-        return column(self._figure, slider)
+        children = [self._figure]
+
+        if slider := self._year_slider():
+            children.append(slider)
+
+        return column(*children)
 
     def create_document(self, doc):
         """Wrapper function for updating a document object.

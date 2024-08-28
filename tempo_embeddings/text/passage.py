@@ -3,8 +3,6 @@ import logging
 import string
 from typing import Any, Iterable, Optional
 
-import numpy.typing as npt
-
 from .highlighting import Highlighting
 
 
@@ -75,8 +73,8 @@ class Passage:
         self._tokenized_text = value
 
     @embedding.setter
-    def embedding(self, value: npt.ArrayLike):
-        # For Chroma DB, this has to be a list of floats; TODO: add a check/conversion in ChromaDatabaseManager
+    def embedding(self, value: list[float]):
+        # This has to be a list of floats, rather than an np.array
         self._embedding = value
 
     @full_word_spans.setter
@@ -137,7 +135,8 @@ class Passage:
             The text with the highlighted word in bold.
         """
         if not self.highlighting:
-            raise ValueError(f"Passage does not have a highlighting: {str(self)}")
+            logging.warning(f"Passage does not have a highlighting: {str(self)}")
+            return self.text
 
         word_start, word_end = self.highlighting.start, self.highlighting.end
 
@@ -163,7 +162,7 @@ class Passage:
                 key: str(self.metadata.get(key))[:max_length] for key in metadata_fields
             }
 
-        return {"text": self.text} | metadata
+        return {"text": self.highlighted_text()} | metadata
 
     def set_metadata(self, key: str, value: Any) -> None:
         """Sets a metadata key to a value.
