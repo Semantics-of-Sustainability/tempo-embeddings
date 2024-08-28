@@ -23,7 +23,11 @@ class TestSegmenter:
             ("This is a test.", 200, ["This is a test."]),
             ("This is; a test.", 200, ["This is; a test."]),
             ("This is; a test.", 5, ["This is;", "a test."]),
+            ("This; is a test.", 5, ["This;", "is a test."]),
+            ("This; is a; test.", 5, ["This;", "is a;", "test."]),
             ("This is a test.", 5, ["This is a test."]),
+            ("This; is a; test.", 12, ["This; is a;", "test."]),
+            ("This; is a; test.", 10, ["This;", "is a;", "test."]),
         ],
     )
     def test_split_sentence(self, sentence, max_sentence_length, expected):
@@ -59,6 +63,15 @@ class TestSegmenter:
                 19,
                 ["This is a sentence. Short."],
                 marks=pytest.mark.xfail(reason="Trailing short sentence."),
+            ),
+            pytest.param(
+                ["This is a sentence."],
+                2000,
+                ["This is a sentence."],
+                marks=pytest.mark.xfail(
+                    raises=ValueError,
+                    reason="Minimum sentence length must be smaller than maximum sentence length.",
+                ),
             ),
         ],
     )

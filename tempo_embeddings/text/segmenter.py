@@ -105,26 +105,26 @@ class Segmenter(abc.ABC):
         Yields:
             str: the split sentences.
         """
+        split_at: Optional[int] = None
+
         if len(sentence) > self._max_sentence_length:
             center = len(sentence) // 2
 
-            right_semicolon: int = sentence.rfind(";", 1, center)
-            left_semicolon: int = sentence.find(";", center, len(sentence) - 2)
+            left_semicolon: int = sentence.rfind(";", 1, center)
+            right_semicolon: int = sentence.find(";", center, len(sentence) - 2)
 
             # TODO: use other delimiters
 
-            if right_semicolon == -1 and left_semicolon == -1:
+            if left_semicolon == -1 and right_semicolon == -1:
                 split_at = None  # No splitting marker found.
-            elif right_semicolon == -1:
-                split_at: int = left_semicolon
             elif left_semicolon == -1:
                 split_at = right_semicolon
-            elif abs(right_semicolon - center) < abs(left_semicolon - center):
-                split_at = right_semicolon
-            else:
+            elif right_semicolon == -1:
                 split_at = left_semicolon
-        else:
-            split_at = None
+            elif abs(left_semicolon - center) <= abs(right_semicolon - center):
+                split_at = left_semicolon
+            else:
+                split_at = right_semicolon
 
         if split_at is None:
             yield sentence.strip()
