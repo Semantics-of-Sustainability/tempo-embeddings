@@ -212,6 +212,13 @@ class AbstractCorpus(ABC):
                 row["x"] = self.embeddings_2d[i, 0]
                 row["y"] = self.embeddings_2d[i, 1]
 
+            if passage.highlighting is not None:
+                row["highlight_start"] = passage.highlighting.start
+                row["highlight_end"] = passage.highlighting.end
+            else:
+                row["highlight_start"] = None
+                row["highlight_end"] = None
+
             rows.append(row)
 
         return pd.DataFrame(rows)
