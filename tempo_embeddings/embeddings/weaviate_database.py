@@ -337,6 +337,28 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         label = "; ".join(filter_words) if passages and filter_words else collection
         return Corpus(passages, label)
 
+    def doc_frequency(
+        self, term: str, collections: str, metadata: Optional[dict[str, Any]] = None
+    ) -> int:
+        """Get the number of documents that contain a term in the collection.
+
+        Args:
+            term (str): The term to count
+            collection (str): collection to query
+            metadata (dict[str, Any]): Additional metadata filters
+
+        Returns:
+            int: The number of occurrences of the term
+        """
+        # TODO: this should make get_collection_count obsolete
+
+        response = self._client.collections.get(collections).aggregate.over_all(
+            filters=QueryBuilder.build_filter(filter_words=[term], metadata=metadata),
+            total_count=True,
+        )
+
+        return response.total_count
+
     def neighbour_passages(
         self, corpus: Corpus, k: int, collections: Optional[list[str]] = None
     ) -> list[Passage]:

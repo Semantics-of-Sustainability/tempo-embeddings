@@ -90,6 +90,25 @@ class TestWeaviateDatabase:
             for passage in corpus.passages
         )
 
+    @pytest.mark.parametrize(
+        "term, metadata, expected",
+        [
+            ("test", None, 5),
+            ("test", {}, 5),
+            ("1", None, 1),
+            ("unknown", None, 0),
+            ("test", {"provenance": "test_file"}, 5),
+            ("test", {"provenance": "unknown"}, 0),
+        ],
+    )
+    def test_doc_frequency(
+        self, weaviate_db_manager_with_data, term, metadata, expected
+    ):
+        doc_freq = weaviate_db_manager_with_data.doc_frequency(
+            term, "TestCorpus", metadata=metadata
+        )
+        assert doc_freq == expected
+
     @pytest.mark.parametrize("k", [1, 2, 5])
     def test_neighbour_passages(self, weaviate_db_manager_with_data, corpus, k):
         sub_corpus_size = 2
