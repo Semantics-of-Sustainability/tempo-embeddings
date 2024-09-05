@@ -610,10 +610,10 @@ class QueryBuilder:
                 f"'year_from' ({year_from}) must be less than 'year_to' ({year_to})."
             )
 
-        filters: list[Filter] = [
-            Filter.by_property(text_field).contains_any(word)
-            for word in (filter_words or [])
-        ]
+        filters: list[Filter] = []
+
+        if filter_words:
+            filters.append(Filter.by_property(text_field).contains_any(filter_words))
 
         if year_from is not None:
             filters.append(Filter.by_property(year_field).greater_or_equal(year_from))

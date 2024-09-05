@@ -362,7 +362,7 @@ class TestQueryBuilder:
                 None,
                 None,
                 None,
-                Filter.by_property("passage").contains_any("test term"),
+                Filter.by_property("passage").contains_any(["test term"]),
             ),
             (
                 ["test term"],
@@ -371,7 +371,7 @@ class TestQueryBuilder:
                 None,
                 Filter.all_of(
                     [
-                        Filter.by_property("passage").contains_any("test term"),
+                        Filter.by_property("passage").contains_any(["test term"]),
                         Filter.by_property("year").greater_or_equal(1999),
                         Filter.by_property("year").less_or_equal(2000),
                     ]
@@ -384,7 +384,7 @@ class TestQueryBuilder:
                 {"test metadata": "test value"},
                 Filter.all_of(
                     [
-                        Filter.by_property("passage").contains_any("test term"),
+                        Filter.by_property("passage").contains_any(["test term"]),
                         Filter.by_property("year").greater_or_equal(1999),
                         Filter.by_property("year").less_or_equal(2000),
                         Filter.by_property("test metadata").equal("test value"),
@@ -398,7 +398,7 @@ class TestQueryBuilder:
                 {"test metadata 1": "test value 1", "test metadata 2": "test value 2"},
                 Filter.all_of(
                     [
-                        Filter.by_property("passage").contains_any("test term"),
+                        Filter.by_property("passage").contains_any(["test term"]),
                         Filter.by_property("year").greater_or_equal(1999),
                         Filter.by_property("year").less_or_equal(2000),
                         Filter.by_property("test metadata 1").equal("test value 1"),
