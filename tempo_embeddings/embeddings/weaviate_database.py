@@ -231,10 +231,11 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             self.delete_collection(collection)
 
     def get_collection_count(self, name) -> int:
-        """Returns the size of a given collection"""
-        collection = self._client.collections.get(name)
-        response = collection.aggregate.over_all(total_count=True)
-        return response.total_count
+        """Returns the size of a given collection.
+
+        Use doc_frequency() with an empty term to get the total number of documents in the collection.
+        """
+        return self.doc_frequency("", name)
 
     def _insert_using_custom_model(
         self, corpus, collection: weaviate.collections.Collection
@@ -342,6 +343,8 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
     ) -> int:
         """Get the number of documents that contain a term in the collection.
 
+        If 'term' is empty, return the total number of documents in the collection.
+
         Args:
             term (str): The term to count
             collection (str): collection to query
@@ -350,10 +353,10 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         Returns:
             int: The number of occurrences of the term
         """
-        # TODO: this should make get_collection_count obsolete
-
         response = self._client.collections.get(collections).aggregate.over_all(
-            filters=QueryBuilder.build_filter(filter_words=[term], metadata=metadata),
+            filters=QueryBuilder.build_filter(
+                filter_words=[term] if term.strip() else None, metadata=metadata
+            ),
             total_count=True,
         )
 

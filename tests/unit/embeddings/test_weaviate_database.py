@@ -99,6 +99,7 @@ class TestWeaviateDatabase:
             ("unknown", None, 0),
             ("test", {"provenance": "test_file"}, 5),
             ("test", {"provenance": "unknown"}, 0),
+            ("", None, 5),
         ],
     )
     def test_doc_frequency(
