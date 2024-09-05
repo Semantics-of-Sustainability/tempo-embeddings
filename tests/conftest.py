@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -60,6 +61,10 @@ def weaviate_db_manager(mock_transformer_wrapper, weaviate_client):
 @pytest.fixture
 def weaviate_db_manager_with_data(weaviate_db_manager, corpus):
     weaviate_db_manager.ingest(corpus)
+
+    total, used, free = shutil.disk_usage(__file__)
+    if free / total < 0.1:
+        pytest.xfail(reason="Less than 10% of disk space available.")
     return weaviate_db_manager
 
 

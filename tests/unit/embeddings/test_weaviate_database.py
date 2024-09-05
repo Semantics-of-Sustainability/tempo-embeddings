@@ -7,10 +7,11 @@ import numpy as np
 import pytest
 
 import weaviate
-from tempo_embeddings.embeddings.weaviate_database import WeaviateConfigDb
+from tempo_embeddings.embeddings.weaviate_database import QueryBuilder, WeaviateConfigDb
 from tempo_embeddings.settings import STRICT
 from tempo_embeddings.text.corpus import Corpus
 from tempo_embeddings.text.passage import Passage
+from weaviate.classes.query import Filter
 from weaviate.exceptions import WeaviateStartUpError
 from weaviate.util import generate_uuid5
 
@@ -336,3 +337,77 @@ class TestWeaviateConfigDb:
 
         config.delete_corpus(corpus_name)
         assert corpus_name not in config
+
+
+class TestQueryBuilder:
+    def assert_filter_equals(self, filter, expected):
+        """Assert the filter is equal to the expected filter or filters.
+
+        For combined filter objects, equality is checked for the sub-filters.
+        """
+        if hasattr(expected, "filters"):
+            # Combined filter
+            assert filter.filters == expected.filters
+            assert filter.operator == expected.operator
+        else:
+            # Single filter
+            assert filter == expected
+
+    @pytest.mark.parametrize(
+        "filter_words, year_from, year_to, metadata, expected",
+        [
+            (None,) * 5,
+            (
+                ["test term"],
+                None,
+                None,
+                None,
+                Filter.by_property("passage").contains_any("test term"),
+            ),
+            (
+                ["test term"],
+                1999,
+                2000,
+                None,
+                Filter.all_of(
+                    [
+                        Filter.by_property("passage").contains_any("test term"),
+                        Filter.by_property("year").greater_or_equal(1999),
+                        Filter.by_property("year").less_or_equal(2000),
+                    ]
+                ),
+            ),
+            (
+                ["test term"],
+                1999,
+                2000,
+                {"test metadata": "test value"},
+                Filter.all_of(
+                    [
+                        Filter.by_property("passage").contains_any("test term"),
+                        Filter.by_property("year").greater_or_equal(1999),
+                        Filter.by_property("year").less_or_equal(2000),
+                        Filter.by_property("test metadata").equal("test value"),
+                    ]
+                ),
+            ),
+            (
+                ["test term"],
+                1999,
+                2000,
+                {"test metadata 1": "test value 1", "test metadata 2": "test value 2"},
+                Filter.all_of(
+                    [
+                        Filter.by_property("passage").contains_any("test term"),
+                        Filter.by_property("year").greater_or_equal(1999),
+                        Filter.by_property("year").less_or_equal(2000),
+                        Filter.by_property("test metadata 1").equal("test value 1"),
+                        Filter.by_property("test metadata 2").equal("test value 2"),
+                    ]
+                ),
+            ),
+        ],
+    )
+    def test_build_filter(self, filter_words, year_from, year_to, metadata, expected):
+        filter = QueryBuilder.build_filter(filter_words, year_from, year_to, metadata)
+        self.assert_filter_equals(filter, expected)

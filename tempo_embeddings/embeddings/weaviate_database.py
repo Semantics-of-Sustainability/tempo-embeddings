@@ -298,12 +298,13 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             num_records += len(corpus.passages)
         return num_records
 
-    # pylint: disable-next=too-many-arguments
     def get_corpus(
         self,
         collection: str,
         filter_words: list[str] = None,
-        where_obj: dict[str, Any] = None,
+        year_from: Optional[int] = None,
+        year_to: Optional[int] = None,
+        metadata_filters: Optional[dict[str, Any]] = None,
         include_embeddings: bool = False,
         limit: int = 10000,
     ) -> Corpus:
@@ -312,7 +313,9 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         Args:
             collection (str): the collection name
             filter_words (list[str], optional): Only include passage that contain any of these words. Defaults to None.
-            where_obj (dict[str, Any], optional): Additional filter criteria, such as 'year_from' and 'year_to'Ï. Defaults to None.
+            year_from (int, optional): Only include passages from this year or later. Defaults to None.
+            year_to (int, optional): Only include passages up to this year. Defaults to None.
+            metadata_filters (dict[str, Any], optional): Additional filter criteria for exact matching in the form <field, term>.
             include_embeddings (bool, optional): If true, include the embeddings to the output. Defaults to False.
             limit (int, optional): The maximum number of passages in the initial corpus. Defaults to 10000.
 
@@ -320,25 +323,12 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             Corpus: A corpus object
 
         """
-        my_collection = self._client.collections.get(collection)
 
-        db_filter_words = (
-            Filter.by_property("passage").contains_any(filter_words)
-            if filter_words and len(filter_words) > 0
-            else None
-        )
-        # TODO: How can we generalize the filtering?
-        if where_obj and "year_from" in where_obj and "year_to" in where_obj:
-            db_prop_filters = Filter.by_property("year").greater_or_equal(
-                str(where_obj["year_from"])
-            ) & Filter.by_property("year").less_or_equal(str(where_obj["year_to"]))
-            db_filters_all = db_filter_words & db_prop_filters
-        else:
-            db_filters_all = db_filter_words
-
-        response = my_collection.query.fetch_objects(
+        response = self._client.collections.get(collection).query.fetch_objects(
             limit=limit or None,
-            filters=db_filters_all,
+            filters=QueryBuilder.build_filter(
+                filter_words, year_from, year_to, metadata_filters
+            ),
             include_vector=include_embeddings,
         )
         passages: list[Passage] = [
@@ -583,3 +573,59 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                     "Collection '%s' exists in the database but is not registered in the configuration database.",
                     collection,
                 )
+
+
+class QueryBuilder:
+    @staticmethod
+    def build_filter(
+        filter_words: list[str] = None,
+        year_from: Optional[int] = None,
+        year_to: Optional[int] = None,
+        metadata: Optional[dict[str, Any]] = None,
+        *,
+        text_field: str = "passage",
+        year_field: str = "year",
+    ) -> Optional[Filter]:
+        """Generic method to build a Weaviate Filter.
+
+        All filters are combined with AND.
+
+        Args:
+            filter_words (list[str], optional): Only include passage that contain any of these words. Defaults to None.
+            year_from (str, optional): Only include passages from this year or later. Defaults to None.
+            year_to (str, optional): Only include passages up to this year. Defaults to None.
+            metadata (dict[str, Any], optional): Additional filter criteria for exact matches in the form <field, term>.
+            text_field: The field name for the text. Defaults to "passage".
+            year_field (str, optional): The field name for the year. Defaults to "year".
+        Raises:
+            ValueError: If year_from > year_to
+        Returns:
+            Optional[Filter]: The filter object or None if none of the input arguments are set.
+
+        """
+        # TODO: contains_any should be a list of tuples to allow for multiple values per field
+
+        if year_from and year_to and year_from > year_to:
+            raise ValueError(
+                f"'year_from' ({year_from}) must be less than 'year_to' ({year_to})."
+            )
+
+        filters: list[Filter] = [
+            Filter.by_property(text_field).contains_any(word)
+            for word in (filter_words or [])
+        ]
+
+        if year_from is not None:
+            filters.append(Filter.by_property(year_field).greater_or_equal(year_from))
+        if year_to is not None:
+            filters.append(Filter.by_property(year_field).less_or_equal(year_to))
+
+        if metadata:
+            filters.extend(
+                [
+                    Filter.by_property(field).equal(value)
+                    for field, value in metadata.items()
+                ]
+            )
+
+        return Filter.all_of(filters) if filters else None
