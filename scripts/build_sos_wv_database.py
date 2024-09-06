@@ -124,7 +124,7 @@ if __name__ == "__main__":
             if args.overwrite:
                 db.delete_collection(corpus_name)
 
-            ingested_files = set(db.provenances(corpus_name))
+            ingested_files = set(db.get_metadata_values(corpus_name, "provenance"))
             logging.info(f"Skipping {len(ingested_files)} files for '{corpus_name}'.")
 
             corpus_config = corpus_reader[corpus_name]

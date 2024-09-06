@@ -161,21 +161,28 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
     def get_available_collections(self) -> Iterable[str]:
         return self._config.get_corpora()
 
-    def provenances(
-        self, collection: str, *, metadata_field: str = "provenance"
-    ) -> Iterable[str]:
-        """Return the filenames in the collection."""
-        if collection in self._config:
-            for group in (
-                self._client.collections.get(collection)
-                .aggregate.over_all(
-                    group_by=wvc.aggregate.GroupByAggregate(prop=metadata_field)
-                )
-                .groups
-            ):
-                yield group.grouped_by.value
-        else:
-            logger.info(f"Collection '{collection}' not found, no files ingested.")
+    def get_metadata_values(self, collection: str, field: str) -> Iterable[str]:
+        """Get the unique values for a metadata field in a collection.
+
+        Args:
+            collection (str): The collection name
+            field (str): The metadata field name
+        Returns:
+            Iterable[str]: The unique values for the metadata field
+        Raises:
+            ValueError: If the collection does not exist
+        """
+        try:
+            response = self._client.collections.get(collection).aggregate.over_all(
+                group_by=wvc.aggregate.GroupByAggregate(prop=field)
+            )
+        except WeaviateQueryError as e:
+            raise ValueError(
+                f"Could not retrieve values for field '{field}' in collection '{collection}'."
+            ) from e
+
+        for group in response.groups:
+            yield group.grouped_by.value
 
     def ingest(
         self,

@@ -2,6 +2,7 @@ import gzip
 import json
 import logging
 import platform
+from contextlib import nullcontext as does_not_raise
 
 import numpy as np
 import pytest
@@ -219,29 +220,21 @@ class TestWeaviateDatabase:
         weaviate_db_manager_with_data.validate_config()
 
     @pytest.mark.parametrize(
-        "corpus_name, expected, expected_warning",
+        "corpus_name, field, expected, exception",
         [
-            ("TestCorpus", {"test_file"}, []),
-            (
-                "NonExistentCorpus",
-                set(),
-                ["root", logging.WARNING, "No such collection."],
-            ),
+            ("TestCorpus", "provenance", {"test_file"}, None),
+            ("NonExistentCorpus", "provenance", [], pytest.raises(ValueError)),
+            ("TestCorpus", "invalid_field", [], None),
         ],
     )
-    def test_provenances(
-        self,
-        weaviate_db_manager_with_data,
-        caplog,
-        corpus_name,
-        expected,
-        expected_warning,
+    def test_get_metadata_values(
+        self, weaviate_db_manager_with_data, corpus_name, field, expected, exception
     ):
-        with caplog.at_level(logging.WARNING):
-            assert (
-                set(weaviate_db_manager_with_data.provenances(corpus_name)) == expected
+        with exception or does_not_raise():
+            values = weaviate_db_manager_with_data.get_metadata_values(
+                corpus_name, field
             )
-            caplog.record_tuples == expected_warning
+            assert sorted(values) == sorted(expected)
 
     def test_validate_config_missing_collection(self, weaviate_db_manager, corpus):
         weaviate_db_manager.validate_config()  # Empty collection
