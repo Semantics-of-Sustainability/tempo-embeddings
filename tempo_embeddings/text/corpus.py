@@ -1,11 +1,13 @@
 import csv
 import gzip
 import logging
+from collections import defaultdict
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
 import joblib
 import numpy as np
+from sklearn.cluster import HDBSCAN
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 from ..settings import DEFAULT_ENCODING
@@ -48,6 +50,47 @@ class Corpus(AbstractCorpus):
         if self._vectorizer is None:
             self._vectorizer = AbstractCorpus.tfidf_vectorizer(self.passages)
         return self._vectorizer
+
+    def cluster(
+        self,
+        max_clusters: Optional[int] = 50,
+        use_2d_embeddings: bool = True,
+        epsilon_step_size: float = 0.1,
+        **kwargs,
+    ):
+        # TODO: remove AbstractCorpus.cluster()
+
+        embeddings = self._select_embeddings(use_2d_embeddings)
+
+        hdbscan_args = {
+            "min_cluster_size": 10,
+            "cluster_selection_method": "leaf",
+            "cluster_selection_epsilon": 0.0,
+        } | kwargs
+
+        cluster_labels: list[int] = (
+            HDBSCAN(**hdbscan_args).fit_predict(embeddings).astype(int).tolist()
+        )
+        if max_clusters:
+            n_clusters = len(set(cluster_labels))
+            while n_clusters > max_clusters:
+                logging.warning(
+                    f"Clustering with epsilon={hdbscan_args['cluster_selection_epsilon']:.2} resulted in >{max_clusters} ({n_clusters}) clusters)."
+                )
+
+                hdbscan_args["cluster_selection_epsilon"] += epsilon_step_size
+                cluster_labels = (
+                    HDBSCAN(**hdbscan_args).fit_predict(embeddings).astype(int).tolist()
+                )
+                n_clusters = len(set(cluster_labels))
+
+        clusters: dict[int, int] = defaultdict(list)
+        for i, label in enumerate(cluster_labels):
+            clusters[label].append(i)
+
+        from .subcorpus import Subcorpus
+
+        return [Subcorpus(self, indices, label) for label, indices in clusters.items()]
 
     def extend(self, passages: list[Passage]) -> list[int]:
         """Add multiple passages to the corpus.
