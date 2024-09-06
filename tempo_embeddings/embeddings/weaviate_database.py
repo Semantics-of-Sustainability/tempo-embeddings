@@ -3,6 +3,7 @@ import json
 import logging
 import uuid
 from collections import Counter
+from functools import lru_cache
 from typing import Any, Iterable, Optional, TypeVar
 
 from tqdm import tqdm
@@ -161,7 +162,8 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
     def get_available_collections(self) -> Iterable[str]:
         return self._config.get_corpora()
 
-    def get_metadata_values(self, collection: str, field: str) -> Iterable[str]:
+    @lru_cache
+    def get_metadata_values(self, collection: str, field: str) -> list[str]:
         """Get the unique values for a metadata field in a collection.
 
         Args:
@@ -181,8 +183,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                 f"Could not retrieve values for field '{field}' in collection '{collection}'."
             ) from e
 
-        for group in response.groups:
-            yield group.grouped_by.value
+        return [group.grouped_by.value for group in response.groups]
 
     def ingest(
         self,
@@ -313,6 +314,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         year_from: Optional[int] = None,
         year_to: Optional[int] = None,
         metadata_filters: Optional[dict[str, Any]] = None,
+        metadata_not: Optional[dict[str, Any]] = None,
         include_embeddings: bool = False,
         limit: int = 10000,
     ) -> Corpus:
@@ -324,6 +326,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             year_from (int, optional): Only include passages from this year or later. Defaults to None.
             year_to (int, optional): Only include passages up to this year. Defaults to None.
             metadata_filters (dict[str, Any], optional): Additional filter criteria for exact matching in the form <field, term>.
+            metadata_not (dict[str, Any], optional): Additional filter criteria to _exclude_ exact matching in the form <field, term>.
             include_embeddings (bool, optional): If true, include the embeddings to the output. Defaults to False.
             limit (int, optional): The maximum number of passages in the initial corpus. Defaults to 10000.
 
@@ -335,7 +338,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         response = self._client.collections.get(collection).query.fetch_objects(
             limit=limit or None,
             filters=QueryBuilder.build_filter(
-                filter_words, year_from, year_to, metadata_filters
+                filter_words, year_from, year_to, metadata_filters, metadata_not
             ),
             include_vector=include_embeddings,
         )
@@ -346,7 +349,11 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         return Corpus(passages, label)
 
     def doc_frequency(
-        self, term: str, collections: str, metadata: Optional[dict[str, Any]] = None
+        self,
+        term: str,
+        collections: str,
+        metadata: Optional[dict[str, Any]] = None,
+        metadata_not: Optional[dict[str, Any]] = None,
     ) -> int:
         """Get the number of documents that contain a term in the collection.
 
@@ -356,13 +363,16 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             term (str): The term to count
             collection (str): collection to query
             metadata (dict[str, Any]): Additional metadata filters
+            metadata_not (dict[str, Any]): Additional metadata filters to exclude
 
         Returns:
             int: The number of occurrences of the term
         """
         response = self._client.collections.get(collections).aggregate.over_all(
             filters=QueryBuilder.build_filter(
-                filter_words=[term] if term.strip() else None, metadata=metadata
+                filter_words=[term] if term.strip() else None,
+                metadata=metadata,
+                metadata_not=metadata_not,
             ),
             total_count=True,
         )
@@ -614,6 +624,7 @@ class QueryBuilder:
         year_from: Optional[int] = None,
         year_to: Optional[int] = None,
         metadata: Optional[dict[str, Any]] = None,
+        metadata_not: Optional[dict[str, Any]] = None,
         *,
         text_field: str = "passage",
         year_field: str = "year",
@@ -627,6 +638,7 @@ class QueryBuilder:
             year_from (str, optional): Only include passages from this year or later. Defaults to None.
             year_to (str, optional): Only include passages up to this year. Defaults to None.
             metadata (dict[str, Any], optional): Additional filter criteria for exact matches in the form <field, term>.
+            metadata_not(dict[str, Any], optional): Additional filter criteria to _exclude_ exact matches in the form <field, term>.
             text_field: The field name for the text. Defaults to "passage".
             year_field (str, optional): The field name for the year. Defaults to "year".
         Raises:
@@ -657,6 +669,13 @@ class QueryBuilder:
                 [
                     Filter.by_property(field).equal(value)
                     for field, value in metadata.items()
+                ]
+            )
+        if metadata_not:
+            filters.extend(
+                [
+                    Filter.by_property(field).not_equal(value)
+                    for field, value in metadata_not.items()
                 ]
             )
 

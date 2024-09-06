@@ -367,11 +367,12 @@ class TestQueryBuilder:
             assert filter == expected
 
     @pytest.mark.parametrize(
-        "filter_words, year_from, year_to, metadata, expected",
+        "filter_words, year_from, year_to, metadata, metadata_not, expected",
         [
-            (None,) * 5,
+            (None,) * 6,
             (
                 ["test term"],
+                None,
                 None,
                 None,
                 None,
@@ -381,6 +382,7 @@ class TestQueryBuilder:
                 ["test term"],
                 1999,
                 2000,
+                None,
                 None,
                 Filter.all_of(
                     [
@@ -395,6 +397,7 @@ class TestQueryBuilder:
                 1999,
                 2000,
                 {"test metadata": "test value"},
+                None,
                 Filter.all_of(
                     [
                         Filter.by_property("passage").contains_any(["test term"]),
@@ -409,6 +412,7 @@ class TestQueryBuilder:
                 1999,
                 2000,
                 {"test metadata 1": "test value 1", "test metadata 2": "test value 2"},
+                None,
                 Filter.all_of(
                     [
                         Filter.by_property("passage").contains_any(["test term"]),
@@ -419,8 +423,30 @@ class TestQueryBuilder:
                     ]
                 ),
             ),
+            (
+                ["test term"],
+                None,
+                None,
+                {"test metadata 2": "test value 2"},
+                {"test metadata 1": "test value 1"},
+                Filter.all_of(
+                    [
+                        Filter.by_property("passage").contains_any(["test term"]),
+                        Filter.by_property("test metadata 2").equal("test value 2"),
+                        Filter.by_property("test metadata 1").not_equal("test value 1"),
+                    ]
+                ),
+            ),
         ],
     )
-    def test_build_filter(self, filter_words, year_from, year_to, metadata, expected):
-        filter = QueryBuilder.build_filter(filter_words, year_from, year_to, metadata)
+    def test_build_filter(
+        self, filter_words, year_from, year_to, metadata, metadata_not, expected
+    ):
+        filter = QueryBuilder.build_filter(
+            filter_words,
+            year_from,
+            year_to,
+            metadata,
+            metadata_not,
+        )
         self.assert_filter_equals(filter, expected)
