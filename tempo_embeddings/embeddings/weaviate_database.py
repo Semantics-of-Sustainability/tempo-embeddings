@@ -380,7 +380,11 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         return response.total_count
 
     def neighbour_passages(
-        self, corpus: Corpus, k: int, collections: Optional[list[str]] = None
+        self,
+        corpus: Corpus,
+        k: int,
+        collections: Optional[list[str]] = None,
+        metadata_not: Optional[dict[str, Any]] = None,
     ) -> list[Passage]:
         """Find passages to expand a corpus with the k-nearest neighbors of the centroid of the corpus.
 
@@ -388,6 +392,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             corpus (Corpus): The corpus to expand, edited in-place
             k (int): The number of neighbors to add per collection
             collections (Optional[list[str]], optional): The collections to query. Defaults to all available collections.
+            metadata_not (Optional[dict[str, Any]], optional): Additional metadata filters to exclude. Defaults to None.
 
         Returns:
             A list of unique passages that were not part of the original corpus
@@ -398,7 +403,10 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             centroid = corpus.centroid(use_2d_embeddings=False).tolist()
 
             for passage, distance in self.query_vector_neighbors(
-                collection, centroid, k + len(_corpus_passages)
+                collection,
+                centroid,
+                k + len(_corpus_passages),
+                metadata_not=metadata_not,
             ):
                 if passage not in _corpus_passages:
                     passages[passage] = min(passages[passage], distance)
@@ -406,9 +414,13 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         return [passage for passage, _ in passages.most_common()[-k:]]
 
     def query_vector_neighbors(
-        self, collection: str, vector: list[float], k_neighbors=10
+        self,
+        collection: str,
+        vector: list[float],
+        k_neighbors=10,
+        *,
+        metadata_not: Optional[dict[str, Any]] = None,
     ) -> Iterable[tuple[Passage, float]]:
-        # TODO: the (minimum) number of neighbors is limited by the Weaviate server configuration
         # TODO: use autocut: https://weaviate.io/developers/weaviate/search/similarity#autocut
 
         wv_collection = self._client.collections.get(collection)
@@ -417,6 +429,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             limit=k_neighbors,
             include_vector=True,
             return_metadata=MetadataQuery(distance=True),
+            filters=QueryBuilder.build_filter(metadata_not=metadata_not),
         )
 
         for o in response.objects:
