@@ -68,6 +68,14 @@ class Corpus(AbstractCorpus):
             "cluster_selection_epsilon": 0.0,
         } | kwargs
 
+        if (
+            hdbscan_args.get("cluster_selection_method") == "leaf"
+            and hdbscan_args["max_cluster_size"]
+        ):
+            logging.warning(
+                f"'max_cluster_size' ({hdbscan_args['max_cluster_size']}) has no effect with cluster selection method '{hdbscan_args.get('cluster_selection_method')}'."
+            )
+
         cluster_labels: list[int] = (
             HDBSCAN(**hdbscan_args).fit_predict(embeddings).astype(int).tolist()
         )
