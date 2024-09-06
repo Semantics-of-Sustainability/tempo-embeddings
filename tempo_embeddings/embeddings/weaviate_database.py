@@ -638,7 +638,7 @@ class QueryBuilder:
             year_from (str, optional): Only include passages from this year or later. Defaults to None.
             year_to (str, optional): Only include passages up to this year. Defaults to None.
             metadata (dict[str, Any], optional): Additional filter criteria for exact matches in the form <field, term>.
-            metadata_not(dict[str, Any], optional): Additional filter criteria to _exclude_ exact matches in the form <field, term>.
+            metadata_not(dict[str, Any], optional): Additional filter criteria to _exclude_ exact matches in the form <field, term> or <field, [terms]>.
             text_field: The field name for the text. Defaults to "passage".
             year_field (str, optional): The field name for the year. Defaults to "year".
         Raises:
@@ -672,11 +672,12 @@ class QueryBuilder:
                 ]
             )
         if metadata_not:
-            filters.extend(
-                [
-                    Filter.by_property(field).not_equal(value)
-                    for field, value in metadata_not.items()
-                ]
-            )
+            for field, value in metadata_not.items():
+                if isinstance(value, list):
+                    filters.extend(
+                        [Filter.by_property(field).not_equal(v) for v in value]
+                    )
+                else:
+                    filters.append(Filter.by_property(field).not_equal(value))
 
         return Filter.all_of(filters) if filters else None

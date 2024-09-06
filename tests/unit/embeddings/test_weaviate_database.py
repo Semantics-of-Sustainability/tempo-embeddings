@@ -437,6 +437,21 @@ class TestQueryBuilder:
                     ]
                 ),
             ),
+            (
+                ["test term"],
+                None,
+                None,
+                {"test metadata 2": "test value 2"},
+                {"test metadata 1": ["test value 1", "test value 2"]},
+                Filter.all_of(
+                    [
+                        Filter.by_property("passage").contains_any(["test term"]),
+                        Filter.by_property("test metadata 2").equal("test value 2"),
+                        Filter.by_property("test metadata 1").not_equal("test value 1"),
+                        Filter.by_property("test metadata 1").not_equal("test value 2"),
+                    ]
+                ),
+            ),
         ],
     )
     def test_build_filter(
