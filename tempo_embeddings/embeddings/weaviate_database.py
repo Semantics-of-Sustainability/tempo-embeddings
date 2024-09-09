@@ -345,7 +345,9 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         passages: list[Passage] = [
             Passage.from_weaviate_record(o) for o in response.objects
         ]
-        label = "; ".join(filter_words) if passages and filter_words else collection
+        label = collection
+        if passages and filter_words:
+            label += ": " + "; ".join(filter_words)
         return Corpus(passages, label)
 
     def doc_frequency(
