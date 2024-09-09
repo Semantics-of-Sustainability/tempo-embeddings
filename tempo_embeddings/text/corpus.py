@@ -14,6 +14,7 @@ from ..settings import DEFAULT_ENCODING
 from .abstractcorpus import AbstractCorpus
 from .passage import Passage
 from .segmenter import Segmenter
+from .subcorpus import Subcorpus
 
 
 class Corpus(AbstractCorpus):
@@ -92,7 +93,7 @@ class Corpus(AbstractCorpus):
         use_2d_embeddings: bool = True,
         epsilon_step_size: float = 0.1,
         **kwargs,
-    ) -> list["Subcorpus"]:  # noqa: F821
+    ) -> list[Subcorpus]:
         """Cluster the passages in the corpus.
 
         Args:
@@ -131,8 +132,6 @@ class Corpus(AbstractCorpus):
 
         for passage_index, cluster in enumerate(passage_clusters):
             cluster_passages[cluster].append(passage_index)
-
-        from .subcorpus import Subcorpus
 
         return [
             Subcorpus(self, passage_indices, cluster)
