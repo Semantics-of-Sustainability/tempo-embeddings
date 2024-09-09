@@ -23,6 +23,40 @@ class TestCorpus:
         assert corpus.passages == [Passage("test1"), Passage("test2")]
 
     @pytest.mark.parametrize(
+        "passages,max_clusters,hdbscan_kwargs",
+        [
+            (
+                [
+                    Passage(f"test {str(i)}", embedding=np.random.rand(10))
+                    for i in range(10)
+                ],
+                10,
+                {"min_cluster_size": 2},
+            ),
+            (
+                [
+                    Passage(f"test {str(i)}", embedding=np.random.rand(10))
+                    for i in range(10)
+                ],
+                2,
+                {"min_cluster_size": 2},
+            ),
+        ],
+    )
+    def test_cluster(self, passages, max_clusters, hdbscan_kwargs):
+        corpus = Corpus(passages)
+        clusters = corpus.cluster(max_clusters=max_clusters, **hdbscan_kwargs)
+
+        for cluster in clusters:
+            assert cluster._parent_corpus is corpus
+            assert (
+                len(cluster) >= hdbscan_kwargs["min_cluster_size"]
+                or cluster._label == -1
+            )
+
+        assert len(clusters) <= max_clusters
+
+    @pytest.mark.parametrize(
         "corpus,metadata_fields,expected",
         [
             (Corpus(), None, []),

@@ -57,9 +57,18 @@ class Corpus(AbstractCorpus):
         use_2d_embeddings: bool = True,
         epsilon_step_size: float = 0.1,
         **kwargs,
-    ):
-        # TODO: remove AbstractCorpus.cluster()
+    ) -> list["Subcorpus"]:  # noqa: F821
+        """Cluster the passages in the corpus.
 
+        Args:
+            max_clusters: The maximum number of clusters to create. If necessary, the epsilon HDBSCAN parameter is increased iteratively.
+            use_2d_embeddings: Whether to use 2D embeddings instead of full embeddings for clustering. If necessary, they are computed. Defaults to True.
+            epsilon_step_size: The step size by which to increase the epsilon parameter if the number of clusters exceeds `max_clusters`. Defaults to 0.1.
+            **kwargs: Additional keyword arguments to pass to HDBSCAN.
+        Returns:
+            list[Subcorpus]: A list of Subcorpus objects, each representing a cluster. Labels are integers as assigned by HDBSCAN, with -1 indicating outliers.
+
+        """
         embeddings = self._select_embeddings(use_2d_embeddings)
 
         hdbscan_args = {
@@ -70,7 +79,7 @@ class Corpus(AbstractCorpus):
 
         if (
             hdbscan_args.get("cluster_selection_method") == "leaf"
-            and hdbscan_args["max_cluster_size"]
+            and "max_cluster_size" in hdbscan_args
         ):
             logging.warning(
                 f"'max_cluster_size' ({hdbscan_args['max_cluster_size']}) has no effect with cluster selection method '{hdbscan_args.get('cluster_selection_method')}'."
@@ -80,6 +89,7 @@ class Corpus(AbstractCorpus):
             HDBSCAN(**hdbscan_args).fit_predict(embeddings).astype(int).tolist()
         )
         if max_clusters:
+            # TODO: make recursive
             n_clusters = len(set(cluster_labels))
             while n_clusters > max_clusters:
                 logging.warning(

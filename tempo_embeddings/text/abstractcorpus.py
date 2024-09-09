@@ -81,7 +81,7 @@ class AbstractCorpus(ABC):
         return hash(tuple(self.passages))
 
     def __len__(self) -> int:
-        return len(self._passages)
+        return len(self.passages)
 
     def __contains__(self, passage: Passage) -> bool:
         return passage in self._passages

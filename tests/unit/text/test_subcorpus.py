@@ -7,6 +7,10 @@ from tempo_embeddings.text.subcorpus import Subcorpus
 
 
 class TestSubCorpus:
+    def test_len(self):
+        subcorpus = Subcorpus(Corpus([Passage("text 1"), Passage("text 2")]), [0])
+        assert len(subcorpus) == 1
+
     def test_passages(self):
         parent_corpus = Corpus([Passage("text 1"), Passage("text 2")])
 
