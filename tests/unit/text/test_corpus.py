@@ -1,3 +1,4 @@
+import logging
 from contextlib import nullcontext as does_not_raise
 
 import numpy as np
@@ -23,38 +24,33 @@ class TestCorpus:
         assert corpus.passages == [Passage("test1"), Passage("test2")]
 
     @pytest.mark.parametrize(
-        "passages,max_clusters,hdbscan_kwargs",
-        [
-            (
-                [
-                    Passage(f"test {str(i)}", embedding=np.random.rand(10))
-                    for i in range(10)
-                ],
-                10,
-                {"min_cluster_size": 2},
-            ),
-            (
-                [
-                    Passage(f"test {str(i)}", embedding=np.random.rand(10))
-                    for i in range(10)
-                ],
-                2,
-                {"min_cluster_size": 2},
-            ),
-        ],
+        "n_passages,max_clusters,min_cluster_size,increase_eps",
+        [(10, 10, 2, False), (50, 3, 2, True)],
     )
-    def test_cluster(self, passages, max_clusters, hdbscan_kwargs):
-        corpus = Corpus(passages)
-        clusters = corpus.cluster(max_clusters=max_clusters, **hdbscan_kwargs)
+    def test_cluster(
+        self, caplog, n_passages, max_clusters, min_cluster_size, increase_eps
+    ):
+        corpus = Corpus(
+            [
+                Passage(f"test {str(i)}", embedding=np.random.rand(768))
+                for i in range(n_passages)
+            ]
+        )
 
-        for cluster in clusters:
-            assert cluster._parent_corpus is corpus
-            assert (
-                len(cluster) >= hdbscan_kwargs["min_cluster_size"]
-                or cluster._label == -1
+        with caplog.at_level(logging.INFO):
+            clusters = corpus.cluster(
+                max_clusters=max_clusters, min_cluster_size=min_cluster_size
             )
 
         assert len(clusters) <= max_clusters
+
+        if increase_eps:
+            # FIXME: clusters are not deterministic
+            assert "Clustering with epsilon=" in caplog.text
+
+        for cluster in clusters:
+            assert cluster._parent_corpus is corpus
+            assert len(cluster) >= min_cluster_size or cluster._label == -1
 
     @pytest.mark.parametrize(
         "corpus,metadata_fields,expected",
