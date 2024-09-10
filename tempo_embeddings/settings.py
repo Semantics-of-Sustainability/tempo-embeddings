@@ -14,6 +14,11 @@ DATA_DIR: Path = CWD / "data"
 if not DATA_DIR.is_dir():
     logging.error(f"Data directory '{DATA_DIR}' not found.")
 
+STOPWORDS_FILE: Path = DATA_DIR / "stopwords-filter-nl.txt"
+assert STOPWORDS_FILE.is_file(), f"Stopwords file '{STOPWORDS_FILE}' not found."
+
+STOPWORDS: set[str] = frozenset(STOPWORDS_FILE.read_text().splitlines())
+
 CORPORA_CONFIG_FILE: Path = DATA_DIR / "corpora.json"
 if not (CORPORA_CONFIG_FILE.is_file()):
     logging.error(f"Corpora config file '{CORPORA_CONFIG_FILE}' not found.")

@@ -3,6 +3,7 @@ import json
 import logging
 import uuid
 from collections import Counter
+from functools import lru_cache
 from typing import Any, Iterable, Optional, TypeVar
 
 from tqdm import tqdm
@@ -16,6 +17,7 @@ from weaviate.util import generate_uuid5
 from ..settings import STRICT, WEAVIATE_CONFIG_COLLECTION
 from ..text.corpus import Corpus
 from ..text.passage import Passage
+from ..text.year_span import YearSpan
 from .model import TransformerModelWrapper
 from .vector_database import VectorDatabaseManagerWrapper
 
@@ -161,21 +163,28 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
     def get_available_collections(self) -> Iterable[str]:
         return self._config.get_corpora()
 
-    def provenances(
-        self, collection: str, *, metadata_field: str = "provenance"
-    ) -> Iterable[str]:
-        """Return the filenames in the collection."""
-        if collection in self._config:
-            for group in (
-                self._client.collections.get(collection)
-                .aggregate.over_all(
-                    group_by=wvc.aggregate.GroupByAggregate(prop=metadata_field)
-                )
-                .groups
-            ):
-                yield group.grouped_by.value
-        else:
-            logger.info(f"Collection '{collection}' not found, no files ingested.")
+    @lru_cache
+    def get_metadata_values(self, collection: str, field: str) -> list[str]:
+        """Get the unique values for a metadata field in a collection.
+
+        Args:
+            collection (str): The collection name
+            field (str): The metadata field name
+        Returns:
+            Iterable[str]: The unique values for the metadata field
+        Raises:
+            ValueError: If the collection does not exist
+        """
+        try:
+            response = self._client.collections.get(collection).aggregate.over_all(
+                group_by=wvc.aggregate.GroupByAggregate(prop=field)
+            )
+        except WeaviateQueryError as e:
+            raise ValueError(
+                f"Could not retrieve values for field '{field}' in collection '{collection}'."
+            ) from e
+
+        return [group.grouped_by.value for group in response.groups]
 
     def ingest(
         self,
@@ -231,10 +240,11 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             self.delete_collection(collection)
 
     def get_collection_count(self, name) -> int:
-        """Returns the size of a given collection"""
-        collection = self._client.collections.get(name)
-        response = collection.aggregate.over_all(total_count=True)
-        return response.total_count
+        """Returns the size of a given collection.
+
+        Use doc_frequency() with an empty term to get the total number of documents in the collection.
+        """
+        return self.doc_frequency("", name)
 
     def _insert_using_custom_model(
         self, corpus, collection: weaviate.collections.Collection
@@ -305,9 +315,12 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         year_from: Optional[int] = None,
         year_to: Optional[int] = None,
         metadata_filters: Optional[dict[str, Any]] = None,
+        metadata_not: Optional[dict[str, Any]] = None,
         include_embeddings: bool = False,
         limit: int = 10000,
     ) -> Corpus:
+        # TODO: replace year_from, year_to with YearSpan object
+
         """Get a corpus from the database with optional filters.
 
         Args:
@@ -316,6 +329,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             year_from (int, optional): Only include passages from this year or later. Defaults to None.
             year_to (int, optional): Only include passages up to this year. Defaults to None.
             metadata_filters (dict[str, Any], optional): Additional filter criteria for exact matching in the form <field, term>.
+            metadata_not (dict[str, Any], optional): Additional filter criteria to _exclude_ exact matching in the form <field, term>.
             include_embeddings (bool, optional): If true, include the embeddings to the output. Defaults to False.
             limit (int, optional): The maximum number of passages in the initial corpus. Defaults to 10000.
 
@@ -327,25 +341,70 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         response = self._client.collections.get(collection).query.fetch_objects(
             limit=limit or None,
             filters=QueryBuilder.build_filter(
-                filter_words, year_from, year_to, metadata_filters
+                filter_words,
+                YearSpan(year_from, year_to),
+                metadata_filters,
+                metadata_not,
             ),
             include_vector=include_embeddings,
         )
         passages: list[Passage] = [
             Passage.from_weaviate_record(o) for o in response.objects
         ]
-        label = "; ".join(filter_words) if passages and filter_words else collection
+        label = collection
+        if passages and filter_words:
+            label += ": " + "; ".join(filter_words)
         return Corpus(passages, label)
 
+    def doc_frequency(
+        self,
+        term: str,
+        collections: str,
+        metadata: Optional[dict[str, Any]] = None,
+        metadata_not: Optional[dict[str, Any]] = None,
+    ) -> int:
+        """Get the number of documents that contain a term in the collection.
+
+        If 'term' is empty, return the total number of documents in the collection.
+
+        Args:
+            term (str): The term to count
+            collection (str): collection to query
+            metadata (dict[str, Any]): Additional metadata filters
+            metadata_not (dict[str, Any]): Additional metadata filters to exclude
+
+        Returns:
+            int: The number of occurrences of the term
+        """
+        response = self._client.collections.get(collections).aggregate.over_all(
+            filters=QueryBuilder.build_filter(
+                filter_words=[term] if term.strip() else None,
+                metadata=metadata,
+                metadata_not=metadata_not,
+            ),
+            total_count=True,
+        )
+
+        return response.total_count
+
     def neighbour_passages(
-        self, corpus: Corpus, k: int, collections: Optional[list[str]] = None
+        self,
+        corpus: Corpus,
+        k: int,
+        distance: Optional[float] = None,
+        collections: Optional[list[str]] = None,
+        year_span: Optional[YearSpan] = None,
+        metadata_not: Optional[dict[str, Any]] = None,
     ) -> list[Passage]:
         """Find passages to expand a corpus with the k-nearest neighbors of the centroid of the corpus.
 
         Args:
             corpus (Corpus): The corpus to expand, edited in-place
-            k (int): The number of neighbors to add per collection
+            k (int): The maximum number of neighbors to add per collection
+            distance (Optional[float], optional): The maximum distance to consider. Defaults to 0.2.
             collections (Optional[list[str]], optional): The collections to query. Defaults to all available collections.
+            year_range (Optional[YearSpan], optional): The year range to consider. Defaults to None.
+            metadata_not (Optional[dict[str, Any]], optional): Additional metadata filters to exclude. Defaults to None.
 
         Returns:
             A list of unique passages that were not part of the original corpus
@@ -356,7 +415,12 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             centroid = corpus.centroid(use_2d_embeddings=False).tolist()
 
             for passage, distance in self.query_vector_neighbors(
-                collection, centroid, k + len(_corpus_passages)
+                collection,
+                centroid,
+                k + len(_corpus_passages),
+                max_distance=distance,
+                year_span=year_span,
+                metadata_not=metadata_not,
             ):
                 if passage not in _corpus_passages:
                     passages[passage] = min(passages[passage], distance)
@@ -364,17 +428,27 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         return [passage for passage, _ in passages.most_common()[-k:]]
 
     def query_vector_neighbors(
-        self, collection: str, vector: list[float], k_neighbors=10
+        self,
+        collection: str,
+        vector: list[float],
+        max_neighbors=10,
+        max_distance: Optional[float] = None,
+        *,
+        year_span: Optional[YearSpan] = None,
+        metadata_not: Optional[dict[str, Any]] = None,
     ) -> Iterable[tuple[Passage, float]]:
-        # TODO: the (minimum) number of neighbors is limited by the Weaviate server configuration
-        # TODO: use autocut: https://weaviate.io/developers/weaviate/search/similarity#autocut
+        # TODO: use autocut: https://weaviate.io/developers/weaviate/api/graphql/additional-operators#autocut
 
         wv_collection = self._client.collections.get(collection)
         response = wv_collection.query.near_vector(
             near_vector=vector,
-            limit=k_neighbors,
+            distance=max_distance,
+            limit=max_neighbors,
             include_vector=True,
             return_metadata=MetadataQuery(distance=True),
+            filters=QueryBuilder.build_filter(
+                year_span=year_span, metadata_not=metadata_not
+            ),
         )
 
         for o in response.objects:
@@ -383,6 +457,8 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
     def query_text_neighbors(
         self, collection: Collection, text: list[float], k_neighbors=10
     ) -> Iterable[tuple[Passage, float]]:
+        # TODO: add filters for metadata, year_span, metadata_not
+
         wv_collection = self._client.collections.get(collection)
         response = wv_collection.query.near_text(
             query=text,
@@ -579,9 +655,9 @@ class QueryBuilder:
     @staticmethod
     def build_filter(
         filter_words: list[str] = None,
-        year_from: Optional[int] = None,
-        year_to: Optional[int] = None,
+        year_span: Optional[YearSpan] = None,
         metadata: Optional[dict[str, Any]] = None,
+        metadata_not: Optional[dict[str, Any]] = None,
         *,
         text_field: str = "passage",
         year_field: str = "year",
@@ -592,33 +668,26 @@ class QueryBuilder:
 
         Args:
             filter_words (list[str], optional): Only include passage that contain any of these words. Defaults to None.
-            year_from (str, optional): Only include passages from this year or later. Defaults to None.
-            year_to (str, optional): Only include passages up to this year. Defaults to None.
+            year_span (YearSpan, optional): Only include passages from this year span. Defaults to None.
             metadata (dict[str, Any], optional): Additional filter criteria for exact matches in the form <field, term>.
+            metadata_not(dict[str, Any], optional): Additional filter criteria to _exclude_ exact matches in the form <field, term> or <field, [terms]>.
             text_field: The field name for the text. Defaults to "passage".
             year_field (str, optional): The field name for the year. Defaults to "year".
-        Raises:
-            ValueError: If year_from > year_to
         Returns:
             Optional[Filter]: The filter object or None if none of the input arguments are set.
 
         """
         # TODO: contains_any should be a list of tuples to allow for multiple values per field
 
-        if year_from and year_to and year_from > year_to:
-            raise ValueError(
-                f"'year_from' ({year_from}) must be less than 'year_to' ({year_to})."
+        filters: list[Filter] = []
+
+        if filter_words:
+            filters.append(Filter.by_property(text_field).contains_any(filter_words))
+
+        if year_span is not None:
+            filters.extend(
+                year_span.to_weaviate_filter(field_name=year_field, field_type=str)
             )
-
-        filters: list[Filter] = [
-            Filter.by_property(text_field).contains_any(word)
-            for word in (filter_words or [])
-        ]
-
-        if year_from is not None:
-            filters.append(Filter.by_property(year_field).greater_or_equal(year_from))
-        if year_to is not None:
-            filters.append(Filter.by_property(year_field).less_or_equal(year_to))
 
         if metadata:
             filters.extend(
@@ -627,5 +696,13 @@ class QueryBuilder:
                     for field, value in metadata.items()
                 ]
             )
+        if metadata_not:
+            for field, value in metadata_not.items():
+                if isinstance(value, list):
+                    filters.extend(
+                        [Filter.by_property(field).not_equal(v) for v in value]
+                    )
+                else:
+                    filters.append(Filter.by_property(field).not_equal(value))
 
         return Filter.all_of(filters) if filters else None

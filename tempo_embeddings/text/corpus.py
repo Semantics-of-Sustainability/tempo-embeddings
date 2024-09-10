@@ -1,17 +1,20 @@
 import csv
 import gzip
 import logging
+from collections import defaultdict
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
 import joblib
 import numpy as np
+from sklearn.cluster import HDBSCAN
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 from ..settings import DEFAULT_ENCODING
 from .abstractcorpus import AbstractCorpus
 from .passage import Passage
 from .segmenter import Segmenter
+from .subcorpus import Subcorpus
 
 
 class Corpus(AbstractCorpus):
@@ -48,6 +51,92 @@ class Corpus(AbstractCorpus):
         if self._vectorizer is None:
             self._vectorizer = AbstractCorpus.tfidf_vectorizer(self.passages)
         return self._vectorizer
+
+    def _clusters(
+        self, embeddings, max_clusters: int, epsilon_step_size: float, **hdbscan_args
+    ) -> list[int]:
+        """Cluster the embeddings using HDBSCAN.
+
+        Recursively increases the epsilon parameter if the number of clusters exceeds `max_clusters`.
+
+        Args:
+            embeddings: The embeddings to cluster.
+            max_clusters: The maximum number of clusters to create.
+            epsilon_step_size: The step size by which to increase the epsilon parameter if the number of clusters exceeds `max_clusters`.
+            **hdbscan_args: Additional keyword arguments to pass to HDBSCAN.
+        Returns:
+            list[int]: The cluster labels assigned by HDBSCAN.
+        """
+        passage_clusters: list[int] = (
+            HDBSCAN(**hdbscan_args).fit_predict(embeddings).astype(int).tolist()
+        )
+        """A list of cluster labels assigned to each passage by HDBSCAN."""
+
+        if max_clusters and len(set(passage_clusters)) > max_clusters:
+            logging.info(
+                f"Clustering with epsilon={hdbscan_args['cluster_selection_epsilon']:.2} resulted in >{max_clusters} clusters."
+            )
+
+            # TODO: compute epsilon_step_size based on difference between n_clusters and max_clusters
+            # TODO: handle RecursionError if max_clusters is never reached
+
+            hdbscan_args["cluster_selection_epsilon"] += epsilon_step_size
+            passage_clusters = self._clusters(
+                embeddings, max_clusters, epsilon_step_size, **hdbscan_args
+            )
+
+        return passage_clusters
+
+    def cluster(
+        self,
+        max_clusters: Optional[int] = 50,
+        use_2d_embeddings: bool = True,
+        epsilon_step_size: float = 0.1,
+        **kwargs,
+    ) -> list[Subcorpus]:
+        """Cluster the passages in the corpus.
+
+        Args:
+            max_clusters: The maximum number of clusters to create. If necessary, the epsilon HDBSCAN parameter is increased iteratively.
+            use_2d_embeddings: Whether to use 2D embeddings instead of full embeddings for clustering. If necessary, they are computed. Defaults to True.
+            epsilon_step_size: The step size by which to increase the epsilon parameter if the number of clusters exceeds `max_clusters`. Defaults to 0.1.
+            **kwargs: Additional keyword arguments to pass to HDBSCAN.
+        Returns:
+            list[Subcorpus]: A list of Subcorpus objects, each representing a cluster. Labels are integers as assigned by HDBSCAN, with -1 indicating outliers.
+
+        """
+        embeddings = self._select_embeddings(use_2d_embeddings)
+
+        hdbscan_args = {
+            "min_cluster_size": 10,
+            "cluster_selection_method": "leaf",
+            "cluster_selection_epsilon": 0.0,
+        } | kwargs
+
+        if (
+            hdbscan_args.get("cluster_selection_method") == "leaf"
+            and "max_cluster_size" in hdbscan_args
+        ):
+            logging.warning(
+                f"'max_cluster_size' ({hdbscan_args['max_cluster_size']}) has no effect with cluster selection method '{hdbscan_args.get('cluster_selection_method')}'."
+            )
+
+        passage_clusters: list[int] = self._clusters(
+            embeddings, max_clusters or 0, epsilon_step_size, **hdbscan_args
+        )
+        """A list of cluster labels assigned to each passage by HDBSCAN."""
+        assert len(passage_clusters) == len(self)
+
+        cluster_passages: dict[int, int] = defaultdict(list)
+        """A dictionary mapping cluster labels/indices to passage indices in the corpus."""
+
+        for passage_index, cluster in enumerate(passage_clusters):
+            cluster_passages[cluster].append(passage_index)
+
+        return [
+            Subcorpus(self, passage_indices, cluster)
+            for cluster, passage_indices in cluster_passages.items()
+        ]
 
     def extend(self, passages: list[Passage]) -> list[int]:
         """Add multiple passages to the corpus.

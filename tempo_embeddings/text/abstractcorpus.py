@@ -2,7 +2,6 @@ import logging
 import random
 import string
 from abc import ABC, abstractmethod
-from collections import defaultdict
 from functools import lru_cache
 from typing import Any, Iterable, Optional
 
@@ -10,7 +9,6 @@ import numpy as np
 import pandas as pd
 from scipy.sparse import csr_matrix
 from scipy.spatial.distance import cosine
-from sklearn.cluster import HDBSCAN
 from sklearn.feature_extraction.text import TfidfVectorizer
 from umap.umap_ import UMAP
 
@@ -83,7 +81,7 @@ class AbstractCorpus(ABC):
         return hash(tuple(self.passages))
 
     def __len__(self) -> int:
-        return len(self._passages)
+        return len(self.passages)
 
     def __contains__(self, passage: Passage) -> bool:
         return passage in self._passages
@@ -402,20 +400,6 @@ class AbstractCorpus(ABC):
         # TODO: remove assertion
         assert all(text.strip() for text in texts), "Empty text."
         return texts
-
-    def cluster(self, use_2d_embeddings: bool = True, **kwargs):
-        embeddings = self._select_embeddings(use_2d_embeddings)
-        cluster_labels: list[int] = (
-            HDBSCAN(**kwargs).fit_predict(embeddings).astype(int).tolist()
-        )
-        clusters: dict[int, int] = defaultdict(list)
-        for i, label in enumerate(cluster_labels):
-            clusters[label].append(i)
-
-        # pylint: disable=import-outside-toplevel,cyclic-import
-        from .subcorpus import Subcorpus
-
-        return [Subcorpus(self, indices, label) for label, indices in clusters.items()]
 
     @staticmethod
     def tfidf_vectorizer(passages: list[Passage], **kwargs) -> TfidfVectorizer:

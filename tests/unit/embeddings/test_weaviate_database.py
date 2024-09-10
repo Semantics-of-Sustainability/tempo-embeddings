@@ -2,6 +2,7 @@ import gzip
 import json
 import logging
 import platform
+from contextlib import nullcontext as does_not_raise
 
 import numpy as np
 import pytest
@@ -11,6 +12,7 @@ from tempo_embeddings.embeddings.weaviate_database import QueryBuilder, Weaviate
 from tempo_embeddings.settings import STRICT
 from tempo_embeddings.text.corpus import Corpus
 from tempo_embeddings.text.passage import Passage
+from tempo_embeddings.text.year_span import YearSpan
 from weaviate.classes.query import Filter
 from weaviate.exceptions import WeaviateStartUpError
 from weaviate.util import generate_uuid5
@@ -89,6 +91,26 @@ class TestWeaviateDatabase:
             passage.metadata == {"provenance": "test_file"}
             for passage in corpus.passages
         )
+
+    @pytest.mark.parametrize(
+        "term, metadata, expected",
+        [
+            ("test", None, 5),
+            ("test", {}, 5),
+            ("1", None, 1),
+            ("unknown", None, 0),
+            ("test", {"provenance": "test_file"}, 5),
+            ("test", {"provenance": "unknown"}, 0),
+            ("", None, 5),
+        ],
+    )
+    def test_doc_frequency(
+        self, weaviate_db_manager_with_data, term, metadata, expected
+    ):
+        doc_freq = weaviate_db_manager_with_data.doc_frequency(
+            term, "TestCorpus", metadata=metadata
+        )
+        assert doc_freq == expected
 
     @pytest.mark.parametrize("k", [1, 2, 5])
     def test_neighbour_passages(self, weaviate_db_manager_with_data, corpus, k):
@@ -199,29 +221,21 @@ class TestWeaviateDatabase:
         weaviate_db_manager_with_data.validate_config()
 
     @pytest.mark.parametrize(
-        "corpus_name, expected, expected_warning",
+        "corpus_name, field, expected, exception",
         [
-            ("TestCorpus", {"test_file"}, []),
-            (
-                "NonExistentCorpus",
-                set(),
-                ["root", logging.WARNING, "No such collection."],
-            ),
+            ("TestCorpus", "provenance", {"test_file"}, None),
+            ("NonExistentCorpus", "provenance", [], pytest.raises(ValueError)),
+            ("TestCorpus", "invalid_field", [], None),
         ],
     )
-    def test_provenances(
-        self,
-        weaviate_db_manager_with_data,
-        caplog,
-        corpus_name,
-        expected,
-        expected_warning,
+    def test_get_metadata_values(
+        self, weaviate_db_manager_with_data, corpus_name, field, expected, exception
     ):
-        with caplog.at_level(logging.WARNING):
-            assert (
-                set(weaviate_db_manager_with_data.provenances(corpus_name)) == expected
+        with exception or does_not_raise():
+            values = weaviate_db_manager_with_data.get_metadata_values(
+                corpus_name, field
             )
-            caplog.record_tuples == expected_warning
+            assert sorted(values) == sorted(expected)
 
     def test_validate_config_missing_collection(self, weaviate_db_manager, corpus):
         weaviate_db_manager.validate_config()  # Empty collection
@@ -340,21 +354,24 @@ class TestWeaviateConfigDb:
 
 
 class TestQueryBuilder:
-    def assert_filter_equals(self, filter, expected):
+    @staticmethod
+    def assert_filter_equals(filter, expected):
         """Assert the filter is equal to the expected filter or filters.
 
         For combined filter objects, equality is checked for the sub-filters.
         """
         if hasattr(expected, "filters"):
-            # Combined filter
-            assert filter.filters == expected.filters
+            assert hasattr(filter, "filters")
             assert filter.operator == expected.operator
+
+            for _filter, _expected in zip(filter.filters, expected.filters, **STRICT):
+                TestQueryBuilder.assert_filter_equals(_filter, _expected)
         else:
             # Single filter
             assert filter == expected
 
     @pytest.mark.parametrize(
-        "filter_words, year_from, year_to, metadata, expected",
+        "filter_words, year_span, metadata, metadata_not, expected",
         [
             (None,) * 5,
             (
@@ -362,52 +379,83 @@ class TestQueryBuilder:
                 None,
                 None,
                 None,
-                Filter.by_property("passage").contains_any("test term"),
+                Filter.by_property("passage").contains_any(["test term"]),
             ),
             (
                 ["test term"],
-                1999,
-                2000,
+                YearSpan(1999, 2000),
+                None,
                 None,
                 Filter.all_of(
                     [
-                        Filter.by_property("passage").contains_any("test term"),
-                        Filter.by_property("year").greater_or_equal(1999),
-                        Filter.by_property("year").less_or_equal(2000),
+                        Filter.by_property("passage").contains_any(["test term"]),
+                        Filter.by_property("year").greater_or_equal("1999"),
+                        Filter.by_property("year").less_or_equal("2000"),
                     ]
                 ),
             ),
             (
                 ["test term"],
-                1999,
-                2000,
+                YearSpan(1999, 2000),
                 {"test metadata": "test value"},
+                None,
                 Filter.all_of(
                     [
-                        Filter.by_property("passage").contains_any("test term"),
-                        Filter.by_property("year").greater_or_equal(1999),
-                        Filter.by_property("year").less_or_equal(2000),
+                        Filter.by_property("passage").contains_any(["test term"]),
+                        Filter.by_property("year").greater_or_equal("1999"),
+                        Filter.by_property("year").less_or_equal("2000"),
                         Filter.by_property("test metadata").equal("test value"),
                     ]
                 ),
             ),
             (
                 ["test term"],
-                1999,
-                2000,
+                YearSpan(1999, 2000),
                 {"test metadata 1": "test value 1", "test metadata 2": "test value 2"},
+                None,
                 Filter.all_of(
                     [
-                        Filter.by_property("passage").contains_any("test term"),
-                        Filter.by_property("year").greater_or_equal(1999),
-                        Filter.by_property("year").less_or_equal(2000),
+                        Filter.by_property("passage").contains_any(["test term"]),
+                        Filter.by_property("year").greater_or_equal("1999"),
+                        Filter.by_property("year").less_or_equal("2000"),
                         Filter.by_property("test metadata 1").equal("test value 1"),
                         Filter.by_property("test metadata 2").equal("test value 2"),
                     ]
                 ),
             ),
+            (
+                ["test term"],
+                None,
+                {"test metadata 2": "test value 2"},
+                {"test metadata 1": "test value 1"},
+                Filter.all_of(
+                    [
+                        Filter.by_property("passage").contains_any(["test term"]),
+                        Filter.by_property("test metadata 2").equal("test value 2"),
+                        Filter.by_property("test metadata 1").not_equal("test value 1"),
+                    ]
+                ),
+            ),
+            (
+                ["test term"],
+                None,
+                {"test metadata 2": "test value 2"},
+                {"test metadata 1": ["test value 1", "test value 2"]},
+                Filter.all_of(
+                    [
+                        Filter.by_property("passage").contains_any(["test term"]),
+                        Filter.by_property("test metadata 2").equal("test value 2"),
+                        Filter.by_property("test metadata 1").not_equal("test value 1"),
+                        Filter.by_property("test metadata 1").not_equal("test value 2"),
+                    ]
+                ),
+            ),
         ],
     )
-    def test_build_filter(self, filter_words, year_from, year_to, metadata, expected):
-        filter = QueryBuilder.build_filter(filter_words, year_from, year_to, metadata)
-        self.assert_filter_equals(filter, expected)
+    def test_build_filter(
+        self, filter_words, year_span, metadata, metadata_not, expected
+    ):
+        filter = QueryBuilder.build_filter(
+            filter_words, year_span, metadata, metadata_not
+        )
+        TestQueryBuilder.assert_filter_equals(filter, expected)
