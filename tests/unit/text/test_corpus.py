@@ -24,12 +24,9 @@ class TestCorpus:
         assert corpus.passages == [Passage("test1"), Passage("test2")]
 
     @pytest.mark.parametrize(
-        "n_passages,max_clusters,min_cluster_size,increase_eps",
-        [(10, 10, 2, False), (50, 3, 2, True)],
+        "n_passages,max_clusters,min_cluster_size", [(10, 10, 2), (50, 3, 2)]
     )
-    def test_cluster(
-        self, caplog, n_passages, max_clusters, min_cluster_size, increase_eps
-    ):
+    def test_cluster(self, caplog, n_passages, max_clusters, min_cluster_size):
         corpus = Corpus(
             [
                 Passage(f"test {str(i)}", embedding=np.random.rand(768))
@@ -37,16 +34,16 @@ class TestCorpus:
             ]
         )
 
-        with caplog.at_level(logging.INFO):
+        with caplog.at_level(logging.WARNING):
             clusters = corpus.cluster(
                 max_clusters=max_clusters, min_cluster_size=min_cluster_size
             )
 
-        assert len(clusters) <= max_clusters
-
-        if increase_eps:
-            # FIXME: clusters are not deterministic
-            assert "Clustering with epsilon=" in caplog.text
+        # FIXME: clustering is not deterministic
+        assert (
+            len(clusters) <= max_clusters
+            or "Could not reduce number of clusters." in caplog.text
+        )
 
         for cluster in clusters:
             assert cluster._parent_corpus is corpus

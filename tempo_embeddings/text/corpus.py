@@ -1,7 +1,7 @@
 import csv
 import gzip
 import logging
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
@@ -52,17 +52,14 @@ class Corpus(AbstractCorpus):
             self._vectorizer = AbstractCorpus.tfidf_vectorizer(self.passages)
         return self._vectorizer
 
-    def _clusters(
-        self, embeddings, max_clusters: int, epsilon_step_size: float, **hdbscan_args
-    ) -> list[int]:
+    def _clusters(self, embeddings, max_clusters: int, **hdbscan_args) -> list[int]:
         """Cluster the embeddings using HDBSCAN.
 
-        Recursively increases the epsilon parameter if the number of clusters exceeds `max_clusters`.
+        Recursively adapts the HDBSCAN parameters if the number of clusters exceeds `max_clusters`.
 
         Args:
             embeddings: The embeddings to cluster.
             max_clusters: The maximum number of clusters to create.
-            epsilon_step_size: The step size by which to increase the epsilon parameter if the number of clusters exceeds `max_clusters`.
             **hdbscan_args: Additional keyword arguments to pass to HDBSCAN.
         Returns:
             list[int]: The cluster labels assigned by HDBSCAN.
@@ -72,34 +69,39 @@ class Corpus(AbstractCorpus):
         )
         """A list of cluster labels assigned to each passage by HDBSCAN."""
 
-        if max_clusters and len(set(passage_clusters)) > max_clusters:
-            logging.info(
-                f"Clustering with epsilon={hdbscan_args['cluster_selection_epsilon']:.2} resulted in >{max_clusters} clusters."
+        clusters = Counter(passage_clusters)
+
+        if max_clusters and len(clusters) > max_clusters:
+            logging.warning(
+                f"Clustering with {hdbscan_args} resulted in >{max_clusters} ({len(clusters)}) clusters."
             )
 
-            # TODO: compute epsilon_step_size based on difference between n_clusters and max_clusters
-            # TODO: handle RecursionError if max_clusters is never reached
-
-            hdbscan_args["cluster_selection_epsilon"] += epsilon_step_size
-            passage_clusters = self._clusters(
-                embeddings, max_clusters, epsilon_step_size, **hdbscan_args
+            # set minimum cluster size to half the size of the largest cluster (except outliers)
+            _min_cluster_size: int = next(
+                size // 2 for cluster, size in clusters.most_common() if cluster != -1
             )
+            if _min_cluster_size != hdbscan_args["min_cluster_size"]:
+                hdbscan_args["min_cluster_size"] = _min_cluster_size
+                logging.info(
+                    "Setting 'min_cluster_size' to %d", hdbscan_args["min_cluster_size"]
+                )
+
+                passage_clusters = self._clusters(
+                    embeddings, max_clusters, **hdbscan_args
+                )
+            else:
+                logging.warning("Could not reduce number of clusters.")
 
         return passage_clusters
 
     def cluster(
-        self,
-        max_clusters: Optional[int] = 50,
-        use_2d_embeddings: bool = True,
-        epsilon_step_size: float = 0.1,
-        **kwargs,
+        self, max_clusters: Optional[int] = 50, use_2d_embeddings: bool = True, **kwargs
     ) -> list[Subcorpus]:
         """Cluster the passages in the corpus.
 
         Args:
             max_clusters: The maximum number of clusters to create. If necessary, the epsilon HDBSCAN parameter is increased iteratively.
             use_2d_embeddings: Whether to use 2D embeddings instead of full embeddings for clustering. If necessary, they are computed. Defaults to True.
-            epsilon_step_size: The step size by which to increase the epsilon parameter if the number of clusters exceeds `max_clusters`. Defaults to 0.1.
             **kwargs: Additional keyword arguments to pass to HDBSCAN.
         Returns:
             list[Subcorpus]: A list of Subcorpus objects, each representing a cluster. Labels are integers as assigned by HDBSCAN, with -1 indicating outliers.
@@ -108,9 +110,10 @@ class Corpus(AbstractCorpus):
         embeddings = self._select_embeddings(use_2d_embeddings)
 
         hdbscan_args = {
-            "min_cluster_size": 10,
+            "min_cluster_size": 5,
             "cluster_selection_method": "leaf",
             "cluster_selection_epsilon": 0.0,
+            "min_samples": kwargs.get("min_samples", 5),
         } | kwargs
 
         if (
@@ -122,7 +125,7 @@ class Corpus(AbstractCorpus):
             )
 
         passage_clusters: list[int] = self._clusters(
-            embeddings, max_clusters or 0, epsilon_step_size, **hdbscan_args
+            embeddings, max_clusters or 0, **hdbscan_args
         )
         """A list of cluster labels assigned to each passage by HDBSCAN."""
         assert len(passage_clusters) == len(self)
