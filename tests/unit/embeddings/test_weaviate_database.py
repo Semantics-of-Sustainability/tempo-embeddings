@@ -12,6 +12,7 @@ from tempo_embeddings.embeddings.weaviate_database import QueryBuilder, Weaviate
 from tempo_embeddings.settings import STRICT
 from tempo_embeddings.text.corpus import Corpus
 from tempo_embeddings.text.passage import Passage
+from tempo_embeddings.text.year_span import YearSpan
 from weaviate.classes.query import Filter
 from weaviate.exceptions import WeaviateStartUpError
 from weaviate.util import generate_uuid5
@@ -353,26 +354,28 @@ class TestWeaviateConfigDb:
 
 
 class TestQueryBuilder:
-    def assert_filter_equals(self, filter, expected):
+    @staticmethod
+    def assert_filter_equals(filter, expected):
         """Assert the filter is equal to the expected filter or filters.
 
         For combined filter objects, equality is checked for the sub-filters.
         """
         if hasattr(expected, "filters"):
-            # Combined filter
-            assert filter.filters == expected.filters
+            assert hasattr(filter, "filters")
             assert filter.operator == expected.operator
+
+            for _filter, _expected in zip(filter.filters, expected.filters, **STRICT):
+                TestQueryBuilder.assert_filter_equals(_filter, _expected)
         else:
             # Single filter
             assert filter == expected
 
     @pytest.mark.parametrize(
-        "filter_words, year_from, year_to, metadata, metadata_not, expected",
+        "filter_words, year_span, metadata, metadata_not, expected",
         [
-            (None,) * 6,
+            (None,) * 5,
             (
                 ["test term"],
-                None,
                 None,
                 None,
                 None,
@@ -380,8 +383,7 @@ class TestQueryBuilder:
             ),
             (
                 ["test term"],
-                1999,
-                2000,
+                YearSpan(1999, 2000),
                 None,
                 None,
                 Filter.all_of(
@@ -394,8 +396,7 @@ class TestQueryBuilder:
             ),
             (
                 ["test term"],
-                1999,
-                2000,
+                YearSpan(1999, 2000),
                 {"test metadata": "test value"},
                 None,
                 Filter.all_of(
@@ -409,8 +410,7 @@ class TestQueryBuilder:
             ),
             (
                 ["test term"],
-                1999,
-                2000,
+                YearSpan(1999, 2000),
                 {"test metadata 1": "test value 1", "test metadata 2": "test value 2"},
                 None,
                 Filter.all_of(
@@ -426,7 +426,6 @@ class TestQueryBuilder:
             (
                 ["test term"],
                 None,
-                None,
                 {"test metadata 2": "test value 2"},
                 {"test metadata 1": "test value 1"},
                 Filter.all_of(
@@ -439,7 +438,6 @@ class TestQueryBuilder:
             ),
             (
                 ["test term"],
-                None,
                 None,
                 {"test metadata 2": "test value 2"},
                 {"test metadata 1": ["test value 1", "test value 2"]},
@@ -455,13 +453,9 @@ class TestQueryBuilder:
         ],
     )
     def test_build_filter(
-        self, filter_words, year_from, year_to, metadata, metadata_not, expected
+        self, filter_words, year_span, metadata, metadata_not, expected
     ):
         filter = QueryBuilder.build_filter(
-            filter_words,
-            year_from,
-            year_to,
-            metadata,
-            metadata_not,
+            filter_words, year_span, metadata, metadata_not
         )
-        self.assert_filter_equals(filter, expected)
+        TestQueryBuilder.assert_filter_equals(filter, expected)

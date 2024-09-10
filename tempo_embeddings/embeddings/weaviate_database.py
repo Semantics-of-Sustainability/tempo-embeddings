@@ -17,6 +17,7 @@ from weaviate.util import generate_uuid5
 from ..settings import STRICT, WEAVIATE_CONFIG_COLLECTION
 from ..text.corpus import Corpus
 from ..text.passage import Passage
+from ..text.year_span import YearSpan
 from .model import TransformerModelWrapper
 from .vector_database import VectorDatabaseManagerWrapper
 
@@ -318,6 +319,8 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         include_embeddings: bool = False,
         limit: int = 10000,
     ) -> Corpus:
+        # TODO: replace year_from, year_to with YearSpan object
+
         """Get a corpus from the database with optional filters.
 
         Args:
@@ -338,7 +341,10 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         response = self._client.collections.get(collection).query.fetch_objects(
             limit=limit or None,
             filters=QueryBuilder.build_filter(
-                filter_words, year_from, year_to, metadata_filters, metadata_not
+                filter_words,
+                YearSpan(year_from, year_to),
+                metadata_filters,
+                metadata_not,
             ),
             include_vector=include_embeddings,
         )
@@ -385,15 +391,19 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         self,
         corpus: Corpus,
         k: int,
+        distance: Optional[float] = None,
         collections: Optional[list[str]] = None,
+        year_span: Optional[YearSpan] = None,
         metadata_not: Optional[dict[str, Any]] = None,
     ) -> list[Passage]:
         """Find passages to expand a corpus with the k-nearest neighbors of the centroid of the corpus.
 
         Args:
             corpus (Corpus): The corpus to expand, edited in-place
-            k (int): The number of neighbors to add per collection
+            k (int): The maximum number of neighbors to add per collection
+            distance (Optional[float], optional): The maximum distance to consider. Defaults to 0.2.
             collections (Optional[list[str]], optional): The collections to query. Defaults to all available collections.
+            year_range (Optional[YearSpan], optional): The year range to consider. Defaults to None.
             metadata_not (Optional[dict[str, Any]], optional): Additional metadata filters to exclude. Defaults to None.
 
         Returns:
@@ -408,6 +418,8 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                 collection,
                 centroid,
                 k + len(_corpus_passages),
+                max_distance=distance,
+                year_span=year_span,
                 metadata_not=metadata_not,
             ):
                 if passage not in _corpus_passages:
@@ -419,19 +431,24 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         self,
         collection: str,
         vector: list[float],
-        k_neighbors=10,
+        max_neighbors=10,
+        max_distance: Optional[float] = None,
         *,
+        year_span: Optional[YearSpan] = None,
         metadata_not: Optional[dict[str, Any]] = None,
     ) -> Iterable[tuple[Passage, float]]:
-        # TODO: use autocut: https://weaviate.io/developers/weaviate/search/similarity#autocut
+        # TODO: use autocut: https://weaviate.io/developers/weaviate/api/graphql/additional-operators#autocut
 
         wv_collection = self._client.collections.get(collection)
         response = wv_collection.query.near_vector(
             near_vector=vector,
-            limit=k_neighbors,
+            distance=max_distance,
+            limit=max_neighbors,
             include_vector=True,
             return_metadata=MetadataQuery(distance=True),
-            filters=QueryBuilder.build_filter(metadata_not=metadata_not),
+            filters=QueryBuilder.build_filter(
+                year_span=year_span, metadata_not=metadata_not
+            ),
         )
 
         for o in response.objects:
@@ -440,6 +457,8 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
     def query_text_neighbors(
         self, collection: Collection, text: list[float], k_neighbors=10
     ) -> Iterable[tuple[Passage, float]]:
+        # TODO: add filters for metadata, year_span, metadata_not
+
         wv_collection = self._client.collections.get(collection)
         response = wv_collection.query.near_text(
             query=text,
@@ -636,8 +655,7 @@ class QueryBuilder:
     @staticmethod
     def build_filter(
         filter_words: list[str] = None,
-        year_from: Optional[int] = None,
-        year_to: Optional[int] = None,
+        year_span: Optional[YearSpan] = None,
         metadata: Optional[dict[str, Any]] = None,
         metadata_not: Optional[dict[str, Any]] = None,
         *,
@@ -650,34 +668,24 @@ class QueryBuilder:
 
         Args:
             filter_words (list[str], optional): Only include passage that contain any of these words. Defaults to None.
-            year_from (str, optional): Only include passages from this year or later. Defaults to None.
-            year_to (str, optional): Only include passages up to this year. Defaults to None.
+            year_span (YearSpan, optional): Only include passages from this year span. Defaults to None.
             metadata (dict[str, Any], optional): Additional filter criteria for exact matches in the form <field, term>.
             metadata_not(dict[str, Any], optional): Additional filter criteria to _exclude_ exact matches in the form <field, term> or <field, [terms]>.
             text_field: The field name for the text. Defaults to "passage".
             year_field (str, optional): The field name for the year. Defaults to "year".
-        Raises:
-            ValueError: If year_from > year_to
         Returns:
             Optional[Filter]: The filter object or None if none of the input arguments are set.
 
         """
         # TODO: contains_any should be a list of tuples to allow for multiple values per field
 
-        if year_from and year_to and year_from > year_to:
-            raise ValueError(
-                f"'year_from' ({year_from}) must be less than 'year_to' ({year_to})."
-            )
-
         filters: list[Filter] = []
 
         if filter_words:
             filters.append(Filter.by_property(text_field).contains_any(filter_words))
 
-        if year_from is not None:
-            filters.append(Filter.by_property(year_field).greater_or_equal(year_from))
-        if year_to is not None:
-            filters.append(Filter.by_property(year_field).less_or_equal(year_to))
+        if year_span is not None:
+            filters.extend(year_span.to_weaviate_filter(field_name=year_field))
 
         if metadata:
             filters.extend(
