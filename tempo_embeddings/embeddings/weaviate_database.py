@@ -685,7 +685,9 @@ class QueryBuilder:
             filters.append(Filter.by_property(text_field).contains_any(filter_words))
 
         if year_span is not None:
-            filters.extend(year_span.to_weaviate_filter(field_name=year_field))
+            filters.extend(
+                year_span.to_weaviate_filter(field_name=year_field, field_type=str)
+            )
 
         if metadata:
             filters.extend(

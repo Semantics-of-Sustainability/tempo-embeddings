@@ -29,17 +29,22 @@ class YearSpan:
 
         return self
 
-    def to_weaviate_filter(self, *, field_name: str) -> Iterable[Filter]:
+    def to_weaviate_filter(
+        self, *, field_name: str, field_type=int
+    ) -> Iterable[Filter]:
         """Generate filters for querying Weaviate based on the year span.
 
         Yields one filter for each boundary of the year span which is not None. Can hence yield 0, 1, or 2 filters.
 
         Args:
             field_name: The name of the field to filter on, e.g. "year".
+            field_type: the type of the field, e.g. int. Can be e.g. str and should match the type of the field as stored in the database.
         Yield:
             Filters for querying Weaviate.
         """
         if self.start is not None:
-            yield Filter.by_property(field_name).greater_or_equal(self.start)
+            yield Filter.by_property(field_name).greater_or_equal(
+                field_type(self.start)
+            )
         if self.end is not None:
-            yield Filter.by_property(field_name).less_or_equal(self.end)
+            yield Filter.by_property(field_name).less_or_equal(field_type(self.end))
