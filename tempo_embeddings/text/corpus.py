@@ -80,7 +80,10 @@ class Corpus(AbstractCorpus):
             _min_cluster_size: int = next(
                 size // 2 for cluster, size in clusters.most_common() if cluster != -1
             )
-            if _min_cluster_size != hdbscan_args["min_cluster_size"]:
+            if (
+                _min_cluster_size != hdbscan_args["min_cluster_size"]
+                and _min_cluster_size > 1
+            ):
                 hdbscan_args["min_cluster_size"] = _min_cluster_size
                 logging.info(
                     "Setting 'min_cluster_size' to %d", hdbscan_args["min_cluster_size"]
