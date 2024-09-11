@@ -359,33 +359,53 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
     def doc_frequency(
         self,
         term: str,
-        collections: str,
+        collection: str,
         metadata: Optional[dict[str, Any]] = None,
         metadata_not: Optional[dict[str, Any]] = None,
-    ) -> int:
+        normalize: bool = False,
+    ) -> float:
         """Get the number of documents that contain a term in the collection.
 
         If 'term' is empty, return the total number of documents in the collection.
+
+        If 'normalize' is True, normalize the number of documents that contain the term by the number of documents
+            in the collection matching the filters, but regardless of the term.
 
         Args:
             term (str): The term to count
             collection (str): collection to query
             metadata (dict[str, Any]): Additional metadata filters
             metadata_not (dict[str, Any]): Additional metadata filters to exclude
+            normalize: If True, normalize the number of matching documents
 
         Returns:
-            int: The number of occurrences of the term
+            float: The (relative) number of occurrences of the term
         """
-        response = self._client.collections.get(collections).aggregate.over_all(
+
+        search_terms: list[str] = [term] if term.strip() else []
+        if normalize and not search_terms:
+            logging.warning("Did not provide a term to normalize.")
+            return 1.0
+
+        response = self._client.collections.get(collection).aggregate.over_all(
             filters=QueryBuilder.build_filter(
-                filter_words=[term] if term.strip() else None,
+                filter_words=search_terms,
                 metadata=metadata,
                 metadata_not=metadata_not,
             ),
             total_count=True,
         )
+        freq: int = response.total_count
 
-        return response.total_count
+        if freq and normalize:
+            total: int = self.doc_frequency(
+                "", collection, metadata, metadata_not, normalize=False
+            )
+            result = freq / total
+        else:
+            result = freq
+
+        return result
 
     def neighbour_passages(
         self,
