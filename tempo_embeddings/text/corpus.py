@@ -2,6 +2,7 @@ import csv
 import gzip
 import logging
 from collections import Counter, defaultdict
+from itertools import groupby
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
@@ -41,6 +42,12 @@ class Corpus(AbstractCorpus):
 
     def __repr__(self) -> str:
         return f"Corpus({self._label!r}, {len(self._passages)} passages)"
+
+    def groupby(self, key) -> Iterable[tuple[Any, list[Passage]]]:
+        def key_func(p):
+            return p.metadata.get(key)
+
+        return groupby(sorted(self._passages, key=key_func), key_func)
 
     @property
     def passages(self) -> list[Passage]:

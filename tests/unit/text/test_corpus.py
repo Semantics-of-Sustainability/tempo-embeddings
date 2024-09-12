@@ -7,6 +7,7 @@ import pytest
 from numpy.testing import assert_equal
 from umap.umap_ import UMAP
 
+from tempo_embeddings.settings import STRICT
 from tempo_embeddings.text.corpus import Corpus
 from tempo_embeddings.text.highlighting import Highlighting
 from tempo_embeddings.text.passage import Passage
@@ -22,6 +23,58 @@ class TestCorpus:
         corpus = Corpus([Passage("test1")])
         assert corpus.extend([Passage("test2")]) == range(1, 2)
         assert corpus.passages == [Passage("test1"), Passage("test2")]
+
+    @pytest.mark.parametrize(
+        "passages, key, expected",
+        [
+            ([], "key", []),
+            (
+                [Passage("test text", metadata={"key": 1})],
+                "key",
+                [(1, [Passage("test text", metadata={"key": 1})])],
+            ),
+            (
+                [Passage("test text", metadata={"key": 1})],
+                "unknown key",
+                [(None, [Passage("test text", metadata={"key": 1})])],
+            ),
+            (
+                [
+                    Passage("test text 1", metadata={"key": 1}),
+                    Passage("test text 2", metadata={"key": 1}),
+                ],
+                "key",
+                [
+                    (
+                        1,
+                        [
+                            Passage("test text 1", metadata={"key": 1}),
+                            Passage("test text 2", metadata={"key": 1}),
+                        ],
+                    )
+                ],
+            ),
+            (
+                [
+                    Passage("test text 1", metadata={"key": 1}),
+                    Passage("test text 2", metadata={"key": 2}),
+                ],
+                "key",
+                [
+                    (1, [Passage("test text 1", metadata={"key": 1})]),
+                    (2, [Passage("test text 2", metadata={"key": 2})]),
+                ],
+            ),
+        ],
+    )
+    def test_groupby(self, passages, key, expected):
+        groups = Corpus(passages).groupby(key)
+
+        for (group, elements), (expected_group, expected_elements) in zip(
+            groups, expected, **STRICT
+        ):
+            assert group == expected_group
+            assert list(elements) == expected_elements
 
     @pytest.mark.parametrize(
         "n_passages,max_clusters,min_cluster_size",
