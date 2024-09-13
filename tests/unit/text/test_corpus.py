@@ -25,17 +25,19 @@ class TestCorpus:
         assert corpus.passages == [Passage("test1"), Passage("test2")]
 
     @pytest.mark.parametrize(
-        "passages, key, expected",
+        "passages, key, default_value, expected",
         [
-            ([], "key", []),
+            ([], "key", None, []),
             (
                 [Passage("test text", metadata={"key": 1})],
                 "key",
+                None,
                 [(1, [Passage("test text", metadata={"key": 1})])],
             ),
             (
                 [Passage("test text", metadata={"key": 1})],
                 "unknown key",
+                None,
                 [(None, [Passage("test text", metadata={"key": 1})])],
             ),
             (
@@ -44,6 +46,7 @@ class TestCorpus:
                     Passage("test text 2", metadata={"key": 1}),
                 ],
                 "key",
+                None,
                 [
                     (
                         1,
@@ -60,15 +63,28 @@ class TestCorpus:
                     Passage("test text 2", metadata={"key": 2}),
                 ],
                 "key",
+                None,
                 [
                     (1, [Passage("test text 1", metadata={"key": 1})]),
                     (2, [Passage("test text 2", metadata={"key": 2})]),
                 ],
             ),
+            (
+                [
+                    Passage("test text 1", metadata={"key": 1}),
+                    Passage("test text 2", metadata={"other key": 1}),
+                ],
+                "key",
+                0,
+                [
+                    (0, [Passage("test text 2", metadata={"other key": 1})]),
+                    (1, [Passage("test text 1", metadata={"key": 1})]),
+                ],
+            ),
         ],
     )
-    def test_groupby(self, passages, key, expected):
-        groups = Corpus(passages).groupby(key)
+    def test_groupby(self, passages, key, default_value, expected):
+        groups = Corpus(passages).groupby(key, default_value=default_value)
 
         for (group, elements), (expected_group, expected_elements) in zip(
             groups, expected, **STRICT

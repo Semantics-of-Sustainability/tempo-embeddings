@@ -43,9 +43,11 @@ class Corpus(AbstractCorpus):
     def __repr__(self) -> str:
         return f"Corpus({self._label!r}, {len(self._passages)} passages)"
 
-    def groupby(self, key) -> Iterable[tuple[Any, list[Passage]]]:
+    def groupby(
+        self, key, *, default_value: Any = None
+    ) -> Iterable[tuple[Any, list[Passage]]]:
         def key_func(p):
-            return p.metadata.get(key)
+            return p.metadata.get(key, default_value)
 
         return groupby(sorted(self._passages, key=key_func), key_func)
 
