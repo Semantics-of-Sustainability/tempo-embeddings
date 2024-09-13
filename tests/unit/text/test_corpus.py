@@ -206,7 +206,7 @@ class TestCorpus:
             ),
         ],
     )
-    def test_get_token_metadatas(self, corpus: Corpus, key, expected):
+    def test_get_metadatas(self, corpus: Corpus, key, expected):
         assert list(corpus.get_metadatas(key)) == expected
 
     def test_load_save(self, tmp_path):
