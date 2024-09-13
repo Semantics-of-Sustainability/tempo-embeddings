@@ -150,10 +150,10 @@ class AbstractCorpus(ABC):
         condition = all if strict else any
         return condition(key in passage.metadata for passage in self.passages)
 
-    def get_metadatas(self, key: str) -> list[Any]:
+    def get_metadatas(self, key: str, *, default_value: Any = None) -> list[Any]:
         """Returns all metadata values for a key."""
 
-        return [passage.metadata.get(key) for passage in self.passages]
+        return [passage.metadata.get(key, default_value) for passage in self.passages]
 
     def set_metadatas(self, key, value):
         """Sets a metadata key to a value for all passages.
