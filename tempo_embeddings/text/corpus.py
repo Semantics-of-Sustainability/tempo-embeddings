@@ -148,9 +148,6 @@ class Corpus(AbstractCorpus):
 
     @property
     def vectorizer(self) -> TfidfVectorizer:
-        if not self.__is_fitted(self._vectorizer):
-            self.fit_vectorizer()
-
         return self._vectorizer
 
     @property
@@ -158,7 +155,7 @@ class Corpus(AbstractCorpus):
         return self._umap
 
     @staticmethod
-    def __is_fitted(model) -> bool:
+    def _is_fitted(model) -> bool:
         try:
             check_is_fitted(model)
             return True
@@ -236,11 +233,11 @@ class Corpus(AbstractCorpus):
         return groupby(sorted(self._passages, key=key_func), key_func)
 
     ##### FITTING methods #####
-    def fit_vectorizer(self):
+    def _fit_vectorizer(self):
         self._vectorizer.fit(self.passages)
 
     def _fit_umap(self, *, recompute: bool = False):
-        if recompute or not self.__is_fitted(self._umap):
+        if recompute or not self._is_fitted(self._umap):
             self._umap.fit(self.embeddings)
         else:
             logging.warning("UMAP model already fitted.")
@@ -437,7 +434,7 @@ class Corpus(AbstractCorpus):
 
     ##### TF-IDF methods #####
     def _tf_idf_words(self, *, n: int = None) -> list[str]:
-        """The most words in the corpus with maximum <tf-idf> x <distance to centroid>.
+        """The top n words in the corpus with maximum <tf-idf> x <distance to centroid>.
 
         Each word is scored by multiplying its tf-idf score for each passage
         with the passage's embedding distance to the centroid.

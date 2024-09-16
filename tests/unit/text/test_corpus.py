@@ -362,3 +362,35 @@ class TestCorpus:
                 assert_equal(compressed, np.zeros((len(corpus), 2)))
 
             assert all(passage.embedding_compressed for passage in corpus.passages)
+
+    def test_fit_umap(self, corpus):
+        assert not Corpus._is_fitted(corpus.umap)
+
+        with pytest.raises(AttributeError):
+            corpus.umap.transform(np.random.rand(10, 768))
+
+        corpus._fit_umap()
+
+        assert Corpus._is_fitted(corpus.umap)
+
+        np.testing.assert_allclose(
+            corpus.umap.transform(np.random.rand(10, 768)),
+            np.zeros((10, 2)),
+            atol=100.0,
+        )
+
+    def test_fit_vectorizer(self, corpus):
+        assert not Corpus._is_fitted(corpus.vectorizer)
+
+        with pytest.raises(AttributeError):
+            corpus.vectorizer.transform(Passage("test text"))
+
+        corpus._fit_vectorizer()
+
+        assert Corpus._is_fitted(corpus.vectorizer)
+        np.testing.assert_equal(
+            corpus.vectorizer.transform([Passage("test text")]).toarray(),
+            np.array([[0.7071067811865475, 0.7071067811865475]]),
+        )
+
+        assert corpus.vectorizer.get_feature_names_out().tolist() == ["test", "text"]
