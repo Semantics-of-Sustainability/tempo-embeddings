@@ -82,9 +82,10 @@ class Corpus:
             )
             vectorizer = None
 
+        label = " + ".join((str(label) for label in (self.label, other.label) if label))
         return Corpus(
             self._passages + other._passages,
-            label=" + ".join((str(self.label), str(other.label))),
+            label=label,
             umap_model=umap,
             vectorizer=vectorizer,
         )
