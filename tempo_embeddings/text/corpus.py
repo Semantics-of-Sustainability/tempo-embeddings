@@ -622,6 +622,7 @@ class Corpus(AbstractCorpus):
         """Save the corpus to a file."""
 
         # FIXME: TfIdfVectorizer cannot be saved, see  https://stackoverflow.com/questions/32764991/how-do-i-store-a-tfidfvectorizer-for-future-use-in-scikit-learn
+        raise NotImplementedError("TfidfVectorizer cannot be saved.")
         with open(filepath, "wb") as f:
             joblib.dump(self, f)
 
@@ -629,6 +630,7 @@ class Corpus(AbstractCorpus):
     def load(cls, filepath: Path):
         """Load the corpus from a file."""
 
+        raise NotImplementedError("TfidfVectorizer cannot be saved.")
         with open(filepath, "rb") as f:
             corpus = joblib.load(f)
 
