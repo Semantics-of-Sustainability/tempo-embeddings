@@ -193,13 +193,13 @@ class Segmenter(abc.ABC):
         provenance: str,
         text_columns: list[str],
         filter_terms: Optional[Iterable[str]] = None,
-    ) -> Iterable[Passage]:
-        """Yield passages from a CSV file.
+    ) -> tuple[Passage, ...]:
+        """Read passages from a CSV file.
 
         Args:
             file: the CSV file to read.
-        Yields:
-            Passage: the passages from the CSV file.
+        Return:
+            tuple[Passage]: the passages from the CSV file.
         """
         for column in text_columns:
             if column not in reader.fieldnames:
@@ -238,7 +238,7 @@ class Segmenter(abc.ABC):
                                 )
                 else:
                     passages.extend(column_passages)
-        return passages
+        return tuple(passages)
 
     @classmethod
     @lru_cache(maxsize=4)
