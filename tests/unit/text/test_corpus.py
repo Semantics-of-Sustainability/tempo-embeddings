@@ -13,11 +13,21 @@ from tempo_embeddings.text.passage import Passage
 
 
 class TestCorpus:
-    def test_add(self):
-        expected = Corpus(
-            [Passage("test1"), Passage("test2")], None, umap_model=None, vectorizer=None
-        )
-        assert Corpus([Passage("test1")]) + Corpus([Passage("test2")]) == expected
+    def test_add(self, test_passages):
+        expected = Corpus(test_passages[:2], None, umap_model=None, vectorizer=None)
+        assert Corpus([test_passages[0]]) + Corpus([test_passages[1]]) == expected
+
+    def test_add_umap_fitted(self, corpus):
+        corpus._fit_umap()
+
+        with pytest.raises(RuntimeError):
+            corpus + Corpus([Passage("test")])
+
+    def test_add_vectorizer_fitted(self, corpus):
+        corpus._fit_vectorizer()
+
+        with pytest.raises(RuntimeError):
+            corpus + Corpus([Passage("test")])
 
     @pytest.mark.parametrize(
         "passages, key, default_value, expected",

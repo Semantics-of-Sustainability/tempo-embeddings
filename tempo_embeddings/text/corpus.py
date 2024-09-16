@@ -60,7 +60,12 @@ class Corpus(AbstractCorpus):
 
     def __add__(self, other: "Corpus") -> "Corpus":
         if self.umap is other.umap:
+            logging.info("UMAP models are the same.")
             umap = self.umap
+        elif self._is_fitted(self.umap) or self._is_fitted(other.umap):
+            raise RuntimeError(
+                "UMAP model has been fitted on one of the corpora, cannot merge."
+            )
         else:
             logging.warning(
                 "Dropping UMAP model while merging corpora with different models."
@@ -69,6 +74,10 @@ class Corpus(AbstractCorpus):
 
         if self.vectorizer is other.vectorizer:
             vectorizer = self.vectorizer
+        elif self._is_fitted(self.vectorizer) or self._is_fitted(other.vectorizer):
+            raise RuntimeError(
+                "TfidfVectorizer model has been fitted on one of the corpora, cannot merge."
+            )
         else:
             logging.warning(
                 "Dropping TfidfVectorizer model while merging corpora with different models."
