@@ -21,13 +21,11 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from umap.umap_ import UMAP
 
 from ..settings import DEFAULT_ENCODING, OUTLIERS_LABEL, STRICT
-from .abstractcorpus import AbstractCorpus
 from .passage import Passage
 from .segmenter import Segmenter
-from .subcorpus import Subcorpus
 
 
-class Corpus(AbstractCorpus):
+class Corpus:
     """A Corpus implementation that holds the concrecte passages and embeddings."""
 
     def __init__(
@@ -299,7 +297,7 @@ class Corpus(AbstractCorpus):
 
     def cluster(
         self, max_clusters: Optional[int] = 50, use_2d_embeddings: bool = True, **kwargs
-    ) -> Iterable[Subcorpus]:
+    ) -> Iterable["Corpus"]:
         """Cluster the passages in the corpus.
 
         Args:
@@ -307,7 +305,7 @@ class Corpus(AbstractCorpus):
             use_2d_embeddings: Whether to use 2D embeddings instead of full embeddings for clustering. If necessary, they are computed. Defaults to True.
             **kwargs: Additional keyword arguments to pass to HDBSCAN.
         Yields:
-            Corpus: A generator of Corpus objects, each representing a cluster. Labels are integers as assigned by HDBSCAN, with -1 indicating outliers.
+            Iterable[Corpus]: A generator of Corpus objects, each representing a cluster. Labels are integers as assigned by HDBSCAN, with -1 indicating outliers.
 
         """
         embeddings = self._select_embeddings(use_2d_embeddings)
