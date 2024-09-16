@@ -125,13 +125,14 @@ class Corpus(AbstractCorpus):
         if any(p.embedding_compressed for p in self.passages):
             return np.array([p.embedding_compressed for p in self.passages])
         else:
+            logging.warning("No 2D embeddings available.")
             return None
 
     @embeddings_2d.setter
     def embeddings_2d(self, value: np.ndarray):
         for row, passage in zip(value, self.passages, **STRICT):
             # TODO: test
-            passage.embedding_2d = row.tolist()
+            passage.embedding_compressed = row.tolist()
 
     @property
     def label(self) -> Optional[str]:
@@ -337,7 +338,7 @@ class Corpus(AbstractCorpus):
                 vectorizer=self._vectorizer,
             )
 
-    def compress_embeddings(self, *, recompute: bool = False):
+    def compress_embeddings(self, *, recompute: bool = False) -> np.ndarray:
         """Compress the embeddings of the corpus using UMAP and stores them in the corpus
 
         Args:
@@ -357,6 +358,38 @@ class Corpus(AbstractCorpus):
         ), f"{self.embeddings_2d.shape[0]} UMAP embeddings have been computed, but there are {len(self)} passages."
 
         return self.embeddings_2d
+
+    def sample(self, sample_size: int, centroid_based: bool = False) -> "Corpus":
+        """Sample a subset of the corpus, randomly or based on the distance to the centroid.
+
+        Args:
+            sample_size: The number of passages to sample.
+            centroid_based: If True, the sample comprises the closest points to the centroid
+                If False the sample is taken randomly.
+
+        Returns:
+            Corpus: A new corpus with the sampled passages.
+        """
+        if sample_size > len(self):
+            raise ValueError(
+                (f"Sample size ({sample_size}) exceeds corpus size ({len(self)})")
+            )
+        elif sample_size == len(self):
+            logging.info("Sample size equals corpus size, returning the entire corpus.")
+            return self
+
+        if centroid_based:
+            distances = self.distances(normalize=False)
+            sample_indices = np.argsort(distances)[:sample_size]
+        else:
+            sample_indices = random.sample(range(len(self.passages)), sample_size)
+
+        return Corpus(
+            [self.passages[i] for i in sample_indices],
+            label=self.label,
+            umap_model=self.umap,
+            vectorizer=self.vectorizer,
+        )
 
     ##### METADATA methods #####
     def get_metadatas(self, key: str, *, default_value: Any = None) -> Iterable[Any]:
@@ -542,60 +575,24 @@ class Corpus(AbstractCorpus):
             for batch_start in range(0, len(self.passages), batch_size):
                 yield self.passages[batch_start : batch_start + batch_size]
 
-    def to_dataframe(
-        self, sample_size=None, centroid_based_sample=False
-    ) -> pd.DataFrame:
+    def to_dataframe(self) -> pd.DataFrame:
         """Transforms the Key Cluster information in a pandas Dataframe.
-
-        Args:
-            sample_size (int, optional): If provided it only returns the 'sample_size' otherwise all points are returned.
-              Defaults to None.
-            centroid_based_sample (bool): If True, the sample comprises the closest points to the centroid
-                If False the sample is taken randomly.
 
         Returns:
             a Pandas Dataframe
 
-        Raises:
-            ValueError: If centroid_based_sample is True but sample_size is not provided.
         """
-        if centroid_based_sample and not sample_size:
-            raise ValueError(
-                "centroid_based_sample cannot be True if sample_size is not provided."
+        # TODO: add option for including compressed or full embedding or no centroid distances
+
+        return pd.DataFrame(
+            (
+                passage.to_dict() | {"distance_to_centroid": distance}
+                for passage, distance in zip(
+                    self.passages,
+                    self.distances(normalize=True, use_2d_embeddings=True),
+                )
             )
-
-        if centroid_based_sample:
-            distances = self.distances(normalize=False)
-            sample_indices = np.argsort(distances)[:sample_size]
-        elif sample_size:
-            sample_indices = random.sample(range(len(self.passages)), sample_size)
-        else:
-            sample_indices = range(len(self.passages))
-
-        rows = []
-        for i in sample_indices:
-            passage = self.passages[i]
-            row = passage.metadata | {
-                "ID_DB": passage.get_unique_id(),
-                "text": passage.text,
-            }
-            if centroid_based_sample:
-                row["distance_to_centroid"] = distances[i]
-
-            if self.embeddings_2d is not None:
-                row["x"] = self.embeddings_2d[i, 0]
-                row["y"] = self.embeddings_2d[i, 1]
-
-            if passage.highlighting is not None:
-                row["highlight_start"] = passage.highlighting.start
-                row["highlight_end"] = passage.highlighting.end
-            else:
-                row["highlight_start"] = None
-                row["highlight_end"] = None
-
-            rows.append(row)
-
-        return pd.DataFrame(rows)
+        )
 
     def save(self, filepath: Path):
         """Save the corpus to a file."""

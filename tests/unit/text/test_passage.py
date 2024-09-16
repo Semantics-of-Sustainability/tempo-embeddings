@@ -81,6 +81,38 @@ class TestPassage:
         assert passage.hover_data(metadata_fields=metadata_fields) == expected
 
     @pytest.mark.parametrize(
+        "passage,expected",
+        [
+            (
+                Passage("test"),
+                {
+                    "text": "test",
+                    "ID_DB": "21daa890fa6ec86a719c9869a5b794c886f0ce348b6b465c13fee12bbc6bda43",
+                    "highlight_start": None,
+                    "highlight_end": None,
+                },
+            ),
+            (
+                Passage(
+                    "test",
+                    highlighting=Highlighting(1, 3),
+                    embedding_compressed=[1.0, 2.0],
+                ),
+                {
+                    "text": "test",
+                    "ID_DB": "de5a824827cda1bf8f789c962895a724eed0f2c81168df20f52ee2402f46b15d",
+                    "highlight_start": 1,
+                    "highlight_end": 3,
+                    "x": 1.0,
+                    "y": 2.0,
+                },
+            ),
+        ],
+    )
+    def test_to_dict(self, passage, expected):
+        assert passage.to_dict() == expected
+
+    @pytest.mark.parametrize(
         "text,metadata,expected",
         [
             ("", None, Passage("", {})),
