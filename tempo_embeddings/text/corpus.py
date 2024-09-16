@@ -85,16 +85,16 @@ class Corpus:
         label = " + ".join((str(label) for label in (self.label, other.label) if label))
         return Corpus(
             self._passages + other._passages,
-            label=label,
+            label=label or None,
             umap_model=umap,
             vectorizer=vectorizer,
         )
 
     def __eq__(self, other: object) -> bool:
-        return other.passages == self.passages
+        return self.label == other.label and other.passages == self.passages
 
     def __hash__(self) -> int:
-        return hash(tuple(self.passages))
+        return hash((self.label, tuple(self.passages)))
 
     def __contains__(self, passage: Passage) -> bool:
         # TODO: a (frozen)set would be more efficient
