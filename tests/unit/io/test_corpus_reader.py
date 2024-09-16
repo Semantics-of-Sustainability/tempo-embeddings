@@ -88,11 +88,11 @@ class TestCorpusConfig:
 
     def test_files(self, anp_corpus_config):
         assert sorted(anp_corpus_config.files()) == [
-            CORPUS_DIR / "ANP" / "ANP_1937.csv.gz"
+            CORPUS_DIR / "ANP" / "ANP_1938.csv.gz"
         ]
 
     @pytest.mark.parametrize(
-        "skip_files,expected_size", [(None, 5307), (["ANP_1938.csv.gz"], 0)]
+        "skip_files,expected_size", [(None, 3157), (["ANP_1938.csv.gz"], 0)]
     )
     def test_build_corpus(
         self, anp_corpus_config: CorpusConfig, skip_files, expected_size
@@ -103,7 +103,7 @@ class TestCorpusConfig:
         assert len(corpus) == expected_size
 
     @pytest.mark.parametrize(
-        "skip_files,expected_sizes", [(None, [5307]), (["ANP_1938.csv.gz"], [])]
+        "skip_files,expected_sizes", [(None, [3157]), (["ANP_1938.csv.gz"], [])]
     )
     def test_build_corpora(self, anp_corpus_config, skip_files, expected_sizes):
         assert [
