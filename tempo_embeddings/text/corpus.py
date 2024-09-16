@@ -445,7 +445,7 @@ class Corpus(AbstractCorpus):
         Returns:
             the n highest scoring words in a sorted list
         """
-        tf_idfs: csr_matrix = self.tf_idf()
+        tf_idfs: csr_matrix = self._tf_idf()
 
         # assert all(
         #     passage.highlighting for passage in self.passages
@@ -472,12 +472,14 @@ class Corpus(AbstractCorpus):
 
         return [get_vocabulary(self.vectorizer)[i] for i in top_indices]
 
-    def tf_idf(self) -> csr_matrix:
+    def _tf_idf(self) -> csr_matrix:
         """Returns a sparse matrix for the TF-IDF of all passages in the corpus.
 
         Returns:
             np.ndarray: a sparse matrix of n_passages x n_words
         """
+        if not self._is_fitted(self.vectorizer):
+            self._fit_vectorizer()
         return self.vectorizer.transform(self.passages)
 
     @lru_cache(maxsize=256)
@@ -490,6 +492,8 @@ class Corpus(AbstractCorpus):
     ):
         """
         Extract the top words from the corpus.
+
+        The 'exclude_words' argument must be hashable (hence immutable) for caching, e.g. a tuple or frozenset.
 
         Args:
             exclude_words: The word to exclude from the label,
@@ -518,6 +522,20 @@ class Corpus(AbstractCorpus):
             and not any(char in string.punctuation for char in word)
             and word.casefold() not in exclude_words
         ][:n]
+
+    def set_topic_label(self, **kwargs) -> None:
+        """Set the label of the corpus to the top word(s) in the corpus.
+
+        Kwargs:
+            exclude_words: The word to exclude from the label,
+                e.g. stopwords and the search term used for composing this corpus
+            n: concatenate the top n words in the corpus as the label.
+            stopwords: if given, exclude these words
+        """
+
+        self._label = "; ".join(sorted(self.top_words(**kwargs)))
+
+        return self._label
 
     def hover_datas(
         self, metadata_fields: Optional[list[str]] = None

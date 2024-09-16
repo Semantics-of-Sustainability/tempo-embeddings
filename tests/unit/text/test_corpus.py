@@ -394,3 +394,20 @@ class TestCorpus:
         )
 
         assert corpus.vectorizer.get_feature_names_out().tolist() == ["test", "text"]
+
+    def test_tf_idf(self, corpus):
+        assert not corpus._is_fitted(corpus.vectorizer)
+
+        np.testing.assert_equal(
+            corpus._tf_idf().toarray(),
+            np.array([[0.7071067811865475, 0.7071067811865475]] * 5),
+        )
+
+        assert corpus._is_fitted(corpus.vectorizer)
+
+    @pytest.mark.parametrize(
+        "exclude_words, n, expected",
+        [(None, 1, ["test"]), (None, 5, ["test", "text"]), (("test",), 1, ["text"])],
+    )
+    def test_top_words(self, corpus, exclude_words, n, expected):
+        assert corpus.top_words(exclude_words=exclude_words, n=n) == expected
