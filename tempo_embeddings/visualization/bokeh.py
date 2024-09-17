@@ -14,7 +14,7 @@ from bokeh.plotting import curdoc, figure, show
 from bokeh.transform import factor_cmap
 
 from ..settings import OUTLIERS_LABEL
-from ..text.abstractcorpus import AbstractCorpus
+from ..text.corpus import Corpus
 from .visualizer import Visualizer
 
 
@@ -23,7 +23,7 @@ class BokehVisualizer(Visualizer):
 
     _YEAR_COLUMN = "year"
 
-    def __init__(self, *clusters: list[AbstractCorpus]):
+    def __init__(self, *clusters: list[Corpus]):
         self._clusters = clusters
 
     def _select_palette(self):
@@ -41,7 +41,7 @@ class BokehInteractiveVisualizer(BokehVisualizer):
 
     def __init__(
         self,
-        *clusters: list[AbstractCorpus],
+        *clusters: list[Corpus],
         metadata_fields: list[str] = None,
         height: int = 500,
         width: int = 500,
@@ -49,7 +49,7 @@ class BokehInteractiveVisualizer(BokehVisualizer):
         """Create an interactive Bokeh visualizer.
 
         Args:
-            *clusters (list[AbstractCorpus]): Clusters to visualize.
+            *clusters (list[Corpus]): Clusters to visualize.
             metadata_fields (list[str], optional): Metadata fields to show in the hover tooltip.
                 If None (default), all metadata fields found in the data are shown.
             height (int, optional): Height of the plot. Defaults to 500.
@@ -93,7 +93,7 @@ class BokehInteractiveVisualizer(BokehVisualizer):
             (self._create_cluster_data(cluster=cluster) for cluster in self._clusters)
         )
 
-    def _create_cluster_data(self, *, cluster: AbstractCorpus) -> pd.DataFrame:
+    def _create_cluster_data(self, *, cluster: Corpus) -> pd.DataFrame:
         hover_data: list[dict[str, str]] = pd.DataFrame(
             cluster.hover_datas(self._metadata_fields)
         )

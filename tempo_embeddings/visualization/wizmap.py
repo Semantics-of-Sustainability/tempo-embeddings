@@ -12,7 +12,7 @@ from typing import Optional
 import numpy as np
 import wizmap
 
-from ..text.abstractcorpus import AbstractCorpus
+from ..text.corpus import Corpus
 from .visualizer import Visualizer
 
 
@@ -21,11 +21,7 @@ class WizmapVisualizer(Visualizer):
     grid_file_name = "grid.json"
 
     def __init__(
-        self,
-        corpus: AbstractCorpus,
-        title: str,
-        path: str = None,
-        stopwords: list[str] = None,
+        self, corpus: Corpus, title: str, path: str = None, stopwords: list[str] = None
     ):
         super().__init__(corpus)
 

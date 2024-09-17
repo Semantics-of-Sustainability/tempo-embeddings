@@ -1,36 +1,104 @@
 import csv
 import gzip
 import logging
+import random
+import string
 from collections import Counter, defaultdict
+from functools import lru_cache
 from itertools import groupby
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
 import joblib
 import numpy as np
+import pandas as pd
+from scipy.sparse import csr_matrix
+from scipy.spatial.distance import cosine
+from sklearn.base import check_is_fitted
 from sklearn.cluster import HDBSCAN
+from sklearn.exceptions import NotFittedError
 from sklearn.feature_extraction.text import TfidfVectorizer
+from umap.umap_ import UMAP
 
-from ..settings import DEFAULT_ENCODING
-from .abstractcorpus import AbstractCorpus
+from ..settings import DEFAULT_ENCODING, OUTLIERS_LABEL, STRICT
 from .passage import Passage
 from .segmenter import Segmenter
-from .subcorpus import Subcorpus
 
 
-class Corpus(AbstractCorpus):
-    """A Corpus implementation that holds the concrecte passages and embedings."""
+class Corpus:
+    """A Corpus implementation that holds the concrecte passages and embeddings."""
 
-    def __init__(self, passages: list[Passage] = None, label: Optional[Any] = None):
+    def __init__(
+        self,
+        passages: Iterable[Passage] = None,
+        label: Optional[Any] = None,
+        *,
+        umap_model: Optional["UMAP"] = None,
+        vectorizer: Optional[TfidfVectorizer] = None,
+    ):
+        """Create a new corpus.
+
+        Args:
+            passages: The passages to add to the corpus. Defaults to None. Type is not enforced, but should be immutable.
+            label: The label of the corpus. Defaults to None.
+            umap_model: The UMAP model to use for compressing embeddings.
+                Defaults to None, hence a new model will be initialized.
+            vectorizer: The TfidfVectorizer model to use for vectorizing passages.
+                Defaults to None, hence a new model will be initialized.
+        """
         super().__init__()
 
-        self._passages: list[Passage] = passages or []
+        self._passages: tuple[Passage, ...] = tuple(passages or [])
         self._label: Optional[str] = label
-        self._vectorizer: TfidfVectorizer = None
+        self._umap = umap_model or UMAP()
+        self._vectorizer: TfidfVectorizer = vectorizer or TfidfVectorizer(
+            tokenizer=lambda passage: [word.casefold() for word in passage.words()],
+            preprocessor=lambda x: x,
+        )
 
     def __add__(self, other: "Corpus") -> "Corpus":
-        new_label = self.label if self.label == other.label else None
-        return Corpus(self._passages + other._passages, label=new_label)
+        if self.umap is other.umap:
+            logging.info("Merging corpora with identical UMAP models, reusing it.")
+            umap = self.umap
+        elif self._is_fitted(self.umap) or self._is_fitted(other.umap):
+            raise RuntimeError(
+                "UMAP model has been fitted on one of the corpora, cannot merge."
+            )
+        else:
+            logging.info("Dropping UMAP model while merging corpora .")
+            umap = None
+
+        if self.vectorizer is other.vectorizer:
+            vectorizer = self.vectorizer
+        elif self._is_fitted(self.vectorizer) or self._is_fitted(other.vectorizer):
+            raise RuntimeError(
+                "TfidfVectorizer model has been fitted on one of the corpora, cannot merge."
+            )
+        else:
+            logging.info("Merging corpora with identical vectorizers, reusing it.")
+            vectorizer = None
+
+        label = " + ".join((str(label) for label in (self.label, other.label) if label))
+        return Corpus(
+            self._passages + other._passages,
+            label=label or None,
+            umap_model=umap,
+            vectorizer=vectorizer,
+        )
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            isinstance(other, Corpus)
+            and self.label == other.label
+            and other.passages == self.passages
+        )
+
+    def __hash__(self) -> int:
+        return hash((self.label, tuple(self.passages)))
+
+    def __contains__(self, passage: Passage) -> bool:
+        # TODO: a (frozen)set would be more efficient
+        return passage in self._passages
 
     def __len__(self) -> int:
         """Return the number of passages in the corpus.
@@ -42,6 +110,114 @@ class Corpus(AbstractCorpus):
 
     def __repr__(self) -> str:
         return f"Corpus({self._label!r}, {len(self._passages)} passages)"
+
+    def _select_embeddings(self, use_2d_embeddings: bool):
+        if use_2d_embeddings:
+            if not self._is_fitted(self.umap):
+                self.compress_embeddings()
+            embeddings = self.embeddings_2d
+        else:
+            embeddings = self.embeddings
+
+        return embeddings
+
+    @property
+    def embeddings(self) -> np.ndarray:
+        return np.array([p.embedding for p in self.passages])
+
+    @embeddings.setter
+    def embeddings(self, embeddings: np.ndarray):
+        for row, passage in zip(embeddings, self.passages, **STRICT):
+            passage.embedding = row
+
+    @property
+    def embeddings_2d(self) -> Optional[np.ndarray]:
+        if any(p.embedding_compressed for p in self.passages):
+            return np.array([p.embedding_compressed for p in self.passages])
+        else:
+            logging.warning("No 2D embeddings available.")
+            return None
+
+    @embeddings_2d.setter
+    def embeddings_2d(self, value: np.ndarray):
+        for row, passage in zip(value, self.passages, **STRICT):
+            # TODO: test
+            passage.embedding_compressed = row.tolist()
+
+    @property
+    def label(self) -> Optional[str]:
+        return self._label
+
+    @label.setter
+    def label(self, value: str):
+        self._label = value
+
+    @property
+    def passages(self) -> list[Passage]:
+        return self._passages
+
+    @property
+    def vectorizer(self) -> TfidfVectorizer:
+        return self._vectorizer
+
+    @property
+    def umap(self) -> UMAP:
+        return self._umap
+
+    @staticmethod
+    def _is_fitted(model) -> bool:
+        try:
+            check_is_fitted(model)
+            return True
+        except NotFittedError:
+            return False
+
+    def centroid(self, use_2d_embeddings: bool = True) -> np.ndarray:
+        """The mean for all passage embeddings."""
+        embeddings = self._select_embeddings(use_2d_embeddings)
+        return embeddings.mean(axis=0)
+
+    def coordinates(self) -> pd.DataFrame:
+        """Returns the coordinates of the corpus.
+
+        Returns:
+            pd.DataFrame: The coordinates of the corpus.
+        """
+
+        if self.embeddings_2d is None:
+            logging.warning("No 2D embeddings available.")
+            df = pd.DataFrame()
+        else:
+            df = pd.DataFrame(
+                {
+                    "x": [e[0] for e in self.embeddings_2d],
+                    "y": [e[1] for e in self.embeddings_2d],
+                }
+            )
+        return df
+
+    def distances(self, normalize: bool, use_2d_embeddings: bool = True) -> np.ndarray:
+        """Compute the distances between the passages and the centroid of the corpus.
+
+        Args:
+            normalize (bool): Normalize the distances vector.
+            use_2d_embeddings (bool): If True, use the 2d embeddings for computing the distances.
+
+        Returns: an array with the distances per passage in this corpus.
+        """
+        centroid = self.centroid(use_2d_embeddings=use_2d_embeddings)
+
+        # TODO: can this be vectorized?
+
+        embeddings = self._select_embeddings(use_2d_embeddings)
+        distances: np.ndarray = np.array(
+            [cosine(centroid, embedding) for embedding in embeddings]
+        )
+
+        if normalize:
+            distances /= np.linalg.norm(distances)
+
+        return distances
 
     def groupby(
         self, key, *, default_value: Any = None
@@ -59,22 +235,24 @@ class Corpus(AbstractCorpus):
             TypeError: if the sorting fails due to incomparable types, e.g. None and int.
 
         """
+        # TODO: do we still need this method?
 
         def key_func(p):
             return p.metadata.get(key, default_value)
 
         return groupby(sorted(self._passages, key=key_func), key_func)
 
-    @property
-    def passages(self) -> list[Passage]:
-        return self._passages
+    ##### FITTING methods #####
+    def _fit_vectorizer(self):
+        self._vectorizer.fit(self.passages)
 
-    @property
-    def vectorizer(self) -> TfidfVectorizer:
-        if self._vectorizer is None:
-            self._vectorizer = AbstractCorpus.tfidf_vectorizer(self.passages)
-        return self._vectorizer
+    def _fit_umap(self):
+        if self._is_fitted(self._umap):
+            raise RuntimeError("UMAP model has already been fitted.")
+        else:
+            self._umap.fit(self.embeddings)
 
+    ##### Clustering and Embedding methods #####
     def _clusters(self, embeddings, max_clusters: int, **hdbscan_args) -> list[int]:
         """Cluster the embeddings using HDBSCAN.
 
@@ -85,7 +263,7 @@ class Corpus(AbstractCorpus):
             max_clusters: The maximum number of clusters to create.
             **hdbscan_args: Additional keyword arguments to pass to HDBSCAN.
         Returns:
-            list[int]: The cluster labels assigned by HDBSCAN.
+            list[int]: The cluster labels per passage from HDBSCAN.
         """
         passage_clusters: list[int] = (
             HDBSCAN(**hdbscan_args).fit_predict(embeddings).astype(int).tolist()
@@ -122,15 +300,15 @@ class Corpus(AbstractCorpus):
 
     def cluster(
         self, max_clusters: Optional[int] = 50, use_2d_embeddings: bool = True, **kwargs
-    ) -> list[Subcorpus]:
+    ) -> Iterable["Corpus"]:
         """Cluster the passages in the corpus.
 
         Args:
             max_clusters: The maximum number of clusters to create. If necessary, the epsilon HDBSCAN parameter is increased iteratively.
             use_2d_embeddings: Whether to use 2D embeddings instead of full embeddings for clustering. If necessary, they are computed. Defaults to True.
             **kwargs: Additional keyword arguments to pass to HDBSCAN.
-        Returns:
-            list[Subcorpus]: A list of Subcorpus objects, each representing a cluster. Labels are integers as assigned by HDBSCAN, with -1 indicating outliers.
+        Yields:
+            Iterable[Corpus]: A generator of Corpus objects, each representing a cluster. Labels are integers as assigned by HDBSCAN, with -1 indicating outliers.
 
         """
         embeddings = self._select_embeddings(use_2d_embeddings)
@@ -153,56 +331,296 @@ class Corpus(AbstractCorpus):
         passage_clusters: list[int] = self._clusters(
             embeddings, max_clusters or 0, **hdbscan_args
         )
-        """A list of cluster labels assigned to each passage by HDBSCAN."""
-        assert len(passage_clusters) == len(self)
 
         cluster_passages: dict[int, int] = defaultdict(list)
         """A dictionary mapping cluster labels/indices to passage indices in the corpus."""
+        for passage, cluster in zip(self.passages, passage_clusters, **STRICT):
+            cluster_passages[cluster].append(passage)
 
-        for passage_index, cluster in enumerate(passage_clusters):
-            cluster_passages[cluster].append(passage_index)
-
-        return [
-            Subcorpus(self, passage_indices, cluster)
-            for cluster, passage_indices in cluster_passages.items()
-        ]
-
-    def extend(self, passages: list[Passage]) -> list[int]:
-        """Add multiple passages to the corpus.
-
-        If a UMAP model is already present, 2D embeddings are computed for the new passages.
-
-        Note: The UMAP model is *not* retrained with the added passages.
-        In order to do so, call the corpus object's `compress_embeddings(recompute=True)` after adding new passages.
-
-        Args:
-            passages: The passages to add to the corpus.
-        Returns:
-            the indices in the corpus where the new passages were added, to be used in SubCorpus objects.
-        """
-        start_index = len(self._passages)
-        self._passages.extend(passages)
-        end_index = len(self._passages)
-
-        if self._umap:
-            self.embeddings_2d = np.append(
-                self.embeddings_2d,
-                self._umap.transform(self.embeddings[start_index:end_index]),
-                axis=0,
+        for cluster, passages in cluster_passages.items():
+            yield Corpus(
+                tuple(passages),
+                cluster,
+                umap_model=self._umap,
+                vectorizer=self._vectorizer,
             )
 
-        return range(start_index, end_index)
+    def compress_embeddings(self) -> np.ndarray:
+        """Compress the embeddings of the corpus using UMAP and stores them in the corpus
 
-    def batches(self, batch_size: int) -> Iterable[list[Passage]]:
+        Returns:
+            np.ndarray: the compressed embeddings.
+
+        Raises:
+            ValueError: If the corpus has zero or exactly one embeddings.
+        """
+        self._fit_umap()
+        self.embeddings_2d = self.umap.transform(self.embeddings)
+
+        assert (
+            self.embeddings_2d.shape[0] == len(self)
+        ), f"{self.embeddings_2d.shape[0]} UMAP embeddings have been computed, but there are {len(self)} passages."
+
+        return self.embeddings_2d
+
+    def sample(self, sample_size: int, centroid_based: bool = False) -> "Corpus":
+        """Sample a subset of the corpus, randomly or based on the distance to the centroid.
+
+        Args:
+            sample_size: The number of passages to sample.
+            centroid_based: If True, the sample comprises the closest points to the centroid
+                If False the sample is taken randomly.
+
+        Returns:
+            Corpus: A new corpus with the sampled passages.
+        """
+        if sample_size > len(self):
+            raise ValueError(
+                (f"Sample size ({sample_size}) exceeds corpus size ({len(self)})")
+            )
+        elif sample_size == len(self):
+            logging.info("Sample size equals corpus size, returning the entire corpus.")
+            return self
+
+        if centroid_based:
+            distances = self.distances(normalize=False)
+            sample_indices = np.argsort(distances)[:sample_size]
+        else:
+            sample_indices = random.sample(range(len(self.passages)), sample_size)
+
+        return Corpus(
+            [self.passages[i] for i in sample_indices],
+            label=self.label,
+            umap_model=self.umap,
+            vectorizer=self.vectorizer,
+        )
+
+    ##### METADATA methods #####
+    def get_metadatas(self, key: str, *, default_value: Any = None) -> Iterable[Any]:
+        """Returns all metadata values for a key.
+
+        Args:
+            key: The metadata key to get.
+            default_value: The default value to use if the key is missing. Defaults to None.
+        Yields:
+            Any: each passage's the metadata values for the key.
+        """
+
+        for passage in self.passages:
+            yield passage.metadata.get(key, default_value)
+
+    def set_metadatas(self, key, value):
+        """Sets a metadata key to a value for all passages.
+
+        Args:
+            key: The metadata key to set.
+            value: The value to set the metadata key to.
+        """
+
+        for passage in self.passages:
+            passage.set_metadata(key, value)
+
+    def has_metadata(self, key: str, strict=False) -> bool:
+        """Returns True if the corpus has a metadata key.
+
+        Args:
+            key: The metadata key to check for.
+            strict: If True, returns True only if all passages have the key.
+        """
+        condition = all if strict else any
+        return condition(key in passage.metadata for passage in self.passages)
+
+    def metadata_fields(self) -> set[str]:
+        """Returns all metadata fields in the corpus."""
+
+        return {key for passage in self.passages for key in passage.metadata}
+
+    def texts(self) -> Iterable[str]:
+        for passage in self._passages:
+            yield passage.text
+
+    ##### TF-IDF methods #####
+    def _tf_idf_words(self, *, n: int = None) -> list[str]:
+        """The top n words in the corpus with maximum <tf-idf> x <distance to centroid>.
+
+        Each word is scored by multiplying its tf-idf score for each passage
+        with the passage's embedding distance to the centroid.
+
+        Args:
+            n (int): The number of words to return. Defaults to None, returning all words
+
+        Returns:
+            the n highest scoring words in a sorted list
+        """
+        tf_idfs: csr_matrix = self._tf_idf()
+
+        # assert all(
+        #     passage.highlighting for passage in self.passages
+        # ), "Passages must have highlightings"
+
+        assert tf_idfs.shape == (
+            len(self.passages),
+            len(get_vocabulary(self.vectorizer)),
+        ), f"tf_idfs shape ({tf_idfs.shape}) does not match expected shape."
+
+        ### Weigh in vector distances
+        distances: np.ndarray = self.distances(normalize=True)
+        weights = np.ones(distances.shape[0]) - distances
+
+        assert (
+            weights.shape[0] == tf_idfs.shape[0]
+        ), f"distances shape ({weights.shape}) does not match expected shape."
+
+        weighted_tf_idfs = np.average(tf_idfs.toarray(), weights=weights, axis=0)
+        assert weighted_tf_idfs.shape[0] == len(get_vocabulary(self.vectorizer))
+
+        # pylint: disable=invalid-unary-operand-type
+        top_indices = np.argsort(-weighted_tf_idfs)[:n]
+
+        return [get_vocabulary(self.vectorizer)[i] for i in top_indices]
+
+    def _tf_idf(self) -> csr_matrix:
+        """Returns a sparse matrix for the TF-IDF of all passages in the corpus.
+
+        Returns:
+            np.ndarray: a sparse matrix of n_passages x n_words
+        """
+        if not self._is_fitted(self.vectorizer):
+            self._fit_vectorizer()
+        return self.vectorizer.transform(self.passages)
+
+    @lru_cache(maxsize=256)
+    def top_words(
+        self,
+        *,
+        exclude_words: Iterable[str] = None,
+        min_word_length: int = 3,
+        n: int = 5,
+    ):
+        """
+        Extract the top words from the corpus.
+
+        The 'exclude_words' argument must be hashable (hence immutable) for caching, e.g. a tuple or frozenset.
+
+        Args:
+            exclude_words: The word to exclude from the label,
+                e.g. stopwords and the search term used for composing this corpus
+            min_word_length: the minimum length of a word to be included in the label. Defaults to 3
+            n:  the number of words to return. Defaults to 5
+        """
+        if exclude_words is None:
+            exclude_words = set()
+        exclude_words = {word.casefold() for word in exclude_words}
+
+        # account for word filtering:
+        _n = n + len(exclude_words)
+
+        if self.label in (-1, OUTLIERS_LABEL):
+            words = [OUTLIERS_LABEL]
+        else:
+            words = self._tf_idf_words(n=_n)
+
+        # TODO: no need to filter all words if we only return n
+        return [
+            word
+            for word in words
+            # filter words:
+            if len(word.strip()) >= min_word_length
+            and not any(char in string.punctuation for char in word)
+            and word.casefold() not in exclude_words
+        ][:n]
+
+    def set_topic_label(self, **kwargs) -> None:
+        """Set the label of the corpus to the top word(s) in the corpus.
+
+        Kwargs:
+            exclude_words: The word to exclude from the label,
+                e.g. stopwords and the search term used for composing this corpus
+            n: concatenate the top n words in the corpus as the label.
+            stopwords: if given, exclude these words
+        """
+
+        self._label = "; ".join(sorted(self.top_words(**kwargs)))
+
+        return self._label
+
+    def hover_datas(
+        self, metadata_fields: Optional[list[str]] = None
+    ) -> list[dict[str, str]]:
+        """A dictionary for each passage in this corpus to be used for visualization.
+
+        Args:
+            metadata_fields: The metadata fields to include in the hover data.
+                If None (default), all metadata fields are included.
+
+        Returns:
+            A list of dictionaries, one for each passage in this corpus.
+        """
+        return [
+            passage.hover_data(metadata_fields=metadata_fields)
+            | {"corpus": str(self.label)}
+            for passage in self.passages
+        ]
+
+    def highlighted_texts(self, metadata_fields: list[str] = None) -> list[str]:
+        """Generates texts with formatting for all passages in the corpus.
+
+        The resulting text is formatted with HTML tags for highlighting.
+
+        Args:
+            metadata_fields: The metadata fields to include in the highlighted text.
+
+        Returns:
+            A list of texts, one for each passage in this corpus.
+        """
+
+        texts = [
+            passage.highlighted_text(metadata_fields=metadata_fields)
+            for passage in self.passages
+        ]
+
+        # TODO: remove assertion
+        assert all(text.strip() for text in texts), "Empty text."
+        return texts
+
+    def batches(self, batch_size: int) -> Iterable[tuple[Passage, ...]]:
+        """Split the passages into batches of a given size.
+
+        Args:
+            batch_size: The maximum number of passages per batch.
+        Yields:
+            Iterable[tuple[Passage, ...]]: A generator of tuples of passages.
+        """
         if batch_size <= 1:
             yield self.passages
         else:
             for batch_start in range(0, len(self.passages), batch_size):
                 yield self.passages[batch_start : batch_start + batch_size]
 
+    def to_dataframe(self) -> pd.DataFrame:
+        """Transforms the Key Cluster information in a pandas Dataframe.
+
+        Returns:
+            a Pandas Dataframe
+
+        """
+        # TODO: add option for including compressed or full embedding or no centroid distances
+
+        return pd.DataFrame(
+            (
+                passage.to_dict() | {"distance_to_centroid": distance}
+                for passage, distance in zip(
+                    self.passages,
+                    self.distances(normalize=True, use_2d_embeddings=True),
+                )
+            )
+        )
+
     def save(self, filepath: Path):
         """Save the corpus to a file."""
 
+        # FIXME: TfIdfVectorizer cannot be saved, see  https://stackoverflow.com/questions/32764991/how-do-i-store-a-tfidfvectorizer-for-future-use-in-scikit-learn
+        raise NotImplementedError("TfidfVectorizer cannot be saved.")
         with open(filepath, "wb") as f:
             joblib.dump(self, f)
 
@@ -210,6 +628,7 @@ class Corpus(AbstractCorpus):
     def load(cls, filepath: Path):
         """Load the corpus from a file."""
 
+        raise NotImplementedError("TfidfVectorizer cannot be saved.")
         with open(filepath, "rb") as f:
             corpus = joblib.load(f)
 
@@ -271,3 +690,17 @@ class Corpus(AbstractCorpus):
             filter_terms=filter_terms,
         )
         return Corpus(passages)
+
+
+@lru_cache
+def get_vocabulary(vectorizer: TfidfVectorizer) -> list[str]:
+    """Caching wrapper for getting the vocabulary of a vectorizer.
+
+    Args:
+        vectorizer (TfidfVectorizer): a vectorizer generated by count_vectorizer()
+
+    Returns:
+        list[str]: the vocabulary of the vectorizer.
+    """
+
+    return vectorizer.get_feature_names_out()

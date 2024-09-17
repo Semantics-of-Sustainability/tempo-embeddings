@@ -3,6 +3,8 @@ import logging
 import string
 from typing import Any, Iterable, Optional
 
+import pandas as pd
+
 from .highlighting import Highlighting
 
 
@@ -15,6 +17,7 @@ class Passage:
         metadata: dict = None,
         highlighting: Optional[Highlighting] = None,
         embedding: Optional[list[float]] = None,
+        embedding_compressed: Optional[list[float]] = None,
         full_word_spans: Optional[list[tuple[int, int]]] = None,
         char2tokens: Optional[list[int]] = None,
         unique_id: str = None,
@@ -25,6 +28,7 @@ class Passage:
         self._metadata = metadata or {}
         self._highlighting = highlighting
         self._embedding = embedding
+        self._embedding_compressed = embedding_compressed
         self._full_word_spans = full_word_spans
         self._char2tokens = char2tokens
 
@@ -51,6 +55,14 @@ class Passage:
     @property
     def embedding(self) -> Optional[list[float]]:
         return self._embedding
+
+    @property
+    def embedding_compressed(self) -> Optional[list[float]]:
+        return self._embedding_compressed
+
+    @embedding_compressed.setter
+    def embedding_compressed(self, value: list[float]):
+        self._embedding_compressed = value
 
     @property
     def full_word_spans(self) -> Optional[list[tuple[int, int]]]:
@@ -164,6 +176,19 @@ class Passage:
 
         return {"text": self.highlighted_text()} | metadata
 
+    def to_dict(self) -> pd.DataFrame:
+        """Returns a dictionary representation of the passage."""
+        d = {
+            "text": self.text,
+            "ID_DB": self.get_unique_id(),
+            "highlight_start": self.highlighting.start if self.highlighting else None,
+            "highlight_end": self.highlighting.end if self.highlighting else None,
+        } | self.metadata
+        if self.embedding_compressed:
+            d["x"] = self.embedding_compressed[0]
+            d["y"] = self.embedding_compressed[1]
+        return d
+
     def set_metadata(self, key: str, value: Any) -> None:
         """Sets a metadata key to a value.
 
@@ -216,7 +241,11 @@ class Passage:
         )
 
     def __eq__(self, other: object) -> bool:
-        return self._text == other._text and self._metadata == other._metadata
+        return (
+            isinstance(other, Passage)
+            and self._text == other._text
+            and self._metadata == other._metadata
+        )
 
     def __repr__(self) -> str:
         return f"Passage({self._text!r}, {self._metadata!r}, {self._highlighting!r})"

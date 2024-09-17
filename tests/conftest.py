@@ -33,6 +33,7 @@ def test_passages():
             f"test text {str(i)}",
             metadata={"provenance": "test_file"},
             highlighting=Highlighting(1, 3),
+            # TODO: make this deterministic for testing
             embedding=np.random.rand(768).tolist(),
         )
         for i in range(TEST_CORPUS_SIZE)

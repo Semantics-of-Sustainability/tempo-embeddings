@@ -5,7 +5,7 @@ import plotly.express as px
 from dash import Dash, Input, Output, callback, dcc, html
 from dash.html import Figure
 
-from ..text.abstractcorpus import AbstractCorpus
+from ..text.corpus import Corpus
 from .visualizer import Visualizer
 
 
@@ -15,7 +15,7 @@ class PlotlyVisualizer(Visualizer):
     _MARGIN_X = 0.5
     _MARGIN_Y = 0.5
 
-    def __init__(self, *corpora: Iterable[AbstractCorpus]):
+    def __init__(self, *corpora: Iterable[Corpus]):
         self._corpora = corpora
 
     def _create_data(self, metadata_fields) -> pd.DataFrame:

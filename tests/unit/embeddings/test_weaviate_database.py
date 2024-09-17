@@ -11,7 +11,6 @@ import weaviate
 from tempo_embeddings.embeddings.weaviate_database import QueryBuilder, WeaviateConfigDb
 from tempo_embeddings.settings import STRICT
 from tempo_embeddings.text.corpus import Corpus
-from tempo_embeddings.text.passage import Passage
 from tempo_embeddings.text.year_span import YearSpan
 from weaviate.classes.query import Filter
 from weaviate.exceptions import WeaviateStartUpError
@@ -116,15 +115,37 @@ class TestWeaviateDatabase:
         assert doc_freq == expected
         assert not caplog.record_tuples
 
-    @pytest.mark.parametrize("k", [1, 2, 5])
-    def test_neighbour_passages(self, weaviate_db_manager_with_data, corpus, k):
+    @pytest.mark.parametrize("k", [0, 1, 2, 3, 4, 5, 10])
+    def test_neighbours(self, weaviate_db_manager_with_data, corpus, k):
         sub_corpus_size = 2
-        sub_corpus = Corpus(corpus.passages[:sub_corpus_size])
+        sub_corpus = corpus.sample(sub_corpus_size)
 
-        neighbours: list[Passage] = weaviate_db_manager_with_data.neighbour_passages(
-            sub_corpus, k
-        )
-        assert len(neighbours) == min(k, TEST_CORPUS_SIZE - sub_corpus_size)
+        neighbours: Corpus = weaviate_db_manager_with_data.neighbours(sub_corpus, k)
+
+        if k + sub_corpus_size >= len(corpus):
+            expected_passages = set(corpus.passages) ^ set(sub_corpus.passages)
+            assert set(neighbours.passages) == expected_passages
+        else:
+            assert len(neighbours) == k
+            assert all(passage in corpus.passages for passage in neighbours.passages)
+            assert all(
+                passage not in sub_corpus.passages for passage in neighbours.passages
+            )
+
+        assert neighbours.label == f"TestCorpus {str(k)} neighbours"
+        assert neighbours.umap is sub_corpus.umap
+        assert neighbours.vectorizer is sub_corpus.vectorizer
+
+    @pytest.mark.parametrize("k", [0, 1, 2, 3, 4, 5, 10])
+    @pytest.mark.skip(reason="Weaviate distances are different from distances()")
+    def test_neighbour_order(self, weaviate_db_manager_with_data, corpus, k):
+        sub_corpus_size = 2
+        sub_corpus = corpus.sample(sub_corpus_size)
+
+        neighbours: Corpus = weaviate_db_manager_with_data.neighbours(sub_corpus, k)
+
+        distances = neighbours.distances(normalize=False, use_2d_embeddings=False)
+        np.testing.assert_allclose(distances, np.sort(distances), rtol=1e-3)
 
     def test_delete_collection(self, weaviate_db_manager_with_data):
         weaviate_db_manager_with_data.delete_collection("TestCorpus")

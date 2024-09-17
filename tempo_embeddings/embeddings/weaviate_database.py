@@ -2,7 +2,6 @@ import gzip
 import json
 import logging
 import uuid
-from collections import Counter
 from functools import lru_cache
 from typing import Any, Iterable, Optional, TypeVar
 
@@ -358,9 +357,9 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             ),
             include_vector=include_embeddings,
         )
-        passages: list[Passage] = [
-            Passage.from_weaviate_record(o) for o in response.objects
-        ]
+        passages: tuple[Passage] = tuple(
+            [Passage.from_weaviate_record(o) for o in response.objects]
+        )
         label = collection
         if passages and filter_words:
             label += ": " + "; ".join(filter_words)
@@ -418,7 +417,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
 
         return result
 
-    def neighbour_passages(
+    def neighbours(
         self,
         corpus: Corpus,
         k: int,
@@ -426,8 +425,10 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         collections: Optional[list[str]] = None,
         year_span: Optional[YearSpan] = None,
         metadata_not: Optional[dict[str, Any]] = None,
-    ) -> list[Passage]:
+    ) -> Corpus:
         """Find passages to expand a corpus with the k-nearest neighbors of the centroid of the corpus.
+
+        Passages in the new corpus are sorted by distance to the centroid.
 
         Args:
             corpus (Corpus): The corpus to expand, edited in-place
@@ -438,9 +439,11 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             metadata_not (Optional[dict[str, Any]], optional): Additional metadata filters to exclude. Defaults to None.
 
         Returns:
-            A list of unique passages that were not part of the original corpus
+            A new corpus with passages close to the input corpus
         """
-        passages: Counter[Passage, float] = Counter()
+        # TODO: filter out search terms and/or passages in other corpora
+
+        passages: dict[Passage, float] = dict()
         _corpus_passages = set(corpus.passages)
         for collection in collections or self.get_available_collections():
             centroid = corpus.centroid(use_2d_embeddings=False).tolist()
@@ -454,9 +457,21 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                 metadata_not=metadata_not,
             ):
                 if passage not in _corpus_passages:
-                    passages[passage] = min(passages[passage], distance)
+                    if passage in passages:
+                        distance = min(passages[passage], distance)
 
-        return [passage for passage, _ in passages.most_common()[-k:]]
+                    passages[passage] = distance
+
+        _sorted = sorted(passages.items(), key=lambda x: x[1])
+
+        # FIXME: the cosine distances from Weaviate are not the same as the ones from Corpus.distances()
+
+        return Corpus(
+            passages=tuple([passage for passage, _ in _sorted[:k]]),
+            label=f"{corpus.label} {k} neighbours",
+            umap_model=corpus.umap,
+            vectorizer=corpus.vectorizer,
+        )
 
     def query_vector_neighbors(
         self,
