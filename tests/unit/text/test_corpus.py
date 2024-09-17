@@ -327,12 +327,13 @@ class TestCorpus:
 
     def test_to_dataframe(self, corpus):
         ids = [
-            "d4e730f8574317e635c56793c11044a23b25ec6e22bb5c0ec52c99fef80a3957",
-            "4d9bf2e19ace7ed314607c76e912e3dd33905f356a9699ef71a02cda6edc68a6",
-            "aa71b4bc2bdc330d59a304adf67c3379ecbf7e2e8d62be178ea1afcb8087572a",
-            "a2e60054d9450b163a9045e25a0525a2d2e76f7e1fcab5faafbb85368b065f2d",
-            "85bde0f0f0eb6fc2b9b115f536a0780a5322d270e57c528901c3d5da3aa4990e",
+            "d7100151f2f6f9e3ebb34068a7309c60bcfdaa007d85d2160019259907e40d06",
+            "ad86cf6c28da0d0ae616c90326b44d68c49426d00a3aa0ba1ca9c8b5cdd8f280",
+            "9a644e0c393957dcea1ff66dfdfa8aa8d2fab5bbf2a037aa0c258468189a59f9",
+            "d733014f3bc3878a4f2a8f276e65d7d1408c6a4bb15f081489b607386095fba4",
+            "526ed2b3082137d48a2d337ce7550ecb9401070dc406c7dd5ac15e39520ecd19",
         ]
+
         expected = pd.DataFrame(
             [
                 {
@@ -341,11 +342,12 @@ class TestCorpus:
                     "highlight_start": 1,
                     "highlight_end": 3,
                     "provenance": "test_file",
+                    "year": year,
                     "x": 0.0,
                     "y": 0.0,
                     "distance_to_centroid": 0.0,
                 }
-                for passage, _id in zip(corpus.passages, ids)
+                for passage, _id, year in zip(corpus.passages, ids, range(1950, 1956))
             ]
         )
 
