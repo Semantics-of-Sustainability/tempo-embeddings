@@ -1,5 +1,8 @@
 aan
 al
+aldus
+alle
+alleen
 alles
 als
 altijd
@@ -19,6 +22,7 @@ doch
 doen
 door
 dus
+echter
 een
 eens
 en
@@ -77,6 +81,8 @@ over
 reeds
 te
 tegen
+ten
+ter
 toch
 toen
 tot
@@ -85,8 +91,11 @@ uit
 uw
 van
 veel
+volgens
 voor
 voorzitter
+waar
+waarin
 want
 waren
 was
