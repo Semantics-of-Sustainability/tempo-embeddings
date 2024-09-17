@@ -243,7 +243,9 @@ class Corpus:
         return groupby(sorted(self._passages, key=key_func), key_func)
 
     ##### FITTING methods #####
-    def _fit_vectorizer(self):
+    def fit_vectorizer(self):
+        if self._is_fitted(self._vectorizer):
+            raise RuntimeError("TfidfVectorizer model has already been fitted.")
         self._vectorizer.fit(self.passages)
 
     def _fit_umap(self):
@@ -491,10 +493,6 @@ class Corpus:
         """
         tf_idfs: csr_matrix = self._tf_idf()
 
-        # assert all(
-        #     passage.highlighting for passage in self.passages
-        # ), "Passages must have highlightings"
-
         assert tf_idfs.shape == (
             len(self.passages),
             len(get_vocabulary(self.vectorizer)),
@@ -523,7 +521,9 @@ class Corpus:
             np.ndarray: a sparse matrix of n_passages x n_words
         """
         if not self._is_fitted(self.vectorizer):
-            self._fit_vectorizer()
+            raise RuntimeError(
+                "TfidfVectorizer model has not been fitted. Run fit_vectorizer() first."
+            )
         return self.vectorizer.transform(self.passages)
 
     @lru_cache(maxsize=256)
