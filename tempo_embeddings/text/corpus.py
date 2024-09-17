@@ -214,7 +214,7 @@ class Corpus:
             [cosine(centroid, embedding) for embedding in embeddings]
         )
 
-        if normalize:
+        if normalize and len(self) > 1:
             distances /= np.linalg.norm(distances)
 
         return distances
@@ -415,17 +415,22 @@ class Corpus:
         )
 
         for start in range(start, stop, step_size):
-            yield Corpus(
-                [
-                    passage
-                    for passage in self.passages
-                    if int(passage.metadata.get(metadata_field))
-                    in range(start, start + step_size)
-                ],
-                label=self.label + f" {start}-{start+step_size}",
-                umap_model=self.umap,
-                vectorizer=self.vectorizer,
-            )
+            label = f" {start}-{start+step_size}"
+            passages: list[Passage] = [
+                passage
+                for passage in self.passages
+                if int(passage.metadata.get(metadata_field))
+                in range(start, start + step_size)
+            ]
+            if passages:
+                yield Corpus(
+                    tuple(passages),
+                    label=self.label + label,
+                    umap_model=self.umap,
+                    vectorizer=self.vectorizer,
+                )
+            else:
+                logging.warning(f"No passages found for{label}")
 
     ##### METADATA methods #####
     def get_metadatas(self, key: str, *, default_value: Any = None) -> Iterable[Any]:
