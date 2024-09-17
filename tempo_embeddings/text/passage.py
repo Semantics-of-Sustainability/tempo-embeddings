@@ -241,7 +241,11 @@ class Passage:
         )
 
     def __eq__(self, other: object) -> bool:
-        return self._text == other._text and self._metadata == other._metadata
+        return (
+            isinstance(other, Passage)
+            and self._text == other._text
+            and self._metadata == other._metadata
+        )
 
     def __repr__(self) -> str:
         return f"Passage({self._text!r}, {self._metadata!r}, {self._highlighting!r})"

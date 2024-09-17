@@ -91,7 +91,11 @@ class Corpus:
         )
 
     def __eq__(self, other: object) -> bool:
-        return self.label == other.label and other.passages == self.passages
+        return (
+            isinstance(other, Corpus)
+            and self.label == other.label
+            and other.passages == self.passages
+        )
 
     def __hash__(self) -> int:
         return hash((self.label, tuple(self.passages)))
@@ -111,12 +115,14 @@ class Corpus:
     def __repr__(self) -> str:
         return f"Corpus({self._label!r}, {len(self._passages)} passages)"
 
-    def _select_embeddings(self, use_2d_embeddings: bool, recompute: bool = False):
+    def _select_embeddings(self, use_2d_embeddings: bool):
         if use_2d_embeddings:
-            self.compress_embeddings(recompute=recompute)
+            if not self._is_fitted(self.umap):
+                self.compress_embeddings()
             embeddings = self.embeddings_2d
         else:
             embeddings = self.embeddings
+
         return embeddings
 
     @property
@@ -173,7 +179,7 @@ class Corpus:
     def centroid(self, use_2d_embeddings: bool = True) -> np.ndarray:
         """The mean for all passage embeddings."""
         embeddings = self._select_embeddings(use_2d_embeddings)
-        return np.array(embeddings).mean(axis=0)
+        return embeddings.mean(axis=0)
 
     def coordinates(self) -> pd.DataFrame:
         """Returns the coordinates of the corpus.
@@ -213,7 +219,7 @@ class Corpus:
         )
 
         if normalize:
-            distances = distances / np.linalg.norm(distances)
+            distances /= np.linalg.norm(distances)
 
         return distances
 
@@ -244,11 +250,11 @@ class Corpus:
     def _fit_vectorizer(self):
         self._vectorizer.fit(self.passages)
 
-    def _fit_umap(self, *, recompute: bool = False):
-        if recompute or not self._is_fitted(self._umap):
-            self._umap.fit(self.embeddings)
+    def _fit_umap(self):
+        if self._is_fitted(self._umap):
+            raise RuntimeError("UMAP model has already been fitted.")
         else:
-            logging.warning("UMAP model already fitted.")
+            self._umap.fit(self.embeddings)
 
     ##### Clustering and Embedding methods #####
     def _clusters(self, embeddings, max_clusters: int, **hdbscan_args) -> list[int]:
@@ -343,11 +349,8 @@ class Corpus:
                 vectorizer=self._vectorizer,
             )
 
-    def compress_embeddings(self, *, recompute: bool = False) -> np.ndarray:
+    def compress_embeddings(self) -> np.ndarray:
         """Compress the embeddings of the corpus using UMAP and stores them in the corpus
-
-        Args:
-            recompute: If True, recomputes the UMAP model even if it has already been computed.
 
         Returns:
             np.ndarray: the compressed embeddings.
@@ -355,7 +358,7 @@ class Corpus:
         Raises:
             ValueError: If the corpus has zero or exactly one embeddings.
         """
-        self._fit_umap(recompute=recompute)
+        self._fit_umap()
         self.embeddings_2d = self.umap.transform(self.embeddings)
 
         assert (
@@ -465,7 +468,8 @@ class Corpus:
         ), f"tf_idfs shape ({tf_idfs.shape}) does not match expected shape."
 
         ### Weigh in vector distances
-        distances: np.ndarray = self.distances(normalize=True)
+        normalize = False
+        distances: np.ndarray = self.distances(normalize)
         weights = np.ones(distances.shape[0]) - distances
 
         assert (
