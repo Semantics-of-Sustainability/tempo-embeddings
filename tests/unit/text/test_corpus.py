@@ -423,6 +423,9 @@ class TestCorpus:
             atol=100.0,
         )
 
+        with pytest.raises(RuntimeError):
+            corpus._fit_umap()
+
     def test_fit_vectorizer(self, corpus):
         assert not Corpus._is_fitted(corpus.vectorizer)
 
@@ -438,6 +441,9 @@ class TestCorpus:
         )
 
         assert corpus.vectorizer.get_feature_names_out().tolist() == ["test", "text"]
+
+        with pytest.raises(RuntimeError):
+            corpus.fit_vectorizer()
 
     @pytest.mark.parametrize(
         "exclude_words, n, expected",
