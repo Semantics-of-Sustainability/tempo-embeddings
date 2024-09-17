@@ -31,7 +31,8 @@ def test_passages():
     return [
         Passage(
             f"test text {str(i)}",
-            metadata={"provenance": "test_file", "year": 1950 + i},
+            # FIXME: year should be int type
+            metadata={"provenance": "test_file", "year": str(1950 + i)},
             highlighting=Highlighting(1, 3),
             # TODO: make this deterministic for testing
             embedding=np.random.rand(768).tolist(),

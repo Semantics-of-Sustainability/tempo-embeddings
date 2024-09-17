@@ -395,6 +395,38 @@ class Corpus:
             vectorizer=self.vectorizer,
         )
 
+    def windows(
+        self, step_size: int, *, metadata_field: str = "year"
+    ) -> Iterable["Corpus"]:
+        """Split the corpus into windows of a given size.
+
+        Assumes that the values in the given metadata field are integers or convertible to integers.
+
+        Args:
+            step_size: The step size between windows.
+            metadata_field: The metadata field to use for splitting the corpus. Defaults to 'year'
+        Yields:
+            Corpus: A new corpus with the passages in the window.
+        """
+
+        start: int = min((int(value) for value in self.get_metadatas(metadata_field)))
+        stop: int = (
+            max((int(value) for value in self.get_metadatas(metadata_field))) + 1
+        )
+
+        for start in range(start, stop, step_size):
+            yield Corpus(
+                [
+                    passage
+                    for passage in self.passages
+                    if int(passage.metadata.get(metadata_field))
+                    in range(start, start + step_size)
+                ],
+                label=self.label + f" {start}-{start+step_size}",
+                umap_model=self.umap,
+                vectorizer=self.vectorizer,
+            )
+
     ##### METADATA methods #####
     def get_metadatas(self, key: str, *, default_value: Any = None) -> Iterable[Any]:
         """Returns all metadata values for a key.

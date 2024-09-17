@@ -141,6 +141,17 @@ class TestCorpus:
                 # TODO: test that samples are closest to the centroid
                 pass
 
+    def test_windows(self, corpus):
+        expected_windows = [
+            corpus.passages[:2],
+            corpus.passages[2:4],
+            corpus.passages[4:],
+        ]
+        for window, expected in zip(
+            corpus.windows(step_size=2), expected_windows, **STRICT
+        ):
+            assert window.passages == expected
+
     @pytest.mark.parametrize(
         "corpus,metadata_fields,expected",
         [
@@ -327,11 +338,11 @@ class TestCorpus:
 
     def test_to_dataframe(self, corpus):
         ids = [
-            "d7100151f2f6f9e3ebb34068a7309c60bcfdaa007d85d2160019259907e40d06",
-            "ad86cf6c28da0d0ae616c90326b44d68c49426d00a3aa0ba1ca9c8b5cdd8f280",
-            "9a644e0c393957dcea1ff66dfdfa8aa8d2fab5bbf2a037aa0c258468189a59f9",
-            "d733014f3bc3878a4f2a8f276e65d7d1408c6a4bb15f081489b607386095fba4",
-            "526ed2b3082137d48a2d337ce7550ecb9401070dc406c7dd5ac15e39520ecd19",
+            "2ca2b35080541f54923e8672e8a6e8bbb8cdeb0ffbd3a9b2b0d9ea8666e830ba",
+            "def9ccfb5acac052ad71b656aa47c0b6b707d7ac5c33e82ffb860f43518a0b79",
+            "2c98aba242f96f5ffe4b4d5c79741b1135ba0a5b76c7c2741fee5353fbfbd690",
+            "b0810559acde7d00598789cd9e3264174f24af0b0b84e081d4159691648c7a45",
+            "c982e6944e0813cdc9a533f27b18edafee1c6fdc9da4d09175542444edcef99f",
         ]
 
         expected = pd.DataFrame(
@@ -342,7 +353,7 @@ class TestCorpus:
                     "highlight_start": 1,
                     "highlight_end": 3,
                     "provenance": "test_file",
-                    "year": year,
+                    "year": str(year),
                     "x": 0.0,
                     "y": 0.0,
                     "distance_to_centroid": 0.0,
