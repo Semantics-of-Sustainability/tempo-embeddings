@@ -48,7 +48,7 @@ class Corpus:
         """
         super().__init__()
 
-        self._passages: tuple[Passage, ...] = passages or tuple()
+        self._passages: tuple[Passage, ...] = tuple(passages or [])
         self._label: Optional[str] = label
         self._umap = umap_model or UMAP()
         self._vectorizer: TfidfVectorizer = vectorizer or TfidfVectorizer(

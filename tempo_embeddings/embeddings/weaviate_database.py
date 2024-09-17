@@ -357,9 +357,9 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             ),
             include_vector=include_embeddings,
         )
-        passages: list[Passage] = [
-            Passage.from_weaviate_record(o) for o in response.objects
-        ]
+        passages: tuple[Passage] = tuple(
+            [Passage.from_weaviate_record(o) for o in response.objects]
+        )
         label = collection
         if passages and filter_words:
             label += ": " + "; ".join(filter_words)
