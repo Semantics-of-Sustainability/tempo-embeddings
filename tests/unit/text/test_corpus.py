@@ -161,12 +161,12 @@ class TestCorpus:
     )
     def test_windows(self, corpus, step_size, start, stop, expected):
         expected_windows = [corpus.passages[_slice] for _slice in expected]
-        for window, expected in zip(
-            corpus.windows(step_size, start=start, stop=stop),
-            expected_windows,
-            **STRICT,
-        ):
+        windows = corpus.windows(step_size, start=start, stop=stop)
+
+        for window, expected in zip(windows, expected_windows, **STRICT):
             assert window.passages == expected
+            if stop is not None:
+                assert int(window.label.split("-")[-1]) <= stop
 
     @pytest.mark.parametrize(
         "corpus,metadata_fields,expected",

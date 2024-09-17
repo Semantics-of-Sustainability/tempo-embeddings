@@ -425,19 +425,25 @@ class Corpus:
             max((int(value) for value in self.get_metadatas(metadata_field))) + 1
         )
 
-        for _start in range(start, stop, step_size):
-            _end = min(_start + step_size, stop)
-            label = f" {_start}-{_end}"
-            passages: list[Passage] = [
-                passage
-                for passage in self.passages
-                if int(passage.metadata.get(metadata_field)) in range(_start, _end)
-            ]
-            # FIXME: this iterates over all passages for each range
+        bins = range(start, stop, step_size)
+        passages = defaultdict(list)
+        for passage in self.passages:
+            try:
+                bin: int = next(
+                    bin_start
+                    for bin_start in bins
+                    if int(passage.metadata.get(metadata_field))
+                    in range(bin_start, min(bin_start + step_size, stop))
+                )
+                passages[bin].append(passage)
+            except StopIteration:
+                logging.debug(f"Passage {passage} is out of range {start}-{stop}.")
 
-            if passages:
+        for bin, bin_passages in passages.items():
+            label = f" {bin}-{min(bin+step_size, stop)}"
+            if bin_passages:
                 yield Corpus(
-                    tuple(passages),
+                    tuple(bin_passages),
                     label=self.label + label,
                     umap_model=self.umap,
                     vectorizer=self.vectorizer,
