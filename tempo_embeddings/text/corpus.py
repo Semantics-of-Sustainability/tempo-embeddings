@@ -418,10 +418,10 @@ class Corpus:
             Corpus: A new corpus with the passages for each non-empty window.
         """
 
-        start: int = start or min(
+        start: int = int(start) or min(
             (int(value) for value in self.get_metadatas(metadata_field))
         )
-        stop: int = stop or (
+        stop: int = int(stop) or (
             max((int(value) for value in self.get_metadatas(metadata_field))) + 1
         )
 
