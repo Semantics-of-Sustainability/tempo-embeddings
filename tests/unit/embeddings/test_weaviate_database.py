@@ -115,7 +115,7 @@ class TestWeaviateDatabase:
         assert doc_freq == expected
         assert not caplog.record_tuples
 
-    @pytest.mark.parametrize("k", [1, 2, 5])
+    @pytest.mark.parametrize("k", [0, 1, 2, 3, 4, 5, 10])
     def test_neighbours(self, weaviate_db_manager_with_data, corpus, k):
         sub_corpus_size = 2
         sub_corpus = corpus.sample(sub_corpus_size)
@@ -135,6 +135,17 @@ class TestWeaviateDatabase:
         assert neighbours.label == f"TestCorpus {str(k)} neighbours"
         assert neighbours.umap is sub_corpus.umap
         assert neighbours.vectorizer is sub_corpus.vectorizer
+
+    @pytest.mark.parametrize("k", [0, 1, 2, 3, 4, 5, 10])
+    @pytest.mark.skip(reason="Weaviate distances are different from distances()")
+    def test_neighbour_order(self, weaviate_db_manager_with_data, corpus, k):
+        sub_corpus_size = 2
+        sub_corpus = corpus.sample(sub_corpus_size)
+
+        neighbours: Corpus = weaviate_db_manager_with_data.neighbours(sub_corpus, k)
+
+        distances = neighbours.distances(normalize=False, use_2d_embeddings=False)
+        np.testing.assert_allclose(distances, np.sort(distances), rtol=1e-3)
 
     def test_delete_collection(self, weaviate_db_manager_with_data):
         weaviate_db_manager_with_data.delete_collection("TestCorpus")

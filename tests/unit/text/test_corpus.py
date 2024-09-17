@@ -293,13 +293,36 @@ class TestCorpus:
         corpus.embeddings_2d = embeddings
         pd.testing.assert_frame_equal(corpus.coordinates(), expected)
 
-    @pytest.mark.parametrize("normalize", [True, False])
-    def test_distances(self, corpus, normalize):
-        distances = corpus.distances(normalize=normalize)
+    def test_centroid(self, corpus):
+        corpus.embeddings = np.array(
+            [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10]], dtype=np.float64
+        )
+        expected = np.array([5.0, 6.0], dtype=np.float64)
 
-        # TODO test embeddings are random, so distances vary
+        np.testing.assert_equal(corpus.centroid(use_2d_embeddings=False), expected)
+
+    @pytest.mark.parametrize(
+        "embeddings,normalize,expected",
+        [
+            (
+                [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10]],
+                False,
+                [0.026583, 0.001312, 0.0, 0.00029, 0.000725],
+            ),
+            (
+                [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10]],
+                True,
+                [0.998354, 0.049287, 0.0, 0.010899, 0.027222],
+            ),
+        ],
+    )
+    def test_distances(self, corpus, embeddings, normalize, expected):
+        corpus.embeddings = np.array(embeddings, dtype=np.float64)
+
         np.testing.assert_allclose(
-            distances, np.zeros(len(corpus)), atol=1.0, verbose=True
+            corpus.distances(normalize=normalize, use_2d_embeddings=False),
+            np.array(expected, dtype=np.float64),
+            rtol=1e-3,
         )
 
     def test_to_dataframe(self, corpus):

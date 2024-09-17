@@ -65,9 +65,7 @@ class Corpus:
                 "UMAP model has been fitted on one of the corpora, cannot merge."
             )
         else:
-            logging.warning(
-                "Dropping UMAP model while merging corpora with different models."
-            )
+            logging.info("Dropping UMAP model while merging corpora .")
             umap = None
 
         if self.vectorizer is other.vectorizer:
@@ -77,9 +75,7 @@ class Corpus:
                 "TfidfVectorizer model has been fitted on one of the corpora, cannot merge."
             )
         else:
-            logging.warning(
-                "Dropping TfidfVectorizer model while merging corpora with different models."
-            )
+            logging.info("Dropping TfidfVectorizer model while merging corpora.")
             vectorizer = None
 
         label = " + ".join((str(label) for label in (self.label, other.label) if label))
@@ -468,8 +464,7 @@ class Corpus:
         ), f"tf_idfs shape ({tf_idfs.shape}) does not match expected shape."
 
         ### Weigh in vector distances
-        normalize = False
-        distances: np.ndarray = self.distances(normalize)
+        distances: np.ndarray = self.distances(normalize=True)
         weights = np.ones(distances.shape[0]) - distances
 
         assert (
