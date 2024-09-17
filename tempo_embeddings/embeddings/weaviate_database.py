@@ -239,12 +239,22 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         for collection in self._config.get_corpora():
             self.delete_collection(collection)
 
-    def get_collection_count(self, name) -> int:
-        """Returns the size of a given collection.
+    def get_collection_count(
+        self,
+        name,
+        metadata: Optional[dict[str, Any]] = None,
+        metadata_not: Optional[dict[str, Any]] = None,
+    ) -> int:
+        """Returns the total size of a given collection, optionally with metadata filters applied.
 
-        Use doc_frequency() with an empty term to get the total number of documents in the collection.
+        Args:
+            name (str): The collection name
+            metadata (dict[str, Any], optional): Additional metadata filters. Defaults to None.
+            metadata_not (dict[str, Any], optional): Additional metadata filters to exclude. Defaults to None.
         """
-        return self.doc_frequency("", name)
+        return self.doc_frequency(
+            "", name, metadata=metadata, metadata_not=metadata_not, normalize=False
+        )
 
     def _insert_using_custom_model(
         self, corpus, collection: weaviate.collections.Collection
@@ -359,33 +369,54 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
     def doc_frequency(
         self,
         term: str,
-        collections: str,
+        collection: str,
         metadata: Optional[dict[str, Any]] = None,
         metadata_not: Optional[dict[str, Any]] = None,
-    ) -> int:
+        normalize: bool = False,
+    ) -> float:
         """Get the number of documents that contain a term in the collection.
 
         If 'term' is empty, return the total number of documents in the collection.
+
+        If 'normalize' is True, normalize the number of documents that contain the term by the number of documents
+            in the collection matching the filters, but regardless of the term.
 
         Args:
             term (str): The term to count
             collection (str): collection to query
             metadata (dict[str, Any]): Additional metadata filters
             metadata_not (dict[str, Any]): Additional metadata filters to exclude
+            normalize: If True, normalize the number of matching documents
 
         Returns:
-            int: The number of occurrences of the term
+            float: The (relative) number of occurrences of the term
         """
-        response = self._client.collections.get(collections).aggregate.over_all(
+        # TODO: cache locally? use frozendicts for metadata filters
+
+        search_terms: list[str] = [term] if term.strip() else []
+        if normalize and not search_terms:
+            logging.warning("Did not provide a term to normalize.")
+            return 1.0
+
+        response = self._client.collections.get(collection).aggregate.over_all(
             filters=QueryBuilder.build_filter(
-                filter_words=[term] if term.strip() else None,
+                filter_words=search_terms,
                 metadata=metadata,
                 metadata_not=metadata_not,
             ),
             total_count=True,
         )
+        freq: int = response.total_count
 
-        return response.total_count
+        if freq and normalize:
+            total: int = self.doc_frequency(
+                "", collection, metadata, metadata_not, normalize=False
+            )
+            result = freq / total
+        else:
+            result = freq
+
+        return result
 
     def neighbour_passages(
         self,

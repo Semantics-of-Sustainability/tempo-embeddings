@@ -2,6 +2,7 @@ import csv
 import gzip
 import logging
 from collections import Counter, defaultdict
+from itertools import groupby
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
@@ -41,6 +42,28 @@ class Corpus(AbstractCorpus):
 
     def __repr__(self) -> str:
         return f"Corpus({self._label!r}, {len(self._passages)} passages)"
+
+    def groupby(
+        self, key, *, default_value: Any = None
+    ) -> Iterable[tuple[Any, list[Passage]]]:
+        """Group the passages in the corpus by a metadata key.
+
+        See Also:
+            `get_metadatas()` to get all the metadata values
+        Args:
+            key: The metadata key to group by.
+            default_value: The default value to use if the key is missing. Defaults to None.
+        Returns:
+            Iterable[tuple[Any, list[Passage]]]: An iterable of tuples with the key and the passages that have that key.
+        Raises:
+            TypeError: if the sorting fails due to incomparable types, e.g. None and int.
+
+        """
+
+        def key_func(p):
+            return p.metadata.get(key, default_value)
+
+        return groupby(sorted(self._passages, key=key_func), key_func)
 
     @property
     def passages(self) -> list[Passage]:

@@ -93,24 +93,28 @@ class TestWeaviateDatabase:
         )
 
     @pytest.mark.parametrize(
-        "term, metadata, expected",
+        "term, metadata, normalize, expected",
         [
-            ("test", None, 5),
-            ("test", {}, 5),
-            ("1", None, 1),
-            ("unknown", None, 0),
-            ("test", {"provenance": "test_file"}, 5),
-            ("test", {"provenance": "unknown"}, 0),
-            ("", None, 5),
+            ("test", None, False, 5),
+            ("test", {}, False, 5),
+            ("1", None, False, 1),
+            ("unknown", None, False, 0),
+            ("test", {"provenance": "test_file"}, False, 5),
+            ("test", {"provenance": "unknown"}, False, 0),
+            ("", None, False, 5),
+            ("test", None, True, 1.0),
+            ("1", None, True, 0.2),
         ],
     )
     def test_doc_frequency(
-        self, weaviate_db_manager_with_data, term, metadata, expected
+        self, caplog, weaviate_db_manager_with_data, term, metadata, normalize, expected
     ):
-        doc_freq = weaviate_db_manager_with_data.doc_frequency(
-            term, "TestCorpus", metadata=metadata
-        )
+        with caplog.at_level(logging.WARNING):
+            doc_freq = weaviate_db_manager_with_data.doc_frequency(
+                term, "TestCorpus", metadata=metadata, normalize=normalize
+            )
         assert doc_freq == expected
+        assert not caplog.record_tuples
 
     @pytest.mark.parametrize("k", [1, 2, 5])
     def test_neighbour_passages(self, weaviate_db_manager_with_data, corpus, k):
