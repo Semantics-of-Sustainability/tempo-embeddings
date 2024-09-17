@@ -117,6 +117,8 @@ class TestWeaviateDatabase:
 
     @pytest.mark.parametrize("k", [0, 1, 2, 3, 4, 5, 10])
     def test_neighbours(self, weaviate_db_manager_with_data, corpus, k):
+        # TODO: test excluded_passages parameter
+
         sub_corpus_size = 2
         sub_corpus = corpus.sample(sub_corpus_size)
 
