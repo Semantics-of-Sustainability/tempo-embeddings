@@ -141,14 +141,30 @@ class TestCorpus:
                 # TODO: test that samples are closest to the centroid
                 pass
 
-    def test_windows(self, corpus):
-        expected_windows = [
-            corpus.passages[:2],
-            corpus.passages[2:4],
-            corpus.passages[4:],
-        ]
+    @pytest.mark.parametrize(
+        "step_size,start, stop, expected",
+        [
+            (
+                1,
+                None,
+                None,
+                [slice(0, 1), slice(1, 2), slice(2, 3), slice(3, 4), slice(4, 5)],
+            ),
+            (2, None, None, [slice(0, 2), slice(2, 4), slice(4, 5)]),
+            (5, None, None, [slice(0, 5)]),
+            (10, None, None, [slice(0, 5)]),
+            (2, 1950, 1953, [slice(0, 2), slice(2, 3)]),
+            (2, 1950, 1954, [slice(0, 2), slice(2, 4)]),
+            (2, 1950, 1960, [slice(0, 2), slice(2, 4), slice(4, 5)]),
+            (2, 1960, 1970, []),
+        ],
+    )
+    def test_windows(self, corpus, step_size, start, stop, expected):
+        expected_windows = [corpus.passages[_slice] for _slice in expected]
         for window, expected in zip(
-            corpus.windows(step_size=2), expected_windows, **STRICT
+            corpus.windows(step_size, start=start, stop=stop),
+            expected_windows,
+            **STRICT,
         ):
             assert window.passages == expected
 

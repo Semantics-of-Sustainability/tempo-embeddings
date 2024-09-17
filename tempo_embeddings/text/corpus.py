@@ -398,7 +398,12 @@ class Corpus:
         )
 
     def windows(
-        self, step_size: int, *, metadata_field: str = "year"
+        self,
+        step_size: int,
+        *,
+        start: Optional[int] = None,
+        stop: Optional[int] = None,
+        metadata_field: str = "year",
     ) -> Iterable["Corpus"]:
         """Split the corpus into windows of a given size.
 
@@ -406,24 +411,30 @@ class Corpus:
 
         Args:
             step_size: The step size between windows.
-            metadata_field: The metadata field to use for splitting the corpus. Defaults to 'year'
+            start (Optional[int]): The start of the first window. Defaults to the minimum value in the metadata field.
+            stop (Optional[int]): The end of the last window (excluded). Defaults to the maximum value in the metadata field.
+            metadata_field (str): The metadata field to use for splitting the corpus. Defaults to 'year'
         Yields:
-            Corpus: A new corpus with the passages in the window.
+            Corpus: A new corpus with the passages for each non-empty window.
         """
 
-        start: int = min((int(value) for value in self.get_metadatas(metadata_field)))
-        stop: int = (
+        start: int = start or min(
+            (int(value) for value in self.get_metadatas(metadata_field))
+        )
+        stop: int = stop or (
             max((int(value) for value in self.get_metadatas(metadata_field))) + 1
         )
 
-        for start in range(start, stop, step_size):
-            label = f" {start}-{start+step_size}"
+        for _start in range(start, stop, step_size):
+            _end = min(_start + step_size, stop)
+            label = f" {_start}-{_end}"
             passages: list[Passage] = [
                 passage
                 for passage in self.passages
-                if int(passage.metadata.get(metadata_field))
-                in range(start, start + step_size)
+                if int(passage.metadata.get(metadata_field)) in range(_start, _end)
             ]
+            # FIXME: this iterates over all passages for each range
+
             if passages:
                 yield Corpus(
                     tuple(passages),
