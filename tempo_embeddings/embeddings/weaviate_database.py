@@ -425,7 +425,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         collections: Optional[list[str]] = None,
         year_span: Optional[YearSpan] = None,
         metadata_not: Optional[dict[str, Any]] = None,
-    ) -> list[Corpus]:
+    ) -> Corpus:
         """Find passages to expand a corpus with the k-nearest neighbors of the centroid of the corpus.
 
         Passages in the new corpus are sorted by distance to the centroid.
@@ -439,7 +439,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             metadata_not (Optional[dict[str, Any]], optional): Additional metadata filters to exclude. Defaults to None.
 
         Returns:
-            A list of unique passages that were not part of the original corpus
+            A new corpus with passages close to the input corpus
         """
         # TODO: filter out search terms and/or passages in other corpora
 
