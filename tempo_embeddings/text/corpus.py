@@ -567,7 +567,7 @@ class Corpus:
             and word.casefold() not in exclude_words
         ][:n]
 
-    def set_topic_label(self, **kwargs) -> None:
+    def set_topic_label(self, *, prefix: Optional[str] = "", **kwargs) -> str:
         """Set the label of the corpus to the top word(s) in the corpus.
 
         Kwargs:
@@ -575,9 +575,14 @@ class Corpus:
                 e.g. stopwords and the search term used for composing this corpus
             n: concatenate the top n words in the corpus as the label.
             stopwords: if given, exclude these words
-        """
 
-        self._label = "; ".join(sorted(self.top_words(**kwargs)))
+        Returns:
+            str: the newly assigned label of the corpus
+        """
+        label = "; ".join(sorted(self.top_words(**kwargs)))
+        if prefix:
+            label = f"{prefix}: " + label
+        self._label = label
 
         return self._label
 
