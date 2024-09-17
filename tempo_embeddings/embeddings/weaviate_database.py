@@ -421,10 +421,12 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         self,
         corpus: Corpus,
         k: int,
+        *,
         distance: Optional[float] = None,
         collections: Optional[list[str]] = None,
         year_span: Optional[YearSpan] = None,
         metadata_not: Optional[dict[str, Any]] = None,
+        exclude_passages: Optional[set[Passage]] = None,
     ) -> Corpus:
         """Find passages to expand a corpus with the k-nearest neighbors of the centroid of the corpus.
 
@@ -437,30 +439,29 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             collections (Optional[list[str]], optional): The collections to query. Defaults to all available collections.
             year_range (Optional[YearSpan], optional): The year range to consider. Defaults to None.
             metadata_not (Optional[dict[str, Any]], optional): Additional metadata filters to exclude. Defaults to None.
+            exclude_passages (Optional[set[Passage]]): Passages to exclude from the search. If not specified, exclude passages from the original corpus.
 
         Returns:
             A new corpus with passages close to the input corpus
         """
-        # TODO: filter out search terms and/or passages in other corpora
-
         passages: dict[Passage, float] = dict()
-        _corpus_passages = set(corpus.passages)
+        exclude_passages = exclude_passages or set(corpus.passages)
+
         for collection in collections or self.get_available_collections():
             centroid = corpus.centroid(use_2d_embeddings=False).tolist()
 
             for passage, distance in self.query_vector_neighbors(
                 collection,
                 centroid,
-                k + len(_corpus_passages),
+                k + len(exclude_passages),  # account for excluded passages
                 max_distance=distance,
                 year_span=year_span,
                 metadata_not=metadata_not,
             ):
-                if passage not in _corpus_passages:
-                    if passage in passages:
-                        distance = min(passages[passage], distance)
-
-                    passages[passage] = distance
+                if passage not in exclude_passages:
+                    passages[passage] = min(
+                        distance, passages.get(passage, float("inf"))
+                    )
 
         _sorted = sorted(passages.items(), key=lambda x: x[1])
 
