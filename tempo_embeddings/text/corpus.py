@@ -5,7 +5,7 @@ import random
 import string
 from collections import Counter, defaultdict
 from functools import lru_cache
-from itertools import groupby
+from itertools import groupby, islice
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
@@ -141,7 +141,6 @@ class Corpus:
     @embeddings_2d.setter
     def embeddings_2d(self, value: np.ndarray):
         for row, passage in zip(value, self.passages, **STRICT):
-            # TODO: test
             passage.embedding_compressed = row.tolist()
 
     @property
@@ -574,17 +573,16 @@ class Corpus:
         else:
             words = self._tf_idf_words(n=_n)
 
-        # TODO: no need to filter all words if we only return n
-        return [
+        filtered_words = (
             word
             for word in words
-            # filter words:
             if len(word.strip()) >= min_word_length
             and not any(char in string.punctuation for char in word)
             and word.casefold() not in exclude_words
-        ][:n]
+        )
+        return list(islice(filtered_words, n))
 
-    def set_topic_label(self, *, prefix: Optional[str] = "", **kwargs) -> str:
+    def set_topic_label(self, *, prefix: Optional[str] = None, **kwargs) -> str:
         """Set the label of the corpus to the top word(s) in the corpus.
 
         Kwargs:

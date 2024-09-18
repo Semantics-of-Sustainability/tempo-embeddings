@@ -309,16 +309,25 @@ class TestCorpus:
         "embeddings,expected",
         [
             (np.ones((1, 2)), pd.DataFrame({"x": [1], "y": [1]}, dtype=np.float64)),
+            (None, pd.DataFrame()),
             (
                 np.array([[1, 2], [3, 4], [5, 6]], dtype=np.float64),
                 pd.DataFrame({"x": [1, 3, 5], "y": [2, 4, 6]}, dtype=np.float64),
             ),
         ],
     )
-    def test_coordinates(self, embeddings, expected):
-        corpus = Corpus([Passage("test" + str(i)) for i in range(embeddings.shape[0])])
-        corpus.embeddings_2d = embeddings
-        pd.testing.assert_frame_equal(corpus.coordinates(), expected)
+    def test_coordinates(self, corpus, embeddings, expected, caplog):
+        if embeddings is not None:
+            # set 2d embeddings
+            corpus = corpus.sample(embeddings.shape[0])
+            corpus.embeddings_2d = embeddings
+
+        with caplog.at_level(logging.WARNING):
+            pd.testing.assert_frame_equal(corpus.coordinates(), expected)
+
+        if embeddings is None:
+            expected_warning = ("root", logging.WARNING, "No 2D embeddings available.")
+            assert expected_warning in caplog.record_tuples
 
     def test_centroid(self, corpus):
         corpus.embeddings = np.array(
@@ -407,6 +416,17 @@ class TestCorpus:
 
             assert all(passage.embedding_compressed for passage in corpus.passages)
 
+    def test_embeddings_2d(self, corpus):
+        assert corpus.embeddings_2d is None
+
+        embeddings = np.random.rand(len(corpus), 2)
+        corpus.embeddings_2d = embeddings
+
+        for i, passage in enumerate(corpus.passages):
+            np.testing.assert_equal(passage.embedding_compressed, embeddings[i, :])
+
+        np.testing.assert_array_equal(corpus.embeddings_2d, embeddings)
+
     def test_fit_umap(self, corpus):
         assert not Corpus._is_fitted(corpus.umap)
 
@@ -450,5 +470,17 @@ class TestCorpus:
         [(None, 1, ["test"]), (None, 5, ["test", "text"]), (("test",), 1, ["text"])],
     )
     def test_top_words(self, corpus, exclude_words, n, expected):
-        corpus.fit_vectorizer()
+        with pytest.raises(RuntimeError):
+            corpus.top_words()
+
+        corpus.fit_vectorizer()  # Note: vectorizer is typically fitted on a larger corpus
         assert corpus.top_words(exclude_words=exclude_words, n=n) == expected
+
+    @pytest.mark.parametrize("prefix", [None, "test"])
+    def test_set_topic_label(self, corpus, prefix):
+        with pytest.raises(RuntimeError):
+            corpus.set_topic_label()
+
+        corpus.fit_vectorizer()  # Note: vectorizer is typically fitted on a larger corpus
+        corpus.set_topic_label(prefix=prefix)
+        assert corpus.label == prefix or "" + "test; text"
