@@ -1,6 +1,7 @@
 import logging
 import string
-from typing import Iterable
+from itertools import islice
+from typing import Iterable, Optional
 
 import numpy as np
 from scipy.sparse import csr_matrix
@@ -81,12 +82,6 @@ class KeywordExtractor:
             RuntimeError: If the vectorizer has not been fitted.
         """
 
-        try:
-            self.fit()
-            logging.debug("Vectorizer fitted.")
-        except RuntimeError as e:
-            logging.debug(str(e))
-
         tf_idfs: csr_matrix = self._vectorizer.transform(corpus.passages)
 
         assert tf_idfs.shape == (
@@ -112,29 +107,26 @@ class KeywordExtractor:
         for i in top_indices:
             yield self._feature_names[i]
 
-    def top_words(
+    def _top_words(
         self,
         corpus: Corpus,
-        *,
-        exclude_words: Iterable[str] = None,
-        min_word_length: int = 3,
-        use_2d_embeddings: bool = False,
+        exclude_words: Iterable[str],
+        min_word_length: int,
+        use_2d_embeddings: bool,
     ) -> Iterable[str]:
         """
         Extract the top words for the given corpus, relative to the extractor's corpus data.
 
-        If necessary, the vectorizer is fitted first.
-
-        Short words, and words containing punctuation are filtered out, as well as words that are in the exclude_words set.
-
         Args:
             exclude_words: The word to exclude from the label (case-insensitive),
-                e.g. stopwords and the search term used for composing this corpus. Defaults to None
-            min_word_length: the minimum length of a word to be included in the label. Defaults to 3
-            use_2d_embeddings: Whether to use 2D embeddings for distance calculation. Defaults to False
+            min_word_length: the minimum length of a word to be included in the label.
+            use_2d_embeddings: Whether to use 2D embeddings for distance calculation.
 
-        Yield:
-            the words in the corpus, descending by score.
+        Yields:
+            the words in the corpus in descending order.
+
+        Raises:
+            RuntimeError: If the vectorizer has not been fitted.
         """
 
         exclude_words: set[str] = {word.casefold() for word in (exclude_words or [])}
@@ -151,3 +143,41 @@ class KeywordExtractor:
                 and word.casefold() not in exclude_words
             ):
                 yield word
+
+    def top_words(
+        self,
+        corpus: Corpus,
+        *,
+        exclude_words: Iterable[str] = None,
+        min_word_length: int = 3,
+        use_2d_embeddings: bool = False,
+        n: Optional[int] = 5,
+    ) -> Iterable[str]:
+        """
+        Extract the top words for the given corpus, relative to the extractor's corpus data.
+
+        If necessary, the vectorizer is fitted first.
+
+        Short words, and words containing punctuation are filtered out, as well as words that are in the exclude_words set.
+
+        Args:
+            exclude_words: The word to exclude from the label (case-insensitive),
+                e.g. stopwords and the search term used for composing this corpus. Defaults to None
+            min_word_length: the minimum length of a word to be included in the label. Defaults to 3
+            use_2d_embeddings: Whether to use 2D embeddings for distance calculation. Defaults to False
+            n (Optional[int]): The number of top words to return. If None, a generator for all words is returned. Defaults to 5
+
+        Returns:
+            the top n words in the corpus as list; if n is None, a generator for all words is returned in descending order.
+
+        """
+        try:
+            self.fit()
+            logging.debug("Vectorizer fitted.")
+        except RuntimeError as e:
+            logging.debug(str(e))
+
+        words = self._top_words(
+            corpus, exclude_words, min_word_length, use_2d_embeddings
+        )
+        return list(islice(words, n))

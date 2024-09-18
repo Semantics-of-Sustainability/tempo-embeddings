@@ -29,10 +29,17 @@ class TestKeywordExtractor:
             extractor.fit()
 
     @pytest.mark.parametrize(
-        "exclude_words,expected",
-        [(None, ["test", "text"]), (["test"], ["text"])],
+        "n,exclude_words,expected",
+        [
+            (None, None, ["test", "text"]),
+            (None, ["test"], ["text"]),
+            (5, None, ["test", "text"]),
+            (1, None, ["test"]),
+            (1, ["test"], ["text"]),
+            (0, None, []),
+        ],
     )
-    def test_top_words(self, corpus, exclude_words, expected, caplog):
+    def test_top_words(self, corpus, n, exclude_words, expected, caplog):
         test_corpus = Corpus(
             [
                 Passage(
@@ -43,8 +50,10 @@ class TestKeywordExtractor:
         extractor = KeywordExtractor(corpus)
 
         with caplog.at_level(logging.DEBUG):
-            top_words = extractor.top_words(test_corpus, exclude_words=exclude_words)
-            assert list(top_words) == expected
+            top_words = extractor.top_words(
+                test_corpus, exclude_words=exclude_words, n=n
+            )
+            assert top_words == expected
 
         assert caplog.record_tuples == [
             ("root", logging.INFO, f"Fitting vectorizer on {corpus}."),
@@ -53,5 +62,5 @@ class TestKeywordExtractor:
 
         caplog.clear()
         with caplog.at_level(logging.DEBUG):
-            list(extractor.top_words(test_corpus, exclude_words=exclude_words))
+            list(extractor.top_words(test_corpus, exclude_words=exclude_words, n=n))
         assert "Vectorizer has already been fitted." in caplog.text
