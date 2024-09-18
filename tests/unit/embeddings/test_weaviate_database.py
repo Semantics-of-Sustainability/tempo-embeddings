@@ -136,7 +136,6 @@ class TestWeaviateDatabase:
 
         assert neighbours.label == f"TestCorpus {str(k)} neighbours"
         assert neighbours.umap is sub_corpus.umap
-        assert neighbours.vectorizer is sub_corpus.vectorizer
 
     @pytest.mark.parametrize("k", [0, 1, 2, 3, 4, 5, 10])
     @pytest.mark.skip(reason="Weaviate distances are different from distances()")

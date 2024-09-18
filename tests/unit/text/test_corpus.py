@@ -14,17 +14,11 @@ from tempo_embeddings.text.passage import Passage
 
 class TestCorpus:
     def test_add(self, test_passages):
-        expected = Corpus(test_passages[:2], None, umap_model=None, vectorizer=None)
+        expected = Corpus(test_passages[:2], None, umap_model=None)
         assert Corpus([test_passages[0]]) + Corpus([test_passages[1]]) == expected
 
     def test_add_umap_fitted(self, corpus):
         corpus._fit_umap()
-
-        with pytest.raises(RuntimeError):
-            corpus + Corpus([Passage("test")])
-
-    def test_add_vectorizer_fitted(self, corpus):
-        corpus.fit_vectorizer()
 
         with pytest.raises(RuntimeError):
             corpus + Corpus([Passage("test")])
@@ -292,6 +286,12 @@ class TestCorpus:
     def test_embeddings(self, corpus, expected):
         assert_equal(corpus.embeddings, expected)
 
+    def test_select_embeddings(self, corpus):
+        assert corpus._select_embeddings(use_2d_embeddings=False).shape == (5, 768)
+
+        assert corpus._select_embeddings(use_2d_embeddings=True).shape == (5, 2)
+        assert corpus._select_embeddings(use_2d_embeddings=False).shape == (5, 768)
+
     @pytest.mark.parametrize(
         "corpus",
         [
@@ -445,36 +445,6 @@ class TestCorpus:
 
         with pytest.raises(RuntimeError):
             corpus._fit_umap()
-
-    def test_fit_vectorizer(self, corpus):
-        assert not Corpus._is_fitted(corpus.vectorizer)
-
-        with pytest.raises(AttributeError):
-            corpus.vectorizer.transform(Passage("test text"))
-
-        corpus.fit_vectorizer()
-
-        assert Corpus._is_fitted(corpus.vectorizer)
-        np.testing.assert_equal(
-            corpus.vectorizer.transform([Passage("test text")]).toarray(),
-            np.array([[0.7071067811865475, 0.7071067811865475]]),
-        )
-
-        assert corpus.vectorizer.get_feature_names_out().tolist() == ["test", "text"]
-
-        with pytest.raises(RuntimeError):
-            corpus.fit_vectorizer()
-
-    @pytest.mark.parametrize(
-        "exclude_words, n, expected",
-        [(None, 1, ["test"]), (None, 5, ["test", "text"]), (("test",), 1, ["text"])],
-    )
-    def test_top_words(self, corpus, exclude_words, n, expected):
-        with pytest.raises(RuntimeError):
-            corpus.top_words()
-
-        corpus.fit_vectorizer()  # Note: vectorizer is typically fitted on a larger corpus
-        assert corpus.top_words(exclude_words=exclude_words, n=n) == expected
 
     @pytest.mark.parametrize("prefix", [None, "test"])
     def test_set_topic_label(self, corpus, prefix):

@@ -466,13 +466,10 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         _sorted = sorted(passages.items(), key=lambda x: x[1])
 
         # FIXME: the cosine distances from Weaviate are not the same as the ones from Corpus.distances()
+        passages = [passage for passage, _ in _sorted[:k]]
+        label = f"{corpus.label} {k} neighbours"
 
-        return Corpus(
-            passages=tuple([passage for passage, _ in _sorted[:k]]),
-            label=f"{corpus.label} {k} neighbours",
-            umap_model=corpus.umap,
-            vectorizer=corpus.vectorizer,
-        )
+        return Corpus(passages, label, umap_model=corpus.umap)
 
     def query_vector_neighbors(
         self,
