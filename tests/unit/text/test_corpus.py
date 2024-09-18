@@ -24,7 +24,7 @@ class TestCorpus:
             corpus + Corpus([Passage("test")])
 
     def test_add_vectorizer_fitted(self, corpus):
-        corpus._fit_vectorizer()
+        corpus.fit_vectorizer()
 
         with pytest.raises(RuntimeError):
             corpus + Corpus([Passage("test")])
@@ -140,6 +140,33 @@ class TestCorpus:
             if centroid_based:
                 # TODO: test that samples are closest to the centroid
                 pass
+
+    @pytest.mark.parametrize(
+        "step_size,start, stop, expected",
+        [
+            (
+                1,
+                None,
+                None,
+                [slice(0, 1), slice(1, 2), slice(2, 3), slice(3, 4), slice(4, 5)],
+            ),
+            (2, None, None, [slice(0, 2), slice(2, 4), slice(4, 5)]),
+            (5, None, None, [slice(0, 5)]),
+            (10, None, None, [slice(0, 5)]),
+            (2, 1950, 1953, [slice(0, 2), slice(2, 3)]),
+            (2, 1950, 1954, [slice(0, 2), slice(2, 4)]),
+            (2, 1950, 1960, [slice(0, 2), slice(2, 4), slice(4, 5)]),
+            (2, 1960, 1970, []),
+        ],
+    )
+    def test_windows(self, corpus, step_size, start, stop, expected):
+        expected_windows = [corpus.passages[_slice] for _slice in expected]
+        windows = corpus.windows(step_size, start=start, stop=stop)
+
+        for window, expected in zip(windows, expected_windows, **STRICT):
+            assert window.passages == expected
+            if stop is not None:
+                assert int(window.label.split("-")[-1]) <= stop
 
     @pytest.mark.parametrize(
         "corpus,metadata_fields,expected",
@@ -282,16 +309,25 @@ class TestCorpus:
         "embeddings,expected",
         [
             (np.ones((1, 2)), pd.DataFrame({"x": [1], "y": [1]}, dtype=np.float64)),
+            (None, pd.DataFrame()),
             (
                 np.array([[1, 2], [3, 4], [5, 6]], dtype=np.float64),
                 pd.DataFrame({"x": [1, 3, 5], "y": [2, 4, 6]}, dtype=np.float64),
             ),
         ],
     )
-    def test_coordinates(self, embeddings, expected):
-        corpus = Corpus([Passage("test" + str(i)) for i in range(embeddings.shape[0])])
-        corpus.embeddings_2d = embeddings
-        pd.testing.assert_frame_equal(corpus.coordinates(), expected)
+    def test_coordinates(self, corpus, embeddings, expected, caplog):
+        if embeddings is not None:
+            # set 2d embeddings
+            corpus = corpus.sample(embeddings.shape[0])
+            corpus.embeddings_2d = embeddings
+
+        with caplog.at_level(logging.WARNING):
+            pd.testing.assert_frame_equal(corpus.coordinates(), expected)
+
+        if embeddings is None:
+            expected_warning = ("root", logging.WARNING, "No 2D embeddings available.")
+            assert expected_warning in caplog.record_tuples
 
     def test_centroid(self, corpus):
         corpus.embeddings = np.array(
@@ -327,12 +363,13 @@ class TestCorpus:
 
     def test_to_dataframe(self, corpus):
         ids = [
-            "d4e730f8574317e635c56793c11044a23b25ec6e22bb5c0ec52c99fef80a3957",
-            "4d9bf2e19ace7ed314607c76e912e3dd33905f356a9699ef71a02cda6edc68a6",
-            "aa71b4bc2bdc330d59a304adf67c3379ecbf7e2e8d62be178ea1afcb8087572a",
-            "a2e60054d9450b163a9045e25a0525a2d2e76f7e1fcab5faafbb85368b065f2d",
-            "85bde0f0f0eb6fc2b9b115f536a0780a5322d270e57c528901c3d5da3aa4990e",
+            "2ca2b35080541f54923e8672e8a6e8bbb8cdeb0ffbd3a9b2b0d9ea8666e830ba",
+            "def9ccfb5acac052ad71b656aa47c0b6b707d7ac5c33e82ffb860f43518a0b79",
+            "2c98aba242f96f5ffe4b4d5c79741b1135ba0a5b76c7c2741fee5353fbfbd690",
+            "b0810559acde7d00598789cd9e3264174f24af0b0b84e081d4159691648c7a45",
+            "c982e6944e0813cdc9a533f27b18edafee1c6fdc9da4d09175542444edcef99f",
         ]
+
         expected = pd.DataFrame(
             [
                 {
@@ -341,11 +378,12 @@ class TestCorpus:
                     "highlight_start": 1,
                     "highlight_end": 3,
                     "provenance": "test_file",
+                    "year": str(year),
                     "x": 0.0,
                     "y": 0.0,
                     "distance_to_centroid": 0.0,
                 }
-                for passage, _id in zip(corpus.passages, ids)
+                for passage, _id, year in zip(corpus.passages, ids, range(1950, 1956))
             ]
         )
 
@@ -378,6 +416,17 @@ class TestCorpus:
 
             assert all(passage.embedding_compressed for passage in corpus.passages)
 
+    def test_embeddings_2d(self, corpus):
+        assert corpus.embeddings_2d is None
+
+        embeddings = np.random.rand(len(corpus), 2)
+        corpus.embeddings_2d = embeddings
+
+        for i, passage in enumerate(corpus.passages):
+            np.testing.assert_equal(passage.embedding_compressed, embeddings[i, :])
+
+        np.testing.assert_array_equal(corpus.embeddings_2d, embeddings)
+
     def test_fit_umap(self, corpus):
         assert not Corpus._is_fitted(corpus.umap)
 
@@ -394,13 +443,16 @@ class TestCorpus:
             atol=100.0,
         )
 
+        with pytest.raises(RuntimeError):
+            corpus._fit_umap()
+
     def test_fit_vectorizer(self, corpus):
         assert not Corpus._is_fitted(corpus.vectorizer)
 
         with pytest.raises(AttributeError):
             corpus.vectorizer.transform(Passage("test text"))
 
-        corpus._fit_vectorizer()
+        corpus.fit_vectorizer()
 
         assert Corpus._is_fitted(corpus.vectorizer)
         np.testing.assert_equal(
@@ -410,19 +462,25 @@ class TestCorpus:
 
         assert corpus.vectorizer.get_feature_names_out().tolist() == ["test", "text"]
 
-    def test_tf_idf(self, corpus):
-        assert not corpus._is_fitted(corpus.vectorizer)
-
-        np.testing.assert_equal(
-            corpus._tf_idf().toarray(),
-            np.array([[0.7071067811865475, 0.7071067811865475]] * 5),
-        )
-
-        assert corpus._is_fitted(corpus.vectorizer)
+        with pytest.raises(RuntimeError):
+            corpus.fit_vectorizer()
 
     @pytest.mark.parametrize(
         "exclude_words, n, expected",
         [(None, 1, ["test"]), (None, 5, ["test", "text"]), (("test",), 1, ["text"])],
     )
     def test_top_words(self, corpus, exclude_words, n, expected):
+        with pytest.raises(RuntimeError):
+            corpus.top_words()
+
+        corpus.fit_vectorizer()  # Note: vectorizer is typically fitted on a larger corpus
         assert corpus.top_words(exclude_words=exclude_words, n=n) == expected
+
+    @pytest.mark.parametrize("prefix", [None, "test"])
+    def test_set_topic_label(self, corpus, prefix):
+        with pytest.raises(RuntimeError):
+            corpus.set_topic_label()
+
+        corpus.fit_vectorizer()  # Note: vectorizer is typically fitted on a larger corpus
+        corpus.set_topic_label(prefix=prefix)
+        assert corpus.label == prefix or "" + "test; text"

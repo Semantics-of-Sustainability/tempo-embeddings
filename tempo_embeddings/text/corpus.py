@@ -5,7 +5,7 @@ import random
 import string
 from collections import Counter, defaultdict
 from functools import lru_cache
-from itertools import groupby
+from itertools import groupby, islice
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
@@ -141,7 +141,6 @@ class Corpus:
     @embeddings_2d.setter
     def embeddings_2d(self, value: np.ndarray):
         for row, passage in zip(value, self.passages, **STRICT):
-            # TODO: test
             passage.embedding_compressed = row.tolist()
 
     @property
@@ -214,7 +213,7 @@ class Corpus:
             [cosine(centroid, embedding) for embedding in embeddings]
         )
 
-        if normalize:
+        if normalize and len(self) > 1:
             distances /= np.linalg.norm(distances)
 
         return distances
@@ -243,7 +242,9 @@ class Corpus:
         return groupby(sorted(self._passages, key=key_func), key_func)
 
     ##### FITTING methods #####
-    def _fit_vectorizer(self):
+    def fit_vectorizer(self):
+        if self._is_fitted(self._vectorizer):
+            raise RuntimeError("TfidfVectorizer model has already been fitted.")
         self._vectorizer.fit(self.passages)
 
     def _fit_umap(self):
@@ -395,6 +396,60 @@ class Corpus:
             vectorizer=self.vectorizer,
         )
 
+    def windows(
+        self,
+        step_size: int,
+        *,
+        start: Optional[int] = None,
+        stop: Optional[int] = None,
+        metadata_field: str = "year",
+    ) -> Iterable["Corpus"]:
+        """Split the corpus into windows of a given size.
+
+        Assumes that the values in the given metadata field are integers or convertible to integers.
+
+        Args:
+            step_size: The step size between windows.
+            start (Optional[int]): The start of the first window. Defaults to the minimum value in the metadata field.
+            stop (Optional[int]): The end of the last window (excluded). Defaults to the maximum value in the metadata field.
+            metadata_field (str): The metadata field to use for splitting the corpus. Defaults to 'year'
+        Yields:
+            Corpus: A new corpus with the passages for each non-empty window.
+        """
+
+        start: int = start or min(
+            (int(value) for value in self.get_metadatas(metadata_field))
+        )
+        stop: int = stop or (
+            max((int(value) for value in self.get_metadatas(metadata_field))) + 1
+        )
+
+        bins = range(start, stop, step_size)
+        passages = defaultdict(list)
+        for passage in self.passages:
+            try:
+                bin: int = next(
+                    bin_start
+                    for bin_start in bins
+                    if int(passage.metadata.get(metadata_field))
+                    in range(bin_start, min(bin_start + step_size, stop))
+                )
+                passages[bin].append(passage)
+            except StopIteration:
+                logging.debug(f"Passage {passage} is out of range {start}-{stop}.")
+
+        for bin, bin_passages in passages.items():
+            label = f" {bin}-{min(bin+step_size, stop)}"
+            if bin_passages:
+                yield Corpus(
+                    tuple(bin_passages),
+                    label=self.label + label,
+                    umap_model=self.umap,
+                    vectorizer=self.vectorizer,
+                )
+            else:
+                logging.warning(f"No passages found for{label}")
+
     ##### METADATA methods #####
     def get_metadatas(self, key: str, *, default_value: Any = None) -> Iterable[Any]:
         """Returns all metadata values for a key.
@@ -454,10 +509,6 @@ class Corpus:
         """
         tf_idfs: csr_matrix = self._tf_idf()
 
-        # assert all(
-        #     passage.highlighting for passage in self.passages
-        # ), "Passages must have highlightings"
-
         assert tf_idfs.shape == (
             len(self.passages),
             len(get_vocabulary(self.vectorizer)),
@@ -486,7 +537,9 @@ class Corpus:
             np.ndarray: a sparse matrix of n_passages x n_words
         """
         if not self._is_fitted(self.vectorizer):
-            self._fit_vectorizer()
+            raise RuntimeError(
+                "TfidfVectorizer model has not been fitted. Run fit_vectorizer() first."
+            )
         return self.vectorizer.transform(self.passages)
 
     @lru_cache(maxsize=256)
@@ -520,17 +573,16 @@ class Corpus:
         else:
             words = self._tf_idf_words(n=_n)
 
-        # TODO: no need to filter all words if we only return n
-        return [
+        filtered_words = (
             word
             for word in words
-            # filter words:
             if len(word.strip()) >= min_word_length
             and not any(char in string.punctuation for char in word)
             and word.casefold() not in exclude_words
-        ][:n]
+        )
+        return list(islice(filtered_words, n))
 
-    def set_topic_label(self, **kwargs) -> None:
+    def set_topic_label(self, *, prefix: Optional[str] = None, **kwargs) -> str:
         """Set the label of the corpus to the top word(s) in the corpus.
 
         Kwargs:
@@ -538,9 +590,14 @@ class Corpus:
                 e.g. stopwords and the search term used for composing this corpus
             n: concatenate the top n words in the corpus as the label.
             stopwords: if given, exclude these words
-        """
 
-        self._label = "; ".join(sorted(self.top_words(**kwargs)))
+        Returns:
+            str: the newly assigned label of the corpus
+        """
+        label = "; ".join(sorted(self.top_words(**kwargs)))
+        if prefix:
+            label = f"{prefix}: " + label
+        self._label = label
 
         return self._label
 

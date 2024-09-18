@@ -86,10 +86,10 @@ class TestWeaviateDatabase:
         corpus = weaviate_db_manager_with_data.get_corpus("TestCorpus")
         assert len(corpus.passages) == TEST_CORPUS_SIZE
         assert corpus.label == "TestCorpus"
-        assert all(
-            passage.metadata == {"provenance": "test_file"}
-            for passage in corpus.passages
-        )
+        for passage, year in zip(
+            sorted(corpus.passages, key=lambda p: p.metadata["year"]), range(1950, 1956)
+        ):
+            assert passage.metadata == {"provenance": "test_file", "year": str(year)}
 
     @pytest.mark.parametrize(
         "term, metadata, normalize, expected",
@@ -169,6 +169,7 @@ class TestWeaviateDatabase:
                 "highlighting": "1_3",
                 "passage": f"test text {i}",
                 "provenance": "test_file",
+                "year": str(1950 + i),
                 "uuid": "5eec7ad3-4802-5c4b-82a5-3456bacec6b0",
                 "vector": np.zeros(768),
             }
@@ -206,17 +207,24 @@ class TestWeaviateDatabase:
         objects = list(
             client.collections.get("TestCorpus").iterator(include_vector=True)
         )
-        assert [len(str(o.uuid)) for o in objects] == [
+        expected_uuid_lengths = [
             len("0f83cbd4-e727-509c-a169-2d5ffba95f36")
         ] * TEST_CORPUS_SIZE
-        assert sorted([o.properties for o in objects], key=lambda o: o["passage"]) == [
+        expected_properties = [
             {
                 "provenance": "test_file",
+                "year": str(1950 + i),
                 "passage": f"test text {str(i)}",
                 "highlighting": "1_3",
             }
             for i in range(TEST_CORPUS_SIZE)
         ]
+        assert [len(str(o.uuid)) for o in objects] == expected_uuid_lengths
+
+        assert (
+            sorted([o.properties for o in objects], key=lambda o: o["passage"])
+            == expected_properties
+        )
         assert [len(o.vector["default"]) for o in objects] == [768] * TEST_CORPUS_SIZE
 
         assert weaviate_db_manager_with_data._config["TestCorpus"] == {
