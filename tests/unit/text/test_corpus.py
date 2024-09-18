@@ -445,12 +445,3 @@ class TestCorpus:
 
         with pytest.raises(RuntimeError):
             corpus._fit_umap()
-
-    @pytest.mark.parametrize("prefix", [None, "test"])
-    def test_set_topic_label(self, corpus, prefix):
-        with pytest.raises(RuntimeError):
-            corpus.set_topic_label()
-
-        corpus.fit_vectorizer()  # Note: vectorizer is typically fitted on a larger corpus
-        corpus.set_topic_label(prefix=prefix)
-        assert corpus.label == prefix or "" + "test; text"

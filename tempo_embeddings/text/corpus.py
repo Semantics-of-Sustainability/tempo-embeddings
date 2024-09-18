@@ -45,6 +45,9 @@ class Corpus:
         self._label: Optional[str] = label
         self._umap = umap_model or UMAP()
 
+        self._top_words: list[str] = []
+        """A list of significant words in this corpus."""
+
     def __add__(self, other: "Corpus") -> "Corpus":
         if self.umap is other.umap:
             logging.info("Merging corpora with identical UMAP models, reusing it.")
@@ -85,7 +88,7 @@ class Corpus:
         return len(self.passages)
 
     def __repr__(self) -> str:
-        return f"Corpus({self._label!r}, {len(self._passages)} passages)"
+        return f"Corpus({self._label!r}, {len(self._passages)} passages, top words={self.top_words})"
 
     def _select_embeddings(self, use_2d_embeddings: bool):
         if use_2d_embeddings:
@@ -126,6 +129,16 @@ class Corpus:
     @label.setter
     def label(self, value: str):
         self._label = value
+
+    @property
+    def top_words(self) -> list[str]:
+        return self._top_words
+
+    @top_words.setter
+    def top_words(self, value: list[str]):
+        if self._top_words:
+            logging.warning(f"Overwriting top words: {self._top_words}")
+        self._top_words = value
 
     @property
     def passages(self) -> list[Passage]:
@@ -449,26 +462,6 @@ class Corpus:
     def texts(self) -> Iterable[str]:
         for passage in self._passages:
             yield passage.text
-
-    # TODO: remove this method
-    def set_topic_label(self, *, prefix: Optional[str] = None, **kwargs) -> str:
-        """Set the label of the corpus to the top word(s) in the corpus.
-
-        Kwargs:
-            exclude_words: The word to exclude from the label,
-                e.g. stopwords and the search term used for composing this corpus
-            n: concatenate the top n words in the corpus as the label.
-            stopwords: if given, exclude these words
-
-        Returns:
-            str: the newly assigned label of the corpus
-        """
-        label = "; ".join(sorted(self.top_words(**kwargs)))
-        if prefix:
-            label = f"{prefix}: " + label
-        self._label = label
-
-        return self._label
 
     def hover_datas(
         self, metadata_fields: Optional[list[str]] = None
