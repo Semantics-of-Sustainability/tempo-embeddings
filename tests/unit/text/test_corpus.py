@@ -251,7 +251,6 @@ class TestCorpus:
     def test_get_metadatas(self, corpus: Corpus, key, expected):
         assert list(corpus.get_metadatas(key)) == expected
 
-    @pytest.mark.xfail(reason="Not implemented", raises=NotImplementedError)
     def test_load_save(self, tmp_path):
         # TODO: test/handle model (de)serialization
         filepath = tmp_path / "corpus"
