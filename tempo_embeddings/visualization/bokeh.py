@@ -22,6 +22,7 @@ class BokehVisualizer(Visualizer):
     """Base class for visualizers using the Bokeh library."""
 
     _YEAR_COLUMN = "year"
+    _TOP_WORDS_COLUMN = "top words"
 
     def __init__(self, *clusters: list[Corpus]):
         self._clusters = clusters
@@ -43,6 +44,7 @@ class BokehInteractiveVisualizer(BokehVisualizer):
         self,
         *clusters: list[Corpus],
         metadata_fields: list[str] = None,
+        legend_label_func: bool = lambda c: c.label,
         height: int = 500,
         width: int = 500,
     ):
@@ -52,6 +54,7 @@ class BokehInteractiveVisualizer(BokehVisualizer):
             *clusters (list[Corpus]): Clusters to visualize.
             metadata_fields (list[str], optional): Metadata fields to show in the hover tooltip.
                 If None (default), all metadata fields found in the data are shown.
+            legend_label_func (bool, optional): Function to generate the legend label for a cluster. Defaults to using the cluster's label.
             height (int, optional): Height of the plot. Defaults to 500.
             width (int, optional): Width of the plot. Defaults to 500.
         """
@@ -64,6 +67,7 @@ class BokehInteractiveVisualizer(BokehVisualizer):
 
         self._data: pd.DataFrame = self._create_data()
         self._source: ColumnDataSource = ColumnDataSource(self._data)
+        self._legend_label_func = legend_label_func
 
     def _generate_tooltips(self, *, hover_width: str = "500px"):
         text_line: str = f"""
@@ -75,8 +79,11 @@ class BokehInteractiveVisualizer(BokehVisualizer):
         metadata_lines: list[str] = [
             f"<b>{column}</b>: @{column}" for column in self._metadata_fields
         ]
+
         label_line: str = f"""
             <b>Corpus Label:</b> "@{self._LABEL_FIELD}"
+            <br>
+            <b>Corpus Top Words:</b> "@{self._TOP_WORDS_COLUMN}"
             """
         separator_line: str = "-" * 100
 
@@ -101,7 +108,7 @@ class BokehInteractiveVisualizer(BokehVisualizer):
             hover_data[self._YEAR_COLUMN] = hover_data[self._YEAR_COLUMN].astype(int)
         else:
             logging.warning(
-                f"Column '{self._YEAR_COLUMN}' not found in cluster '{cluster.label}'."
+                f"Column '{self._YEAR_COLUMN}' not found in cluster '{cluster}'."
             )
 
         for _column in self._metadata_fields:
@@ -124,7 +131,7 @@ class BokehInteractiveVisualizer(BokehVisualizer):
                 x="x",
                 y="y",
                 color=factor_cmap(self._LABEL_FIELD, palette, labels),
-                legend_label=cluster.label,
+                legend_label=self._legend_label_func(cluster),
                 view=CDSView(
                     filter=GroupFilter(
                         column_name=self._LABEL_FIELD, group=cluster.label
@@ -160,7 +167,6 @@ class BokehInteractiveVisualizer(BokehVisualizer):
     def _setup_legend(self):
         legend = self._figure.legend[0]
 
-        # Does 'auto' always resolve to 1 column?
         ncols = 1 if legend.ncols == "auto" else legend.ncols
         while len(self._clusters) * legend.glyph_height / ncols > self._figure.height:
             ncols += 1

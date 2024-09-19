@@ -16,7 +16,7 @@ from sklearn.cluster import HDBSCAN
 from sklearn.exceptions import NotFittedError
 from umap.umap_ import UMAP
 
-from ..settings import DEFAULT_ENCODING, STRICT
+from ..settings import DEFAULT_ENCODING, OUTLIERS_LABEL, STRICT
 from .passage import Passage
 from .segmenter import Segmenter
 
@@ -59,8 +59,14 @@ class Corpus:
         else:
             logging.info("Dropping UMAP model while merging corpora .")
             umap = None
+        if self.top_words or other.top_words:
+            logging.warning(
+                "Dropping existing top words: %s, %s", self.top_words, other.top_words
+            )
 
-        label = " + ".join((str(label) for label in (self.label, other.label) if label))
+        label = " + ".join(
+            (label for label in (self.label, other.label) if label != str(None))
+        )
         return Corpus(
             self._passages + other._passages, label=label or None, umap_model=umap
         )
@@ -124,7 +130,7 @@ class Corpus:
 
     @property
     def label(self) -> Optional[str]:
-        return self._label
+        return str(self._label)
 
     @label.setter
     def label(self, value: str):
@@ -139,6 +145,15 @@ class Corpus:
         if self._top_words:
             logging.warning(f"Overwriting top words: {self._top_words}")
         self._top_words = value
+
+    def top_words_string(self, *, delimiter=";") -> str:
+        if self.is_outliers():
+            return OUTLIERS_LABEL
+        elif self.top_words:
+            return delimiter.join(self.top_words)
+        else:
+            logging.debug(f"No top words available for {self}.")
+            return self.label
 
     @property
     def passages(self) -> list[Passage]:
@@ -155,6 +170,9 @@ class Corpus:
             return True
         except NotFittedError:
             return False
+
+    def is_outliers(self) -> bool:
+        return OUTLIERS_LABEL in self.label
 
     def centroid(self, use_2d_embeddings: bool = True) -> np.ndarray:
         """The mean for all passage embeddings."""
@@ -199,7 +217,8 @@ class Corpus:
         )
 
         if normalize and len(self) > 1:
-            distances /= np.linalg.norm(distances)
+            if norm := np.linalg.norm(distances):  # prevent division by zero
+                distances /= norm
 
         return distances
 
@@ -319,7 +338,10 @@ class Corpus:
             cluster_passages[cluster].append(passage)
 
         for cluster, passages in cluster_passages.items():
-            yield Corpus(tuple(passages), cluster, umap_model=self._umap)
+            label = OUTLIERS_LABEL if cluster == -1 else f"cluster {cluster}"
+            yield Corpus(
+                tuple(passages), label=f"{self.label}; {label}", umap_model=self._umap
+            )
 
     def compress_embeddings(self) -> np.ndarray:
         """Compress the embeddings of the corpus using UMAP and stores them in the corpus
@@ -411,11 +433,9 @@ class Corpus:
                 logging.debug(f"Passage {passage} is out of range {start}-{stop}.")
 
         for bin, bin_passages in passages.items():
-            label = f" {bin}-{min(bin+step_size, stop)}"
+            label = f"{self.label} {bin}-{min(bin+step_size, stop)}"
             if bin_passages:
-                yield Corpus(
-                    tuple(bin_passages), label=self.label + label, umap_model=self.umap
-                )
+                yield Corpus(tuple(bin_passages), label=label, umap_model=self.umap)
             else:
                 logging.warning(f"No passages found for{label}")
 
@@ -475,9 +495,10 @@ class Corpus:
         Returns:
             A list of dictionaries, one for each passage in this corpus.
         """
+        label = self.label[:50] + "..." if len(self.label) > 50 else self.label
         return [
             passage.hover_data(metadata_fields=metadata_fields)
-            | {"corpus": str(self.label)}
+            | {"corpus": label, "top words": self.top_words_string()}
             for passage in self.passages
         ]
 

@@ -100,7 +100,8 @@ class TestCorpus:
             [
                 Passage(f"test {str(i)}", embedding=np.random.rand(768))
                 for i in range(n_passages)
-            ]
+            ],
+            label="TestCorpus",
         )
 
         with caplog.at_level(logging.WARNING):
@@ -119,7 +120,17 @@ class TestCorpus:
 
         for cluster in clusters:
             assert all(passage in corpus.passages for passage in cluster.passages)
-            assert len(cluster) >= min_cluster_size or cluster._label == -1
+            assert len(cluster) >= min_cluster_size or cluster.is_outliers()
+            assert (
+                cluster.label.startswith("TestCorpus; cluster ")
+                or cluster.label == "TestCorpus; Outliers"
+            )
+
+    def test_is_outliers(self, corpus):
+        assert not corpus.is_outliers()
+
+        # Clustering test corpus results in single cluster for outliers
+        assert next(corpus.cluster()).is_outliers()
 
     @pytest.mark.parametrize(
         "sample_size, centroid_based, exception",
@@ -163,14 +174,32 @@ class TestCorpus:
                 assert int(window.label.split("-")[-1]) <= stop
 
     @pytest.mark.parametrize(
+        "corpus, top_words, expected",
+        [
+            (Corpus(), [], "None"),
+            (Corpus(label="test"), [], "test"),
+            (Corpus(label="test"), ["word1", "word2"], "word1;word2"),
+            (Corpus(label="Outliers"), [], "Outliers"),
+        ],
+    )
+    def test_top_words_string(self, corpus, top_words, expected):
+        corpus.top_words = top_words
+
+        assert corpus.top_words_string() == expected
+
+    @pytest.mark.parametrize(
         "corpus,metadata_fields,expected",
         [
             (Corpus(), None, []),
-            (Corpus([Passage("test")]), None, [{"text": "test", "corpus": "None"}]),
+            (
+                Corpus([Passage("test")]),
+                None,
+                [{"text": "test", "corpus": "None", "top words": "None"}],
+            ),
             (
                 Corpus([Passage("test")], label="test label"),
                 None,
-                [{"text": "test", "corpus": "test label"}],
+                [{"text": "test", "corpus": "test label", "top words": "test label"}],
             ),
         ],
     )

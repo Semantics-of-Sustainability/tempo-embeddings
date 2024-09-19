@@ -362,7 +362,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         )
         label = collection
         if passages and filter_words:
-            label += ": " + "; ".join(filter_words)
+            label += ": '" + "; ".join(filter_words) + "'"
         return Corpus(passages, label)
 
     def doc_frequency(

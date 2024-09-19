@@ -171,6 +171,8 @@ class KeywordExtractor:
             the top n words in the corpus as list; if n is None, a generator for all words is returned in descending order.
 
         """
+        # TODO: guess n from knee in score distribution
+
         try:
             self.fit()
             logging.debug("Vectorizer fitted.")
