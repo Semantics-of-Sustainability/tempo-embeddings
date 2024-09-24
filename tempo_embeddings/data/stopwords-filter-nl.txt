@@ -24,6 +24,7 @@ door
 dus
 echter
 een
+één
 eens
 en
 er
@@ -86,6 +87,7 @@ ter
 toch
 toen
 tot
+tussen
 u
 uit
 uw

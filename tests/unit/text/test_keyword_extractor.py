@@ -29,17 +29,22 @@ class TestKeywordExtractor:
             extractor.fit()
 
     @pytest.mark.parametrize(
-        "n,exclude_words,expected",
+        "min_words,max_words,exclude_words,expected",
         [
-            (None, None, ["test", "text"]),
-            (None, ["test"], ["text"]),
-            (5, None, ["test", "text"]),
-            (1, None, ["test"]),
-            (1, ["test"], ["text"]),
-            (0, None, []),
+            (1, 10, None, ["test", "text"]),
+            (1, 10, ["test"], ["text"]),
+            (1, 5, None, ["test", "text"]),
+            (1, 1, None, ["test"]),
+            (2, 2, None, ["test", "text"]),
+            (1, 1, ["test"], ["text"]),
+            (0, 0, None, []),
         ],
     )
-    def test_top_words(self, corpus, n, exclude_words, expected, caplog):
+    def test_top_words(
+        self, corpus, min_words, max_words, exclude_words, expected, caplog
+    ):
+        # FIXME: no knee is ever detected in the test corpus (too small)
+
         test_corpus = Corpus(
             [
                 Passage(
@@ -47,20 +52,24 @@ class TestKeywordExtractor:
                 )
             ]
         )
-        extractor = KeywordExtractor(corpus)
+        extractor = KeywordExtractor(corpus, exclude_words=exclude_words)
 
         with caplog.at_level(logging.DEBUG):
             top_words = extractor.top_words(
-                test_corpus, exclude_words=exclude_words, n=n
+                test_corpus, min_words=min_words, max_words=max_words
             )
             assert top_words == expected
 
-        assert caplog.record_tuples == [
-            ("root", logging.INFO, f"Fitting vectorizer on {corpus}."),
-            ("root", logging.DEBUG, "Vectorizer fitted."),
-        ]
+        assert f"Fitting vectorizer on {corpus}." in caplog.text
+        assert "Vectorizer fitted." in caplog.text
+        if max_words == min_words:
+            assert "No need for knee detection." in caplog.text
+        else:
+            assert (
+                "Knee detected at " in caplog.text or "No knee detected." in caplog.text
+            )
 
         caplog.clear()
         with caplog.at_level(logging.DEBUG):
-            list(extractor.top_words(test_corpus, exclude_words=exclude_words, n=n))
+            extractor.top_words(test_corpus, min_words=min_words, max_words=max_words)
         assert "Vectorizer has already been fitted." in caplog.text
