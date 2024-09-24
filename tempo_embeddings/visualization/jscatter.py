@@ -1,5 +1,3 @@
-from typing import Iterable
-
 import jscatter
 import pandas as pd
 from ipywidgets import widgets
@@ -11,6 +9,8 @@ class JScatter:
     def __init__(
         self,
         *corpora,
+        categorical_fields: list[str] = ["newspaper", "label"],
+        continuous_filter_fields: list[str] = ["year"],
         tooltip_fields: list[str] = ["year", "text", "label", "top words", "newspaper"],
         fillna: dict[str, str] = {"newspaper": "NRC"},
         color_by: str = "label",
@@ -20,6 +20,9 @@ class JScatter:
 
         self._init_dataframe(*corpora, fillna=fillna)
         self._init_scatter(tooltip_fields, color_by)
+
+        self._categorical_fields = categorical_fields
+        self._continuous_fields = continuous_filter_fields
 
     def _init_dataframe(self, *corpora, fillna: dict[str, str]):
         """Create a DataFrame from the given corpora."""
@@ -45,20 +48,52 @@ class JScatter:
 
         # self._filter("outlier", self._df.index.difference(self._df.query("outlier")))
 
-    def _year_filter(self, *, field: str = "year"):
-        """Create a selection widget for filtering on the year field."""
+    def _category_field_filter(self, field: str) -> widgets.VBox:
+        """Create a selection widget for filtering on a categorical field.
+
+
+        Args:
+            field (str): The field to filter on.
+
+        Returns:
+            widgets.VBox: A widget containing the selection widget and the output widget
+        """
+
+        options = self._df[field].unique().tolist()
+
+        selector = widgets.SelectMultiple(
+            options=options, value=options, description=field
+        )
+
+        selector_output = widgets.Output()
+
+        def handle_change(change):
+            self._filter(field, self._df.query(f"{field} in @change.new").index)
+
+        selector.observe(handle_change, names="value")
+
+        return widgets.VBox([selector, selector_output])
+
+    def _continuous_field_filter(self, field: str = "year") -> widgets.VBox:
+        """Create a selection widget for filtering on a continuous field.
+
+        Args:
+            field (str): The field to filter on.
+        Returns:
+            widgets.VBox: A widget containing a RangeSlider widget and the output widget
+        """
 
         min_year = self._df[field].min()
         max_year = self._df[field].max()
 
-        year_selection = widgets.SelectionRangeSlider(
+        selection = widgets.SelectionRangeSlider(
             options=[str(i) for i in range(min_year, max_year + 1)],
             index=(0, max_year - min_year),
             description=field,
             continuous_update=True,
         )
 
-        year_selection_output = widgets.Output()
+        selection_output = widgets.Output()
 
         def handle_slider_change(change):
             start = int(change.new[0])  # noqa: F841
@@ -66,45 +101,9 @@ class JScatter:
 
             self._filter(field, self._df.query("year > @start & year < @end").index)
 
-        year_selection.observe(handle_slider_change, names="value")
+        selection.observe(handle_slider_change, names="value")
 
-        return widgets.VBox([year_selection, year_selection_output])
-
-    def _news_paper_filter(self, *, field: str = "newspaper"):
-        """Create a selection widget for filtering on the newspaper field."""
-
-        options = self._df[field].unique().tolist()
-
-        newspaper_selector = widgets.SelectMultiple(
-            options=options, value=options, description=field
-        )
-
-        newspaper_selector_output = widgets.Output()
-
-        def handle_newspaper_change(change):
-            self._filter(field, self._df.query(f"{field} in @change.new").index)
-
-        newspaper_selector.observe(handle_newspaper_change, names="value")
-
-        return widgets.VBox([newspaper_selector, newspaper_selector_output])
-
-    def _label_filter(self, *, field: str = "label"):
-        """Create a selection widget for filtering on the label field."""
-
-        options = self._df[field].unique().tolist()
-
-        label_selector = widgets.SelectMultiple(
-            options=options, value=options, description=field
-        )
-
-        label_selector_output = widgets.Output()
-
-        def handle_label_change(change):
-            self._filter(field, self._df.query(f"{field} in @change.new").index)
-
-        label_selector.observe(handle_label_change, names="value")
-
-        return widgets.VBox([label_selector, label_selector_output])
+        return widgets.VBox([selection, selection_output])
 
     def _filter(self, field, index):
         """Filter the scatter plot based on the given field and index.
@@ -123,10 +122,12 @@ class JScatter:
 
         self._scatter.filter(index)
 
-    def get_widgets(self) -> Iterable[widgets.Widget]:
+    def get_widgets(self) -> list[widgets.Widget]:
         return (
-            self._scatter.show(),
-            self._year_filter(),
-            self._news_paper_filter(),
-            self._label_filter(),
+            [self._scatter.show()]
+            + [
+                self._continuous_field_filter(field)
+                for field in self._continuous_fields
+            ]
+            + [self._category_field_filter(field) for field in self._categorical_fields]
         )
