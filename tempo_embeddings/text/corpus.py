@@ -2,22 +2,18 @@ import csv
 import gzip
 import logging
 import random
-import string
 from collections import Counter, defaultdict
-from functools import lru_cache
-from itertools import groupby, islice
+from itertools import groupby
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
 import joblib
 import numpy as np
 import pandas as pd
-from scipy.sparse import csr_matrix
 from scipy.spatial.distance import cosine
 from sklearn.base import check_is_fitted
 from sklearn.cluster import HDBSCAN
 from sklearn.exceptions import NotFittedError
-from sklearn.feature_extraction.text import TfidfVectorizer
 from umap.umap_ import UMAP
 
 from ..settings import DEFAULT_ENCODING, OUTLIERS_LABEL, STRICT
@@ -34,7 +30,6 @@ class Corpus:
         label: Optional[Any] = None,
         *,
         umap_model: Optional["UMAP"] = None,
-        vectorizer: Optional[TfidfVectorizer] = None,
     ):
         """Create a new corpus.
 
@@ -43,18 +38,15 @@ class Corpus:
             label: The label of the corpus. Defaults to None.
             umap_model: The UMAP model to use for compressing embeddings.
                 Defaults to None, hence a new model will be initialized.
-            vectorizer: The TfidfVectorizer model to use for vectorizing passages.
-                Defaults to None, hence a new model will be initialized.
         """
         super().__init__()
 
         self._passages: tuple[Passage, ...] = tuple(passages or [])
         self._label: Optional[str] = label
         self._umap = umap_model or UMAP()
-        self._vectorizer: TfidfVectorizer = vectorizer or TfidfVectorizer(
-            tokenizer=lambda passage: [word.casefold() for word in passage.words()],
-            preprocessor=lambda x: x,
-        )
+
+        self._top_words: list[str] = []
+        """A list of significant words in this corpus."""
 
     def __add__(self, other: "Corpus") -> "Corpus":
         if self.umap is other.umap:
@@ -67,23 +59,16 @@ class Corpus:
         else:
             logging.info("Dropping UMAP model while merging corpora .")
             umap = None
-
-        if self.vectorizer is other.vectorizer:
-            vectorizer = self.vectorizer
-        elif self._is_fitted(self.vectorizer) or self._is_fitted(other.vectorizer):
-            raise RuntimeError(
-                "TfidfVectorizer model has been fitted on one of the corpora, cannot merge."
+        if self.top_words or other.top_words:
+            logging.warning(
+                "Dropping existing top words: %s, %s", self.top_words, other.top_words
             )
-        else:
-            logging.info("Merging corpora with identical vectorizers, reusing it.")
-            vectorizer = None
 
-        label = " + ".join((str(label) for label in (self.label, other.label) if label))
+        label = " + ".join(
+            (label for label in (self.label, other.label) if label != str(None))
+        )
         return Corpus(
-            self._passages + other._passages,
-            label=label or None,
-            umap_model=umap,
-            vectorizer=vectorizer,
+            self._passages + other._passages, label=label or None, umap_model=umap
         )
 
     def __eq__(self, other: object) -> bool:
@@ -109,7 +94,7 @@ class Corpus:
         return len(self.passages)
 
     def __repr__(self) -> str:
-        return f"Corpus({self._label!r}, {len(self._passages)} passages)"
+        return f"Corpus({self._label!r}, {len(self._passages)} passages, top words={self.top_words})"
 
     def _select_embeddings(self, use_2d_embeddings: bool):
         if use_2d_embeddings:
@@ -145,19 +130,34 @@ class Corpus:
 
     @property
     def label(self) -> Optional[str]:
-        return self._label
+        return str(self._label)
 
     @label.setter
     def label(self, value: str):
         self._label = value
 
     @property
-    def passages(self) -> list[Passage]:
-        return self._passages
+    def top_words(self) -> list[str]:
+        return self._top_words
+
+    @top_words.setter
+    def top_words(self, value: list[str]):
+        if self._top_words:
+            logging.warning(f"Overwriting top words: {self._top_words}")
+        self._top_words = value
+
+    def top_words_string(self, *, delimiter=";") -> str:
+        if self.is_outliers():
+            return OUTLIERS_LABEL
+        elif self.top_words:
+            return delimiter.join(self.top_words)
+        else:
+            logging.debug(f"No top words available for {self}.")
+            return self.label
 
     @property
-    def vectorizer(self) -> TfidfVectorizer:
-        return self._vectorizer
+    def passages(self) -> list[Passage]:
+        return self._passages
 
     @property
     def umap(self) -> UMAP:
@@ -170,6 +170,9 @@ class Corpus:
             return True
         except NotFittedError:
             return False
+
+    def is_outliers(self) -> bool:
+        return OUTLIERS_LABEL in self.label
 
     def centroid(self, use_2d_embeddings: bool = True) -> np.ndarray:
         """The mean for all passage embeddings."""
@@ -214,7 +217,8 @@ class Corpus:
         )
 
         if normalize and len(self) > 1:
-            distances /= np.linalg.norm(distances)
+            if norm := np.linalg.norm(distances):  # prevent division by zero
+                distances /= norm
 
         return distances
 
@@ -242,11 +246,6 @@ class Corpus:
         return groupby(sorted(self._passages, key=key_func), key_func)
 
     ##### FITTING methods #####
-    def fit_vectorizer(self):
-        if self._is_fitted(self._vectorizer):
-            raise RuntimeError("TfidfVectorizer model has already been fitted.")
-        self._vectorizer.fit(self.passages)
-
     def _fit_umap(self):
         if self._is_fitted(self._umap):
             raise RuntimeError("UMAP model has already been fitted.")
@@ -339,11 +338,9 @@ class Corpus:
             cluster_passages[cluster].append(passage)
 
         for cluster, passages in cluster_passages.items():
+            label = OUTLIERS_LABEL if cluster == -1 else f"cluster {cluster}"
             yield Corpus(
-                tuple(passages),
-                cluster,
-                umap_model=self._umap,
-                vectorizer=self._vectorizer,
+                tuple(passages), label=f"{self.label}; {label}", umap_model=self._umap
             )
 
     def compress_embeddings(self) -> np.ndarray:
@@ -389,12 +386,9 @@ class Corpus:
         else:
             sample_indices = random.sample(range(len(self.passages)), sample_size)
 
-        return Corpus(
-            [self.passages[i] for i in sample_indices],
-            label=self.label,
-            umap_model=self.umap,
-            vectorizer=self.vectorizer,
-        )
+        passages = [self.passages[i] for i in sample_indices]
+
+        return Corpus(passages, label=self.label, umap_model=self.umap)
 
     def windows(
         self,
@@ -439,14 +433,9 @@ class Corpus:
                 logging.debug(f"Passage {passage} is out of range {start}-{stop}.")
 
         for bin, bin_passages in passages.items():
-            label = f" {bin}-{min(bin+step_size, stop)}"
+            label = f"{self.label} {bin}-{min(bin+step_size, stop)}"
             if bin_passages:
-                yield Corpus(
-                    tuple(bin_passages),
-                    label=self.label + label,
-                    umap_model=self.umap,
-                    vectorizer=self.vectorizer,
-                )
+                yield Corpus(tuple(bin_passages), label=label, umap_model=self.umap)
             else:
                 logging.warning(f"No passages found for{label}")
 
@@ -494,113 +483,6 @@ class Corpus:
         for passage in self._passages:
             yield passage.text
 
-    ##### TF-IDF methods #####
-    def _tf_idf_words(self, *, n: int = None) -> list[str]:
-        """The top n words in the corpus with maximum <tf-idf> x <distance to centroid>.
-
-        Each word is scored by multiplying its tf-idf score for each passage
-        with the passage's embedding distance to the centroid.
-
-        Args:
-            n (int): The number of words to return. Defaults to None, returning all words
-
-        Returns:
-            the n highest scoring words in a sorted list
-        """
-        tf_idfs: csr_matrix = self._tf_idf()
-
-        assert tf_idfs.shape == (
-            len(self.passages),
-            len(get_vocabulary(self.vectorizer)),
-        ), f"tf_idfs shape ({tf_idfs.shape}) does not match expected shape."
-
-        ### Weigh in vector distances
-        distances: np.ndarray = self.distances(normalize=True)
-        weights = np.ones(distances.shape[0]) - distances
-
-        assert (
-            weights.shape[0] == tf_idfs.shape[0]
-        ), f"distances shape ({weights.shape}) does not match expected shape."
-
-        weighted_tf_idfs = np.average(tf_idfs.toarray(), weights=weights, axis=0)
-        assert weighted_tf_idfs.shape[0] == len(get_vocabulary(self.vectorizer))
-
-        # pylint: disable=invalid-unary-operand-type
-        top_indices = np.argsort(-weighted_tf_idfs)[:n]
-
-        return [get_vocabulary(self.vectorizer)[i] for i in top_indices]
-
-    def _tf_idf(self) -> csr_matrix:
-        """Returns a sparse matrix for the TF-IDF of all passages in the corpus.
-
-        Returns:
-            np.ndarray: a sparse matrix of n_passages x n_words
-        """
-        if not self._is_fitted(self.vectorizer):
-            raise RuntimeError(
-                "TfidfVectorizer model has not been fitted. Run fit_vectorizer() first."
-            )
-        return self.vectorizer.transform(self.passages)
-
-    @lru_cache(maxsize=256)
-    def top_words(
-        self,
-        *,
-        exclude_words: Iterable[str] = None,
-        min_word_length: int = 3,
-        n: int = 5,
-    ):
-        """
-        Extract the top words from the corpus.
-
-        The 'exclude_words' argument must be hashable (hence immutable) for caching, e.g. a tuple or frozenset.
-
-        Args:
-            exclude_words: The word to exclude from the label,
-                e.g. stopwords and the search term used for composing this corpus
-            min_word_length: the minimum length of a word to be included in the label. Defaults to 3
-            n:  the number of words to return. Defaults to 5
-        """
-        if exclude_words is None:
-            exclude_words = set()
-        exclude_words = {word.casefold() for word in exclude_words}
-
-        # account for word filtering:
-        _n = n + len(exclude_words)
-
-        if self.label in (-1, OUTLIERS_LABEL):
-            words = [OUTLIERS_LABEL]
-        else:
-            words = self._tf_idf_words(n=_n)
-
-        filtered_words = (
-            word
-            for word in words
-            if len(word.strip()) >= min_word_length
-            and not any(char in string.punctuation for char in word)
-            and word.casefold() not in exclude_words
-        )
-        return list(islice(filtered_words, n))
-
-    def set_topic_label(self, *, prefix: Optional[str] = None, **kwargs) -> str:
-        """Set the label of the corpus to the top word(s) in the corpus.
-
-        Kwargs:
-            exclude_words: The word to exclude from the label,
-                e.g. stopwords and the search term used for composing this corpus
-            n: concatenate the top n words in the corpus as the label.
-            stopwords: if given, exclude these words
-
-        Returns:
-            str: the newly assigned label of the corpus
-        """
-        label = "; ".join(sorted(self.top_words(**kwargs)))
-        if prefix:
-            label = f"{prefix}: " + label
-        self._label = label
-
-        return self._label
-
     def hover_datas(
         self, metadata_fields: Optional[list[str]] = None
     ) -> list[dict[str, str]]:
@@ -613,9 +495,10 @@ class Corpus:
         Returns:
             A list of dictionaries, one for each passage in this corpus.
         """
+        label = self.label[:50] + "..." if len(self.label) > 50 else self.label
         return [
             passage.hover_data(metadata_fields=metadata_fields)
-            | {"corpus": str(self.label)}
+            | {"corpus": label, "top words": self.top_words_string()}
             for passage in self.passages
         ]
 
@@ -676,8 +559,6 @@ class Corpus:
     def save(self, filepath: Path):
         """Save the corpus to a file."""
 
-        # FIXME: TfIdfVectorizer cannot be saved, see  https://stackoverflow.com/questions/32764991/how-do-i-store-a-tfidfvectorizer-for-future-use-in-scikit-learn
-        raise NotImplementedError("TfidfVectorizer cannot be saved.")
         with open(filepath, "wb") as f:
             joblib.dump(self, f)
 
@@ -685,7 +566,6 @@ class Corpus:
     def load(cls, filepath: Path):
         """Load the corpus from a file."""
 
-        raise NotImplementedError("TfidfVectorizer cannot be saved.")
         with open(filepath, "rb") as f:
             corpus = joblib.load(f)
 
@@ -747,17 +627,3 @@ class Corpus:
             filter_terms=filter_terms,
         )
         return Corpus(passages)
-
-
-@lru_cache
-def get_vocabulary(vectorizer: TfidfVectorizer) -> list[str]:
-    """Caching wrapper for getting the vocabulary of a vectorizer.
-
-    Args:
-        vectorizer (TfidfVectorizer): a vectorizer generated by count_vectorizer()
-
-    Returns:
-        list[str]: the vocabulary of the vectorizer.
-    """
-
-    return vectorizer.get_feature_names_out()
