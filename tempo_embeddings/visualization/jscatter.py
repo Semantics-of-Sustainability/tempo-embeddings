@@ -24,7 +24,10 @@ class JScatter:
     def _init_dataframe(self, *corpora, fillna: dict[str, str]):
         """Create a DataFrame from the given corpora."""
         self._df = (
-            pd.concat(c.to_dataframe().assign(label=c.label) for c in corpora)
+            pd.concat(
+                c.to_dataframe().assign(label=c.label).assign(outlier=c.is_outliers())
+                for c in corpora
+            )
             .reset_index()
             .fillna(fillna)
             .convert_dtypes()
@@ -33,18 +36,14 @@ class JScatter:
     def _init_scatter(self, tooltip_fields: list[str], color_by: str):
         """Create the scatter plot."""
 
-        self._scatter = jscatter.Scatter(
-            data=self._df,
-            x="x",
-            y="y",
-            color_by=color_by,
-            # title=f"Clusters for '{text_widget.value}'",
-            legend=True,
+        self._scatter = (
+            jscatter.Scatter(data=self._df, x="x", y="y")
+            .color(by=color_by)
+            .axes(False)
+            .tooltip(True, properties=tooltip_fields)
         )
-        self._scatter.axes(False)
-        self._scatter.tooltip(True, properties=tooltip_fields)
 
-        # TODO: grey out Outliers
+        # self._filter("outlier", self._df.index.difference(self._df.query("outlier")))
 
     def _year_filter(self, *, field: str = "year"):
         """Create a selection widget for filtering on the year field."""
@@ -89,6 +88,24 @@ class JScatter:
 
         return widgets.VBox([newspaper_selector, newspaper_selector_output])
 
+    def _label_filter(self, *, field: str = "label"):
+        """Create a selection widget for filtering on the label field."""
+
+        options = self._df[field].unique().tolist()
+
+        label_selector = widgets.SelectMultiple(
+            options=options, value=options, description=field
+        )
+
+        label_selector_output = widgets.Output()
+
+        def handle_label_change(change):
+            self._filter(field, self._df.query(f"{field} in @change.new").index)
+
+        label_selector.observe(handle_label_change, names="value")
+
+        return widgets.VBox([label_selector, label_selector_output])
+
     def _filter(self, field, index):
         """Filter the scatter plot based on the given field and index.
 
@@ -107,4 +124,9 @@ class JScatter:
         self._scatter.filter(index)
 
     def get_widgets(self) -> Iterable[widgets.Widget]:
-        return self._scatter.show(), self._year_filter(), self._news_paper_filter()
+        return (
+            self._scatter.show(),
+            self._year_filter(),
+            self._news_paper_filter(),
+            self._label_filter(),
+        )
