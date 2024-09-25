@@ -62,7 +62,10 @@ class JScatter:
         options = self._df[field].unique().tolist()
 
         selector = widgets.SelectMultiple(
-            options=options, value=options, description=field
+            options=options,
+            value=options,
+            description=field,
+            layout={"width": "max-content"},
         )
 
         selector_output = widgets.Output()
