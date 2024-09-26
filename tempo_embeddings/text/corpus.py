@@ -548,6 +548,9 @@ class Corpus:
         # TODO: merge with hover_datas()
 
         corpus_properties = {"corpus": self.label}
+        if self.top_words:
+            corpus_properties["top words"] = "; ".join(self.top_words)
+
         return pd.DataFrame(
             (
                 passage.to_dict()

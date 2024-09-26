@@ -397,6 +397,7 @@ class TestCorpus:
             "d733014f3bc3878a4f2a8f276e65d7d1408c6a4bb15f081489b607386095fba4",
             "526ed2b3082137d48a2d337ce7550ecb9401070dc406c7dd5ac15e39520ecd19",
         ]
+        corpus.top_words = ["word1", "word2"]
 
         expected = pd.DataFrame(
             [
@@ -410,6 +411,7 @@ class TestCorpus:
                     "x": 0.0,
                     "y": 0.0,
                     "corpus": "TestCorpus",
+                    "top words": "word1; word2",
                     "distance_to_centroid": 0.0,
                 }
                 for passage, _id, year in zip(corpus.passages, ids, range(1950, 1956))
