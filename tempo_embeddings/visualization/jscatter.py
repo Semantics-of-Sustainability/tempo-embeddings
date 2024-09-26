@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 
 import jscatter
@@ -10,19 +11,119 @@ from ..text.corpus import Corpus
 from ..text.keyword_extractor import KeywordExtractor
 
 
-class JScatter:
+class JScatterVisualizer:
     """A class for creating interactive scatter plots with Jupyter widgets."""
 
     def __init__(
         self,
         corpus,
-        *,
         categorical_fields: list[str] = ["newspaper", "label"],
         continuous_filter_fields: list[str] = ["year"],
         tooltip_fields: list[str] = ["year", "text", "label", "top words", "newspaper"],
         fillna: dict[str, str] = {"newspaper": "NRC"},
         color_by: str = "label",
         keyword_extractor: Optional[KeywordExtractor] = None,
+    ):
+        self._keyword_extractor = keyword_extractor or KeywordExtractor(
+            corpus, exclude_words=STOPWORDS
+        )
+        self._categorical_fields = categorical_fields
+        self._continuous_filter_fields = continuous_filter_fields
+        self._tooltip_fields = tooltip_fields
+        self._fillna = fillna
+        self._color_by = color_by
+
+        self._plot = PlotWidgets(
+            [corpus],
+            self._categorical_fields,
+            self._continuous_filter_fields,
+            self._tooltip_fields,
+            self._fillna,
+        )
+        self._cluster_plot = None
+        """Index of the current plot being visualized."""
+
+    @property
+    def clusters(self):
+        if self._cluster_plot is None:
+            logging.warning("No clusters have been computed yet.")
+            return None
+        else:
+            return self._cluster_plot._corpora
+
+    def _cluster_button(self) -> widgets.Button:
+        """Create a button for clustering the data."""
+
+        # TODO: add selectors for clustering parameters
+
+        def cluster(button):
+            # TODO: add clustering parameters
+
+            if self._cluster_plot is None:
+                # Initialize clustered plot
+                clusters = list(self._plot._corpora[0].cluster())
+
+                if self._keyword_extractor:
+                    for c in clusters:
+                        c.top_words = self._keyword_extractor.top_words(c)
+                self._cluster_plot = PlotWidgets(
+                    clusters,
+                    self._categorical_fields,
+                    self._continuous_filter_fields,
+                    self._tooltip_fields,
+                    self._fillna,
+                    self._color_by,
+                )
+
+            widgets = self._cluster_plot._widgets + [self._return_button()]
+            clear_output(wait=True)
+            display(*widgets)
+
+        button = widgets.Button(
+            description="Cluster",
+            disabled=False,
+            button_style="",  # 'success', 'info', 'warning', 'danger' or ''
+            tooltip="Cluster the data",
+            # icon="check",  # (FontAwesome names without the `fa-` prefix)
+        )
+        button.on_click(cluster)
+
+        return button
+
+    def _return_button(self) -> widgets.Button:
+        def _return(button):
+            clear_output(wait=True)
+            widgets = self._plot._widgets + [self._cluster_button()]
+            clear_output(wait=True)
+            display(*widgets)
+
+        button = widgets.Button(
+            description="Return",
+            disabled=False,
+            button_style="",  # 'success', 'info', 'warning', 'danger' or ''
+            tooltip="Return to initial view",
+        )
+        button.on_click(_return)
+
+        return button
+
+    def visualize(self):
+        """Display the visualization."""
+        widgets = self._plot._widgets + [self._cluster_button()]
+        display(*widgets)
+
+
+class PlotWidgets:
+    """A class for holding the widgets for a plot."""
+
+    def __init__(
+        self,
+        corpora: list[Corpus],
+        categorical_fields: list[str] = ["newspaper", "label"],
+        continuous_filter_fields: list[str] = ["year"],
+        tooltip_fields: list[str] = ["year", "text", "label", "top words", "newspaper"],
+        fillna: dict[str, str] = {"newspaper": "NRC"},
+        color_by: str = "label",
     ):
         """Create a JScatter object for visualizing a corpus.
 
@@ -39,7 +140,7 @@ class JScatter:
         self._indices: dict[str, pd.RangeIndex] = {}
         """Keeps track of filtered indices per filter field."""
 
-        self._corpora: list[Corpus] = [corpus]
+        self._corpora: list[Corpus] = corpora
         self._fillna = fillna
         self._tooltip_fields = tooltip_fields
         self._color_by = color_by
@@ -47,15 +148,11 @@ class JScatter:
         self._categorical_fields = categorical_fields
         self._continuous_fields = continuous_filter_fields
 
-        self._keyword_extractor = keyword_extractor or KeywordExtractor(
-            corpus, exclude_words=STOPWORDS
-        )
         self._init_scatter()
         self._init_widgets()
 
-    @property
-    def corpora(self) -> list[Corpus]:
-        return self._corpora
+    def __len__(self):
+        return len(self._corpora)
 
     def _init_dataframe(self) -> pd.DataFrame:
         """Create a DataFrame from the corpora."""
@@ -93,9 +190,6 @@ class JScatter:
             [self._continuous_field_filter(field) for field in self._continuous_fields]
         )
 
-        if len(self._corpora) == 1:
-            self._widgets.append(self._cluster_button())
-
         return self._widgets
 
     def _category_field_filter(self, field: str) -> widgets.VBox:
@@ -112,7 +206,7 @@ class JScatter:
 
         selector = widgets.SelectMultiple(
             options=options,
-            value=options,
+            value=options,  # TODO: filter out outliers
             description=field,
             layout={"width": "max-content"},
         )
@@ -173,46 +267,3 @@ class JScatter:
             index = index.intersection(_index)
 
         self._scatter.filter(index)
-
-    def _cluster_button(self) -> widgets.Button:
-        """Create a button for clustering the data.
-
-        This assumes a single corpus is currently being visualized, and triggers its cluster() method.
-        The resulting clusters replace the current single corpus, and re-initialize the scatter plot.
-
-        Raises:
-            ValueError: If clustering is attempted on multiple corpora.
-        """
-
-        # TODO: add selectors for clustering parameters
-
-        if len(self._corpora) > 1:
-            raise ValueError("Clustering is only supported for a single corpus.")
-
-        def cluster(button):
-            self._corpora = list(self._corpora[0].cluster())
-
-            if self._keyword_extractor:
-                for corpus in self._corpora:
-                    corpus.top_words = self._keyword_extractor.top_words(corpus)
-
-            self._init_scatter()
-            self._init_widgets()
-            clear_output(wait=True)
-            self.visualize()
-
-        cluster_button = widgets.Button(
-            description="Cluster",
-            disabled=False,
-            button_style="",  # 'success', 'info', 'warning', 'danger' or ''
-            tooltip="Cluster the data",
-            # icon="check",  # (FontAwesome names without the `fa-` prefix)
-        )
-        cluster_button.on_click(cluster)
-
-        return cluster_button
-
-    def visualize(self):
-        """Display the visualization."""
-
-        display(*self._widgets)
