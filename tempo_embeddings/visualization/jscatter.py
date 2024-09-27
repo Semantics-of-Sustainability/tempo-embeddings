@@ -108,10 +108,11 @@ class JScatterVisualizer:
 
         return button
 
-    def visualize(self):
-        """Display the visualization."""
+    def visualize(self) -> list[widgets.Widget]:
+        """Display the initial visualization."""
         widgets = self._plot._widgets + [self._cluster_button()]
         display(*widgets)
+        return widgets
 
 
 class PlotWidgets:
@@ -237,6 +238,9 @@ class PlotWidgets:
         Returns:
             widgets.VBox: A widget containing a RangeSlider widget and the output widget
         """
+        if field not in self._df.columns:
+            logging.warning(f"Categorical field '{field}' not found, ignoring")
+            return
 
         min_year = self._df[field].min()
         max_year = self._df[field].max()
