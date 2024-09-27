@@ -39,6 +39,7 @@ class JScatterVisualizer:
             self._continuous_filter_fields,
             self._tooltip_fields,
             self._fillna,
+            self._color_by,
         )
         self._cluster_plot = None
         """Index of the current plot being visualized."""
@@ -119,22 +120,21 @@ class PlotWidgets:
     def __init__(
         self,
         corpora: list[Corpus],
-        categorical_fields: list[str] = ["newspaper", "label"],
-        continuous_filter_fields: list[str] = ["year"],
-        tooltip_fields: list[str] = ["year", "text", "label", "top words", "newspaper"],
-        fillna: dict[str, str] = {"newspaper": "NRC"},
-        color_by: str = "label",
+        categorical_fields: list[str],
+        continuous_filter_fields: list[str],
+        tooltip_fields: list[str],
+        fillna: dict[str, str],
+        color_by: str,
     ):
-        """Create a JScatter object for visualizing a corpus.
+        """Create a PlotWidgets object to create the widgets for a JScatterVisualizer.
 
         Args:
             corpus (Corpus): The corpus to visualize.
-            categorical_fields (list[str], optional): The categorical fields to filter on. Defaults to ["newspaper", "label"].
-            continuous_filter_fields (list[str], optional): The continuous fields to filter on. Defaults to ["year"].
-            tooltip_fields (list[str], optional): The fields to show in the tooltip. Defaults to ["year", "text", "label", "top words", "newspaper"].
-            fillna (dict[str, str], optional): The values to fill NaN values with. Defaults to {"newspaper": "NRC"}.
-            color_by (str, optional): The field to color the scatter plot by. Defaults to "label".
-            keyword_extractor (Optional[KeywordExtractor], optional): A keyword extractor to use for clustering. If not set, will be fitted on the corpus.
+            categorical_fields (list[str], optional): The categorical fields to filter on.
+            continuous_filter_fields (list[str], optional): The continuous fields to filter on.
+            tooltip_fields (list[str], optional): The fields to show in the tooltip.
+            fillna (dict[str, str], optional): The values to fill NaN values with.
+            color_by (str, optional): The field to color the scatter plot by.
         """
 
         self._indices: dict[str, pd.RangeIndex] = {}
@@ -201,24 +201,33 @@ class PlotWidgets:
         Returns:
             widgets.VBox: A widget containing the selection widget and the output widget
         """
+        # FIXME: this not work for filtering by "top words"
+
+        if field not in self._df.columns:
+            logging.warning(f"Categorical field '{field}' not found, ignoring")
+            return
 
         options = self._df[field].unique().tolist()
 
-        selector = widgets.SelectMultiple(
-            options=options,
-            value=options,  # TODO: filter out outliers
-            description=field,
-            layout={"width": "max-content"},
-        )
+        if len(options) > 1:
+            selector = widgets.SelectMultiple(
+                options=options,
+                value=options,  # TODO: filter out outliers
+                description=field,
+                layout={"width": "max-content"},
+                rows=len(options),
+            )
 
-        selector_output = widgets.Output()
+            selector_output = widgets.Output()
 
-        def handle_change(change):
-            self._filter(field, self._df.query(f"{field} in @change.new").index)
+            def handle_change(change):
+                self._filter(field, self._df.query(f"{field} in @change.new").index)
 
-        selector.observe(handle_change, names="value")
+            selector.observe(handle_change, names="value")
 
-        return widgets.VBox([selector, selector_output])
+            return widgets.VBox([selector, selector_output])
+        else:
+            logging.debug(f"Skipping field {field} with only {len(options)} option(s)")
 
     def _continuous_field_filter(self, field: str = "year") -> widgets.VBox:
         """Create a selection widget for filtering on a continuous field.
