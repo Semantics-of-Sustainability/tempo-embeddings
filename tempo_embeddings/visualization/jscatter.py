@@ -77,8 +77,8 @@ class JScatterVisualizer:
                 )
 
             widgets = self._cluster_plot._widgets + [self._return_button()]
-            clear_output(wait=True)
-            display(*widgets)
+
+            display(*widgets, clear=True)
 
         button = widgets.Button(
             description="Cluster",
@@ -95,8 +95,8 @@ class JScatterVisualizer:
         def _return(button):
             clear_output(wait=True)
             widgets = self._plot._widgets + [self._cluster_button()]
-            clear_output(wait=True)
-            display(*widgets)
+
+            display(*widgets, clear=True)
 
         button = widgets.Button(
             description="Return",
@@ -180,20 +180,31 @@ class PlotWidgets:
         )
         return self._scatter
 
-    def _init_widgets(self) -> list[widgets.Widget]:
+    def _init_widgets(self) -> tuple[jscatter.Scatter, widgets.HBox, widgets.HBox]:
         """Create the widgets for filtering the scatter plot."""
 
-        self._widgets = [self._scatter.show()]
-        self._widgets.extend(
-            [self._category_field_filter(field) for field in self._categorical_fields]
-        )
-        self._widgets.extend(
-            [self._continuous_field_filter(field) for field in self._continuous_fields]
-        )
+        category_filters: list[widgets.Widget] = [
+            widget
+            for field in self._categorical_fields
+            for widget in self._category_field_filter(field) or []
+        ]
+        continuous_filters: list[widgets.Widget] = [
+            widget
+            for field in self._continuous_fields
+            for widget in self._continuous_field_filter(field) or []
+        ]
+
+        self._widgets: tuple[jscatter.Scatter, widgets.HBox, widgets.HBox] = [
+            self._scatter.show(),
+            widgets.HBox(continuous_filters),
+            widgets.HBox(category_filters),
+        ]
 
         return self._widgets
 
-    def _category_field_filter(self, field: str) -> widgets.VBox:
+    def _category_field_filter(
+        self, field: str
+    ) -> Optional[tuple[widgets.SelectMultiple, widgets.Output]]:
         """Create a selection widget for filtering on a categorical field.
 
         Args:
@@ -216,7 +227,7 @@ class PlotWidgets:
                 value=options,  # TODO: filter out outliers
                 description=field,
                 layout={"width": "max-content"},
-                rows=len(options),
+                rows=min(len(options), 10),
             )
 
             selector_output = widgets.Output()
@@ -226,11 +237,13 @@ class PlotWidgets:
 
             selector.observe(handle_change, names="value")
 
-            return widgets.VBox([selector, selector_output])
+            return selector, selector_output
         else:
             logging.debug(f"Skipping field {field} with only {len(options)} option(s)")
 
-    def _continuous_field_filter(self, field: str = "year") -> widgets.VBox:
+    def _continuous_field_filter(
+        self, field: str
+    ) -> Optional[tuple[widgets.SelectionRangeSlider, widgets.Output]]:
         """Create a selection widget for filtering on a continuous field.
 
         Args:
@@ -262,7 +275,7 @@ class PlotWidgets:
 
         selection.observe(handle_slider_change, names="value")
 
-        return widgets.VBox([selection, selection_output])
+        return selection, selection_output
 
     def _filter(self, field, index):
         """Filter the scatter plot based on the given field and index.
