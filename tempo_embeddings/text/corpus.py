@@ -549,7 +549,7 @@ class Corpus:
 
         corpus_properties = {"corpus": self.label}
         if self.top_words:
-            corpus_properties["top words"] = "; ".join(self.top_words)
+            corpus_properties["top words"] = self.top_words_string()
 
         return pd.DataFrame(
             (
