@@ -1,29 +1,50 @@
 import pytest
-from ipywidgets.widgets import HBox, VBox
+from ipywidgets.widgets import Button, HBox, Output, SelectionRangeSlider
 
-from tempo_embeddings.settings import STRICT
-from tempo_embeddings.visualization.jscatter import JScatter
+from tempo_embeddings.text.corpus import Corpus
+from tempo_embeddings.visualization.jscatter import JScatterVisualizer, PlotWidgets
 
 
-class TestJScatter:
+class TestJScatterVisualizer:
     @pytest.mark.parametrize(
-        "categorical_fields, continuous_filter_fields",
-        [(["provenance"], ["year"]), (["provenance"], []), ([], ["year"])],
+        "cat_fields,cont_fields,cont_widget_types,cat_widget_types",
+        [
+            (["provenance"], ["year"], [], [SelectionRangeSlider, Output]),
+            (["provenance"], [], [], []),
+            ([], ["year"], [], [SelectionRangeSlider, Output]),
+            (
+                ["provenance", "invalid_1"],
+                ["year", "invalid_2"],
+                [],
+                [SelectionRangeSlider, Output],
+            ),
+        ],
+        # TODO: test for continuous filter
     )
-    def test_get_widgets(self, corpus, categorical_fields, continuous_filter_fields):
-        widgets = JScatter(
-            corpus,
-            categorical_fields=categorical_fields,
-            continuous_filter_fields=continuous_filter_fields,
-        ).get_widgets()
+    def test_visualize(
+        self, corpus, cat_fields, cont_fields, cont_widget_types, cat_widget_types
+    ):
+        visualizer = JScatterVisualizer(
+            corpus, categorical_fields=cat_fields, continuous_filter_fields=cont_fields
+        )
 
-        assert isinstance(
-            widgets.pop(0), HBox
-        ), "First widget should be an HBox (the Scatter plot)"
+        widgets = visualizer.visualize()
 
-        for widget, _ in zip(
-            widgets, categorical_fields + continuous_filter_fields, **STRICT
-        ):
-            assert isinstance(
-                widget, VBox
-            ), "There should be a VBox widget for each field"
+        categorical_filters = widgets[1].children
+        continous_filters = widgets[2].children
+
+        assert [type(w) for w in widgets] == [HBox, HBox, HBox, Button]
+        assert [type(w) for w in continous_filters] == cont_widget_types
+        assert [type(w) for w in categorical_filters] == cat_widget_types
+
+        assert visualizer._cluster_plot is None
+
+    def test_cluster_button(self, corpus):
+        visualizer = JScatterVisualizer(corpus)
+        widgets = visualizer.visualize()
+
+        assert visualizer.clusters is None
+
+        widgets[-1].click()
+        assert isinstance(visualizer._cluster_plot, PlotWidgets)
+        assert all(isinstance(c, Corpus) for c in visualizer.clusters)

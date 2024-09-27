@@ -411,7 +411,7 @@ class TestCorpus:
                     "x": 0.0,
                     "y": 0.0,
                     "corpus": "TestCorpus",
-                    "top words": "word1; word2",
+                    "top words": "word1;word2",
                     "distance_to_centroid": 0.0,
                 }
                 for passage, _id, year in zip(corpus.passages, ids, range(1950, 1956))
