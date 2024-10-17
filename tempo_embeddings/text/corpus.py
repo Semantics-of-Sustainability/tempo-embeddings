@@ -545,10 +545,17 @@ class Corpus:
 
         """
         # TODO: add option for including compressed or full embedding or no centroid distances
+        # TODO: merge with hover_datas()
+
+        corpus_properties = {"corpus": self.label}
+        if self.top_words:
+            corpus_properties["top words"] = self.top_words_string()
 
         return pd.DataFrame(
             (
-                passage.to_dict() | {"distance_to_centroid": distance}
+                passage.to_dict()
+                | corpus_properties
+                | {"distance_to_centroid": distance}
                 for passage, distance in zip(
                     self.passages,
                     self.distances(normalize=True, use_2d_embeddings=True),

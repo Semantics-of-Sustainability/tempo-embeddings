@@ -4,12 +4,16 @@ import string
 from typing import Any, Iterable, Optional
 
 import pandas as pd
+from dateutil.parser import parse
 
 from .highlighting import Highlighting
 
 
 class Passage:
     """A text passage with optional metadata and highlighting."""
+
+    _TYPE_CONVERTERS = {"year": int, "date": parse}
+    """When exporting to dict, convert these fields using the specified converter."""
 
     def __init__(
         self,
@@ -178,6 +182,8 @@ class Passage:
 
     def to_dict(self) -> pd.DataFrame:
         """Returns a dictionary representation of the passage."""
+
+        # TODO: merge with hover_data()
         d = {
             "text": self.text,
             "ID_DB": self.get_unique_id(),
@@ -339,6 +345,12 @@ class Passage:
         """
 
         metadata = _object.properties
+
+        # convert date types; can be removed once Weaviate index has the right types
+        for field in cls._TYPE_CONVERTERS:
+            if field in metadata:
+                metadata[field] = cls._TYPE_CONVERTERS[field](metadata[field])
+
         text = metadata.pop("passage")
         highlighting = (
             Highlighting.from_string(metadata.pop("highlighting"))

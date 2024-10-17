@@ -89,7 +89,7 @@ class TestWeaviateDatabase:
         for passage, year in zip(
             sorted(corpus.passages, key=lambda p: p.metadata["year"]), range(1950, 1956)
         ):
-            assert passage.metadata == {"provenance": "test_file", "year": str(year)}
+            assert passage.metadata == {"provenance": "test_file", "year": year}
 
     @pytest.mark.parametrize(
         "term, metadata, normalize, expected",
@@ -168,7 +168,7 @@ class TestWeaviateDatabase:
                 "highlighting": "1_3",
                 "passage": f"test text {i}",
                 "provenance": "test_file",
-                "year": str(1950 + i),
+                "year": 1950 + i,
                 "uuid": "5eec7ad3-4802-5c4b-82a5-3456bacec6b0",
                 "vector": np.zeros(768),
             }
@@ -212,7 +212,7 @@ class TestWeaviateDatabase:
         expected_properties = [
             {
                 "provenance": "test_file",
-                "year": str(1950 + i),
+                "year": 1950 + i,
                 "passage": f"test text {str(i)}",
                 "highlighting": "1_3",
             }
