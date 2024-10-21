@@ -33,11 +33,11 @@ _CORPUS_DIRS: list[Path] = [
         "/data/datasets/research-semantics-of-sustainability/semantics-of-sustainability/data/"
     ),
     # Snellius:
-    Path("/home/cschnober/data/"),
+    Path().home() / "data",
     # Yoda drive mounted on MacOS:
-    Path(
-        "/Volumes/i-lab.data.uu.nl/research-semantics-of-sustainability/semantics-of-sustainability/data"
-    ),
+    # Path(
+    #     "/Volumes/i-lab.data.uu.nl/research-semantics-of-sustainability/semantics-of-sustainability/data"
+    # ),
 ]
 """Directories in which corpora are stored; the first one found is used."""
 
@@ -60,6 +60,7 @@ WTPSPLIT_MODEL = os.environ.get("WTPSPLIT_MODEL", "sat-3l-sm")
 DEVICE: Optional[str] = os.environ.get("DEVICE")
 
 WEAVIATE_CONFIG_COLLECTION: str = "TempoEmbeddings"
+WEAVIATE_SERVERS = [("Research Cloud", "145.38.187.187"), ("local", "localhost")]
 
 STRICT = {"strict": True} if int(platform.python_version_tuple()[1]) >= 10 else {}
 """Optional argument for zip() to enforce strict mode in Python 3.10+."""
