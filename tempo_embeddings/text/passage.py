@@ -4,7 +4,7 @@ import string
 from typing import Any, Iterable, Optional
 
 import pandas as pd
-from dateutil.parser import parse
+from dateutil.parser import ParserError, parse
 
 from .highlighting import Highlighting
 
@@ -349,7 +349,12 @@ class Passage:
         # convert date types; can be removed once Weaviate index has the right types
         for field in cls._TYPE_CONVERTERS:
             if field in metadata:
-                metadata[field] = cls._TYPE_CONVERTERS[field](metadata[field])
+                try:
+                    metadata[field] = cls._TYPE_CONVERTERS[field](metadata[field])
+                except ParserError as e:
+                    logging.error(
+                        f"Could not convert '{metadata[field]}' in '{field}': {e}"
+                    )
 
         text = metadata.pop("passage")
         highlighting = (
