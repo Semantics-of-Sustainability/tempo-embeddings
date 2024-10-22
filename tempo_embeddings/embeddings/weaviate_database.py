@@ -507,6 +507,11 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
     ) -> Iterable[tuple[Passage, float]]:
         # TODO: use autocut: https://weaviate.io/developers/weaviate/api/graphql/additional-operators#autocut
 
+        if max_neighbors > 10000:
+            logging.warning(
+                "Limiting maximum number of neighbors to 10000 (was: %d)", max_neighbors
+            )
+            max_neighbors = 10000
         wv_collection = self._client.collections.get(collection)
         response = wv_collection.query.near_vector(
             near_vector=vector,
