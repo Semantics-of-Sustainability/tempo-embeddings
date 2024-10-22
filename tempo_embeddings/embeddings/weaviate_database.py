@@ -380,7 +380,10 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             include_vector=include_embeddings,
         )
         passages: tuple[Passage] = tuple(
-            [Passage.from_weaviate_record(o) for o in response.objects]
+            [
+                Passage.from_weaviate_record(o, collection=collection)
+                for o in response.objects
+            ]
         )
         label = collection
         if passages and filter_words:
@@ -528,7 +531,10 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         )
 
         for o in response.objects:
-            yield Passage.from_weaviate_record(o), o.metadata.distance
+            yield (
+                Passage.from_weaviate_record(o, collection=collection),
+                o.metadata.distance,
+            )
 
     def query_text_neighbors(
         self, collection: Collection, text: list[float], k_neighbors=10

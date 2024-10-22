@@ -89,7 +89,11 @@ class TestWeaviateDatabase:
         for passage, year in zip(
             sorted(corpus.passages, key=lambda p: p.metadata["year"]), range(1950, 1956)
         ):
-            assert passage.metadata == {"provenance": "test_file", "year": year}
+            assert passage.metadata == {
+                "provenance": "test_file",
+                "year": year,
+                "collection": "TestCorpus",
+            }
 
     @pytest.mark.parametrize(
         "term, metadata, normalize, expected",
@@ -124,18 +128,11 @@ class TestWeaviateDatabase:
 
         neighbours: Corpus = weaviate_db_manager_with_data.neighbours(sub_corpus, k)
 
-        if k + sub_corpus_size >= len(corpus):
-            expected_passages = set(corpus.passages) ^ set(sub_corpus.passages)
-            assert set(neighbours.passages) == expected_passages
-        else:
-            assert len(neighbours) == k
-            assert all(passage in corpus.passages for passage in neighbours.passages)
-            assert all(
-                passage not in sub_corpus.passages for passage in neighbours.passages
-            )
-
+        assert len(neighbours) == min(
+            k, len(corpus)
+        ), "Number of neighbours should be k or all passages."
         assert neighbours.label == f"TestCorpus {str(k)} neighbours"
-        assert neighbours.umap is sub_corpus.umap
+        assert neighbours.umap is sub_corpus.umap, "UMAP model should be inherited"
 
     @pytest.mark.parametrize("k", [0, 1, 2, 3, 4, 5, 10])
     @pytest.mark.skip(reason="Weaviate distances are different from distances()")

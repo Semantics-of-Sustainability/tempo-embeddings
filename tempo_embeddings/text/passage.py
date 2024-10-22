@@ -335,16 +335,25 @@ class Passage:
         )
 
     @classmethod
-    def from_weaviate_record(cls, _object) -> "Passage":
+    def from_weaviate_record(
+        cls, _object, *, collection: Optional[str] = None
+    ) -> "Passage":
         """Create a Passage from a Weaviate object.
 
         Args:
             _object: A Weaviate object.
+            collection: The collection the object belongs to
         Returns:
             A Passage object.
         """
 
         metadata = _object.properties
+        if collection is not None:
+            if "collection" in metadata:
+                logging.warning(
+                    f"Overwriting collection '{metadata['collection']}' with '{collection}'"
+                )
+            metadata["collection"] = collection
 
         # convert date types; can be removed once Weaviate index has the right types
         for field in cls._TYPE_CONVERTERS:
