@@ -185,6 +185,28 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
 
         return [group.grouped_by.value for group in response.groups]
 
+    def properties(self, collection: str) -> set[str]:
+        """Get the properties of a collection.
+
+        Args:
+            collection (str): The collection name
+        Returns:
+            set[str]: The property names
+        Raises:
+            ValueError: If the collection does not exist
+        """
+        try:
+            return {
+                property.name
+                for property in self._client.collections.get(collection)
+                .config.get()
+                .properties
+            }
+        except UnexpectedStatusCodeError as e:
+            raise ValueError(
+                f"Error retrieving properties for collection '{collection}': {e}"
+            ) from e
+
     def ingest(
         self,
         corpus: Corpus,
@@ -396,6 +418,9 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         if normalize and not search_terms:
             logging.warning("Did not provide a term to normalize.")
             return 1.0
+
+        # _collection: Collection = self._client.collections.get(collection)
+        # _collection.
 
         response = self._client.collections.get(collection).aggregate.over_all(
             filters=QueryBuilder.build_filter(

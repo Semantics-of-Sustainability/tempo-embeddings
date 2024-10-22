@@ -271,6 +271,19 @@ class TestWeaviateDatabase:
             )
             assert sorted(values) == sorted(expected)
 
+    @pytest.mark.parametrize(
+        "collection, expected, exception",
+        [
+            ("TestCorpus", {"provenance", "year", "passage", "highlighting"}, None),
+            ("invalid", {}, pytest.raises(ValueError)),
+        ],
+    )
+    def test_properties(
+        self, weaviate_db_manager_with_data, collection, expected, exception
+    ):
+        with exception or does_not_raise():
+            assert weaviate_db_manager_with_data.properties(collection) == expected
+
     def test_validate_config_missing_collection(self, weaviate_db_manager, corpus):
         weaviate_db_manager.validate_config()  # Empty collection
 
