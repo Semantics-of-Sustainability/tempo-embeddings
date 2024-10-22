@@ -506,3 +506,16 @@ class TestQueryBuilder:
             filter_words, year_span, metadata, metadata_not
         )
         TestQueryBuilder.assert_filter_equals(filter, expected)
+
+    @pytest.mark.parametrize(
+        "metadata, properties, expected",
+        [
+            ({}, set(), {}),
+            (None, set(), {}),
+            ({"field1": "value1"}, {"field1"}, {"field1": "value1"}),
+            ({"field1": "value1"}, {"field2"}, {}),
+            ({"field1": "value1", "f2": "v2"}, {"field1"}, {"field1": "value1"}),
+        ],
+    )
+    def test_clean_metadata(self, metadata, properties, expected):
+        assert QueryBuilder.clean_metadata(metadata, properties) == expected

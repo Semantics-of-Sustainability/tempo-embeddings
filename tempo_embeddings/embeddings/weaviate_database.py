@@ -375,7 +375,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                 filter_words,
                 YearSpan(year_from, year_to),
                 metadata_filters,
-                metadata_not,
+                QueryBuilder.clean_metadata(metadata_not, self.properties(collection)),
             ),
             include_vector=include_embeddings,
         )
@@ -419,14 +419,13 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             logging.warning("Did not provide a term to normalize.")
             return 1.0
 
-        # _collection: Collection = self._client.collections.get(collection)
-        # _collection.
-
         response = self._client.collections.get(collection).aggregate.over_all(
             filters=QueryBuilder.build_filter(
                 filter_words=search_terms,
                 metadata=metadata,
-                metadata_not=metadata_not,
+                metadata_not=QueryBuilder.clean_metadata(
+                    metadata_not, self.properties(collection)
+                ),
             ),
             total_count=True,
         )
@@ -516,7 +515,10 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             include_vector=True,
             return_metadata=MetadataQuery(distance=True),
             filters=QueryBuilder.build_filter(
-                year_span=year_span, metadata_not=metadata_not
+                year_span=year_span,
+                metadata_not=QueryBuilder.clean_metadata(
+                    metadata_not, self.properties(collection)
+                ),
             ),
         )
 
@@ -775,3 +777,24 @@ class QueryBuilder:
                     filters.append(Filter.by_property(field).not_equal(value))
 
         return Filter.all_of(filters) if filters else None
+
+    @staticmethod
+    def clean_metadata(
+        metadata: Optional[dict[str, Any]], collection_properties: set[str]
+    ) -> dict[str, Any]:
+        """Remove metadata fields that are not in the collection properties.
+
+        Args:
+            metadata (dict[str, Any]): A metadata dictionary containing field-value pairs
+            collection_properties (set[str]): The collection properties
+        Returns:
+            dict[str, Any]: A new dictionary containing only fields that are in the collection properties
+        """
+        if metadata:
+            return {
+                key: value
+                for key, value in metadata.items()
+                if key in collection_properties
+            }
+        else:
+            return {}
