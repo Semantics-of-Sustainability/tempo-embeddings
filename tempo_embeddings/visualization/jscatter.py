@@ -219,7 +219,7 @@ class PlotWidgets:
             logging.warning(f"Categorical field '{field}' not found, ignoring")
             return
 
-        options = self._df[field].unique().tolist()
+        options = self._df[field].dropna().unique().tolist()
 
         if len(options) > 1:
             selector = widgets.SelectMultiple(
