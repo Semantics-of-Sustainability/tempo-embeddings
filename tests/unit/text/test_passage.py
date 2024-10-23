@@ -135,6 +135,12 @@ class TestPassage:
     def test_words(self, passage, expected):
         assert list(passage.words()) == expected
 
+    def test_set_metadata(self):
+        passage = Passage("test", metadata={"key": "value"})
+        passage.set_metadata("test_key", "test_value")
+
+        assert passage.metadata == {"key": "value", "test_key": "test_value"}
+
     @pytest.mark.xfail(
         platform.system() == "Windows",
         raises=WeaviateStartUpError,
@@ -153,7 +159,7 @@ class TestPassage:
             test_passages,
             **STRICT,
         ):
-            expected.metadata["collection"] = collection
+            expected.set_metadata("collection", collection)
             assert (
                 Passage.from_weaviate_record(_object, collection=collection) == expected
             )
