@@ -17,10 +17,16 @@ class JScatterVisualizer:
     def __init__(
         self,
         corpus,
-        categorical_fields: list[str] = ["newspaper", "label"],
+        categorical_fields: list[str] = ["collection", "label"],
         continuous_filter_fields: list[str] = ["year"],
-        tooltip_fields: list[str] = ["year", "text", "label", "top words", "newspaper"],
-        fillna: dict[str, str] = {"newspaper": "NRC"},
+        tooltip_fields: list[str] = [
+            "year",
+            "text",
+            "label",
+            "top words",
+            "collection",
+        ],
+        fillna: dict[str, str] = None,
         color_by: str = "label",
         keyword_extractor: Optional[KeywordExtractor] = None,
     ):
@@ -142,7 +148,7 @@ class PlotWidgets:
         """Keeps track of filtered indices per filter field."""
 
         self._corpora: list[Corpus] = corpora
-        self._fillna = fillna
+        self._fillna = fillna or {}
         self._tooltip_fields = tooltip_fields
         self._color_by = color_by
 
@@ -219,7 +225,7 @@ class PlotWidgets:
             logging.warning(f"Categorical field '{field}' not found, ignoring")
             return
 
-        options = self._df[field].unique().tolist()
+        options = self._df[field].dropna().unique().tolist()
 
         if len(options) > 1:
             selector = widgets.SelectMultiple(

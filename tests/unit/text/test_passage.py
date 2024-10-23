@@ -141,8 +141,9 @@ class TestPassage:
         reason="Weaviate Embedded not supported on Windows",
     )
     def test_from_weaviate_record(self, weaviate_db_manager_with_data, test_passages):
+        collection = "TestCorpus"
         objects = (
-            weaviate_db_manager_with_data._client.collections.get("TestCorpus")
+            weaviate_db_manager_with_data._client.collections.get(collection)
             .query.fetch_objects(include_vector=True)
             .objects
         )
@@ -152,4 +153,7 @@ class TestPassage:
             test_passages,
             **STRICT,
         ):
-            assert Passage.from_weaviate_record(_object) == expected
+            expected.metadata["collection"] = collection
+            assert (
+                Passage.from_weaviate_record(_object, collection=collection) == expected
+            )

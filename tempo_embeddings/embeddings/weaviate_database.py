@@ -185,6 +185,28 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
 
         return [group.grouped_by.value for group in response.groups]
 
+    def properties(self, collection: str) -> set[str]:
+        """Get the properties of a collection.
+
+        Args:
+            collection (str): The collection name
+        Returns:
+            set[str]: The property names
+        Raises:
+            ValueError: If the collection does not exist
+        """
+        try:
+            return {
+                property.name
+                for property in self._client.collections.get(collection)
+                .config.get()
+                .properties
+            }
+        except UnexpectedStatusCodeError as e:
+            raise ValueError(
+                f"Error retrieving properties for collection '{collection}': {e}"
+            ) from e
+
     def ingest(
         self,
         corpus: Corpus,
@@ -353,12 +375,15 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                 filter_words,
                 YearSpan(year_from, year_to),
                 metadata_filters,
-                metadata_not,
+                QueryBuilder.clean_metadata(metadata_not, self.properties(collection)),
             ),
             include_vector=include_embeddings,
         )
         passages: tuple[Passage] = tuple(
-            [Passage.from_weaviate_record(o) for o in response.objects]
+            [
+                Passage.from_weaviate_record(o, collection=collection)
+                for o in response.objects
+            ]
         )
         label = collection
         if passages and filter_words:
@@ -401,7 +426,9 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             filters=QueryBuilder.build_filter(
                 filter_words=search_terms,
                 metadata=metadata,
-                metadata_not=metadata_not,
+                metadata_not=QueryBuilder.clean_metadata(
+                    metadata_not, self.properties(collection)
+                ),
             ),
             total_count=True,
         )
@@ -483,6 +510,11 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
     ) -> Iterable[tuple[Passage, float]]:
         # TODO: use autocut: https://weaviate.io/developers/weaviate/api/graphql/additional-operators#autocut
 
+        if max_neighbors > 10000:
+            logging.warning(
+                "Limiting maximum number of neighbors to 10000 (was: %d)", max_neighbors
+            )
+            max_neighbors = 10000
         wv_collection = self._client.collections.get(collection)
         response = wv_collection.query.near_vector(
             near_vector=vector,
@@ -491,12 +523,18 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             include_vector=True,
             return_metadata=MetadataQuery(distance=True),
             filters=QueryBuilder.build_filter(
-                year_span=year_span, metadata_not=metadata_not
+                year_span=year_span,
+                metadata_not=QueryBuilder.clean_metadata(
+                    metadata_not, self.properties(collection)
+                ),
             ),
         )
 
         for o in response.objects:
-            yield Passage.from_weaviate_record(o), o.metadata.distance
+            yield (
+                Passage.from_weaviate_record(o, collection=collection),
+                o.metadata.distance,
+            )
 
     def query_text_neighbors(
         self, collection: Collection, text: list[float], k_neighbors=10
@@ -750,3 +788,24 @@ class QueryBuilder:
                     filters.append(Filter.by_property(field).not_equal(value))
 
         return Filter.all_of(filters) if filters else None
+
+    @staticmethod
+    def clean_metadata(
+        metadata: Optional[dict[str, Any]], collection_properties: set[str]
+    ) -> dict[str, Any]:
+        """Remove metadata fields that are not in the collection properties.
+
+        Args:
+            metadata (dict[str, Any]): A metadata dictionary containing field-value pairs
+            collection_properties (set[str]): The collection properties
+        Returns:
+            dict[str, Any]: A new dictionary containing only fields that are in the collection properties
+        """
+        if metadata:
+            return {
+                key: value
+                for key, value in metadata.items()
+                if key in collection_properties
+            }
+        else:
+            return {}

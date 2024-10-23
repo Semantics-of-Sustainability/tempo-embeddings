@@ -4,7 +4,7 @@ import string
 from typing import Any, Iterable, Optional
 
 import pandas as pd
-from dateutil.parser import parse
+from dateutil.parser import ParserError, parse
 
 from .highlighting import Highlighting
 
@@ -335,21 +335,27 @@ class Passage:
         )
 
     @classmethod
-    def from_weaviate_record(cls, _object) -> "Passage":
+    def from_weaviate_record(cls, _object, *, collection: str) -> "Passage":
         """Create a Passage from a Weaviate object.
 
         Args:
             _object: A Weaviate object.
+            collection: The collection the object belongs to
         Returns:
             A Passage object.
         """
 
-        metadata = _object.properties
+        metadata = _object.properties | {"collection": collection}
 
         # convert date types; can be removed once Weaviate index has the right types
         for field in cls._TYPE_CONVERTERS:
             if field in metadata:
-                metadata[field] = cls._TYPE_CONVERTERS[field](metadata[field])
+                try:
+                    metadata[field] = cls._TYPE_CONVERTERS[field](metadata[field])
+                except ParserError as e:
+                    logging.error(
+                        f"Could not convert '{metadata[field]}' in '{field}': {e}"
+                    )
 
         text = metadata.pop("passage")
         highlighting = (

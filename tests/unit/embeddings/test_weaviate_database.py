@@ -89,7 +89,11 @@ class TestWeaviateDatabase:
         for passage, year in zip(
             sorted(corpus.passages, key=lambda p: p.metadata["year"]), range(1950, 1956)
         ):
-            assert passage.metadata == {"provenance": "test_file", "year": year}
+            assert passage.metadata == {
+                "provenance": "test_file",
+                "year": year,
+                "collection": "TestCorpus",
+            }
 
     @pytest.mark.parametrize(
         "term, metadata, normalize, expected",
@@ -124,18 +128,11 @@ class TestWeaviateDatabase:
 
         neighbours: Corpus = weaviate_db_manager_with_data.neighbours(sub_corpus, k)
 
-        if k + sub_corpus_size >= len(corpus):
-            expected_passages = set(corpus.passages) ^ set(sub_corpus.passages)
-            assert set(neighbours.passages) == expected_passages
-        else:
-            assert len(neighbours) == k
-            assert all(passage in corpus.passages for passage in neighbours.passages)
-            assert all(
-                passage not in sub_corpus.passages for passage in neighbours.passages
-            )
-
+        assert len(neighbours) == min(
+            k, len(corpus)
+        ), "Number of neighbours should be k or all passages."
         assert neighbours.label == f"TestCorpus {str(k)} neighbours"
-        assert neighbours.umap is sub_corpus.umap
+        assert neighbours.umap is sub_corpus.umap, "UMAP model should be inherited"
 
     @pytest.mark.parametrize("k", [0, 1, 2, 3, 4, 5, 10])
     @pytest.mark.skip(reason="Weaviate distances are different from distances()")
@@ -270,6 +267,19 @@ class TestWeaviateDatabase:
                 corpus_name, field
             )
             assert sorted(values) == sorted(expected)
+
+    @pytest.mark.parametrize(
+        "collection, expected, exception",
+        [
+            ("TestCorpus", {"provenance", "year", "passage", "highlighting"}, None),
+            ("invalid", {}, pytest.raises(ValueError)),
+        ],
+    )
+    def test_properties(
+        self, weaviate_db_manager_with_data, collection, expected, exception
+    ):
+        with exception or does_not_raise():
+            assert weaviate_db_manager_with_data.properties(collection) == expected
 
     def test_validate_config_missing_collection(self, weaviate_db_manager, corpus):
         weaviate_db_manager.validate_config()  # Empty collection
@@ -493,3 +503,16 @@ class TestQueryBuilder:
             filter_words, year_span, metadata, metadata_not
         )
         TestQueryBuilder.assert_filter_equals(filter, expected)
+
+    @pytest.mark.parametrize(
+        "metadata, properties, expected",
+        [
+            ({}, set(), {}),
+            (None, set(), {}),
+            ({"field1": "value1"}, {"field1"}, {"field1": "value1"}),
+            ({"field1": "value1"}, {"field2"}, {}),
+            ({"field1": "value1", "f2": "v2"}, {"field1"}, {"field1": "value1"}),
+        ],
+    )
+    def test_clean_metadata(self, metadata, properties, expected):
+        assert QueryBuilder.clean_metadata(metadata, properties) == expected
