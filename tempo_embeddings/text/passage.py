@@ -16,9 +16,9 @@ class Passage:
     class Metadata(BaseModel):
         model_config = ConfigDict(extra="allow")
 
-        year: Optional[int] = None
-        date: Optional[datetime.datetime] = None
-        sentence_index: Optional[int] = None
+        year: int = None
+        date: datetime.datetime = None
+        sentence_index: int = None
 
         @field_validator("date", mode="before")
         @classmethod
