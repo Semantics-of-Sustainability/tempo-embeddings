@@ -1,10 +1,11 @@
+import datetime
 import hashlib
 import logging
 import string
 from typing import Any, Iterable, Optional
 
-import pandas as pd
 from dateutil.parser import ParserError, parse
+from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 
 from .highlighting import Highlighting
 
@@ -12,8 +13,24 @@ from .highlighting import Highlighting
 class Passage:
     """A text passage with optional metadata and highlighting."""
 
-    _TYPE_CONVERTERS = {"year": int, "date": parse}
-    """When exporting to dict, convert these fields using the specified converter."""
+    class Metadata(BaseModel):
+        model_config = ConfigDict(extra="allow")
+
+        year: Optional[int] = None
+        date: Optional[datetime.datetime] = None
+        sentence_index: Optional[int] = None
+
+        @field_validator("date", mode="before")
+        @classmethod
+        def parse_date(cls, value) -> datetime.datetime:
+            if isinstance(value, str):
+                try:
+                    value = parse(value)
+                    if not value.tzinfo:
+                        value = value.replace(tzinfo=datetime.timezone.utc)
+                except ParserError as e:
+                    raise ValidationError(e)
+            return value
 
     def __init__(
         self,
@@ -25,11 +42,11 @@ class Passage:
         full_word_spans: Optional[list[tuple[int, int]]] = None,
         char2tokens: Optional[list[int]] = None,
         unique_id: str = None,
-    ) -> None:
+    ):
         # pylint: disable=too-many-arguments
         self._text = text.strip()
         self._unique_id = unique_id
-        self._metadata = metadata or {}
+        self._metadata = Passage.Metadata(**(metadata or {}))
         self._highlighting = highlighting
         self._embedding = embedding
         self._embedding_compressed = embedding_compressed
@@ -50,7 +67,7 @@ class Passage:
 
     @property
     def metadata(self) -> dict:
-        return self._metadata
+        return self._metadata.model_dump(exclude_none=True)
 
     @property
     def highlighting(self) -> Optional[Highlighting]:
@@ -180,7 +197,7 @@ class Passage:
 
         return {"text": self.highlighted_text()} | metadata
 
-    def to_dict(self) -> pd.DataFrame:
+    def to_dict(self) -> dict[str, Any]:
         """Returns a dictionary representation of the passage."""
 
         # TODO: merge with hover_data()
@@ -202,7 +219,7 @@ class Passage:
             key: The metadata key to set.
             value: The value to set the metadata key to.
         """
-        self._metadata[key] = value
+        setattr(self._metadata, key, value)
 
     def word_span(self, start, end) -> tuple[int, int]:
         word_index = self.tokenization.char_to_word(start)
@@ -241,8 +258,8 @@ class Passage:
     def __hash__(self) -> int:
         return (
             hash(self._text)
-            + hash(frozenset(self._metadata.keys()))
-            + hash(frozenset(self._metadata.values()))
+            + hash(frozenset(self.metadata.keys()))
+            + hash(frozenset(self.metadata.values()))
             + hash(self._highlighting)
         )
 
@@ -250,11 +267,11 @@ class Passage:
         return (
             isinstance(other, Passage)
             and self._text == other._text
-            and self._metadata == other._metadata
+            and self.metadata == other.metadata
         )
 
     def __repr__(self) -> str:
-        return f"Passage({self._text!r}, {self._metadata!r}, {self._highlighting!r})"
+        return f"Passage({self._text!r}, {self.metadata!r}, {self._highlighting!r})"
 
     def _partial_match(self, token: str, case_sensitive) -> Iterable[Highlighting]:
         if case_sensitive:
@@ -328,7 +345,7 @@ class Passage:
             raise RuntimeError("Passage already has a highlighting.")
         return Passage(
             text=self._text,
-            metadata=self._metadata,
+            metadata=self.metadata,
             highlighting=highlighting,
             full_word_spans=self.full_word_spans,
             char2tokens=self.char2tokens,
@@ -346,17 +363,6 @@ class Passage:
         """
 
         metadata = _object.properties | {"collection": collection}
-
-        # convert date types; can be removed once Weaviate index has the right types
-        for field in cls._TYPE_CONVERTERS:
-            if field in metadata:
-                try:
-                    metadata[field] = cls._TYPE_CONVERTERS[field](metadata[field])
-                except ParserError as e:
-                    logging.error(
-                        f"Could not convert '{metadata[field]}' in '{field}': {e}"
-                    )
-
         text = metadata.pop("passage")
         highlighting = (
             Highlighting.from_string(metadata.pop("highlighting"))
