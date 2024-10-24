@@ -271,7 +271,11 @@ class TestWeaviateDatabase:
     @pytest.mark.parametrize(
         "collection, expected, exception",
         [
-            ("TestCorpus", {"provenance", "year", "passage", "highlighting"}, None),
+            (
+                "TestCorpus",
+                {"provenance", "year", "passage", "highlighting", "sentence_index"},
+                None,
+            ),
             ("invalid", {}, pytest.raises(ValueError)),
         ],
     )
