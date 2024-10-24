@@ -517,28 +517,32 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             A new corpus with passages close to the input corpus
         """
         passages: dict[Passage, float] = dict()
-        exclude_passages = exclude_passages or set(corpus.passages)
+        if len(corpus) == 0:
+            logging.warning("Empty corpus, no neighbors to find.")
+        else:
+            exclude_passages = exclude_passages or set(corpus.passages)
 
-        for collection in collections or self.get_available_collections():
-            centroid = corpus.centroid(use_2d_embeddings=False).tolist()
+            for collection in collections or self.get_available_collections():
+                centroid = corpus.centroid(use_2d_embeddings=False).tolist()
 
-            for passage, distance in self.query_vector_neighbors(
-                collection,
-                centroid,
-                k + len(exclude_passages),  # account for excluded passages
-                max_distance=distance,
-                year_span=year_span,
-                metadata_not=metadata_not,
-            ):
-                if passage not in exclude_passages:
-                    passages[passage] = min(
-                        distance, passages.get(passage, float("inf"))
-                    )
+                for passage, distance in self.query_vector_neighbors(
+                    collection,
+                    centroid,
+                    k + len(exclude_passages),  # account for excluded passages
+                    max_distance=distance,
+                    year_span=year_span,
+                    metadata_not=metadata_not,
+                ):
+                    if passage not in exclude_passages:
+                        passages[passage] = min(
+                            distance, passages.get(passage, float("inf"))
+                        )
 
         _sorted = sorted(passages.items(), key=lambda x: x[1])
 
         # FIXME: the cosine distances from Weaviate are not the same as the ones from Corpus.distances()
         passages = [passage for passage, _ in _sorted[:k]]
+
         label = f"{corpus.label} {k} neighbours"
 
         return Corpus(passages, label, umap_model=corpus.umap)
