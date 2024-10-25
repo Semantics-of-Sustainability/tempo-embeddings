@@ -57,7 +57,7 @@ class TestWeaviateDatabase:
                 else dict1[key] == value
             ), f"Mismatch for key '{key}': {dict1[key]} != {value}"
 
-    def test_ingest(self, weaviate_db_manager, corpus):
+    def test_ingest(self, weaviate_db_manager, corpus, test_ingestions: int = 2):
         expected_collections = [
             {"name": "TempoEmbeddings", "count": 1, "vector_shape": {}},
             {"name": "TestCorpus", "count": 5, "vector_shape": {"default": 768}},
@@ -75,6 +75,11 @@ class TestWeaviateDatabase:
             )
 
         weaviate_db_manager.model.embed_corpus.assert_called_once()
+
+        if test_ingestions > 1:
+            # Check idempotency
+            weaviate_db_manager.model.embed_corpus.reset_mock()
+            self.test_ingest(weaviate_db_manager, corpus, test_ingestions - 1)
 
     def test_get_collection_count(self, weaviate_db_manager_with_data):
         assert (
@@ -271,7 +276,11 @@ class TestWeaviateDatabase:
     @pytest.mark.parametrize(
         "collection, expected, exception",
         [
-            ("TestCorpus", {"provenance", "year", "passage", "highlighting"}, None),
+            (
+                "TestCorpus",
+                {"provenance", "year", "passage", "highlighting", "sentence_index"},
+                None,
+            ),
             ("invalid", {}, pytest.raises(ValueError)),
         ],
     )
@@ -433,8 +442,8 @@ class TestQueryBuilder:
                 Filter.all_of(
                     [
                         Filter.by_property("passage").contains_any(["test term"]),
-                        Filter.by_property("year").greater_or_equal("1999"),
-                        Filter.by_property("year").less_or_equal("2000"),
+                        Filter.by_property("year").greater_or_equal(1999),
+                        Filter.by_property("year").less_or_equal(2000),
                     ]
                 ),
             ),
@@ -446,8 +455,8 @@ class TestQueryBuilder:
                 Filter.all_of(
                     [
                         Filter.by_property("passage").contains_any(["test term"]),
-                        Filter.by_property("year").greater_or_equal("1999"),
-                        Filter.by_property("year").less_or_equal("2000"),
+                        Filter.by_property("year").greater_or_equal(1999),
+                        Filter.by_property("year").less_or_equal(2000),
                         Filter.by_property("test metadata").equal("test value"),
                     ]
                 ),
@@ -460,8 +469,8 @@ class TestQueryBuilder:
                 Filter.all_of(
                     [
                         Filter.by_property("passage").contains_any(["test term"]),
-                        Filter.by_property("year").greater_or_equal("1999"),
-                        Filter.by_property("year").less_or_equal("2000"),
+                        Filter.by_property("year").greater_or_equal(1999),
+                        Filter.by_property("year").less_or_equal(2000),
                         Filter.by_property("test metadata 1").equal("test value 1"),
                         Filter.by_property("test metadata 2").equal("test value 2"),
                     ]

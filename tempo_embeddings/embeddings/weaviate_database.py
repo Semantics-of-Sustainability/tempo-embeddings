@@ -9,6 +9,7 @@ from tqdm import tqdm
 
 import weaviate
 import weaviate.classes as wvc
+from weaviate.classes.config import DataType, Property
 from weaviate.classes.query import Filter, MetadataQuery
 from weaviate.exceptions import UnexpectedStatusCodeError, WeaviateQueryError
 from weaviate.util import generate_uuid5
@@ -228,28 +229,66 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                 "No embedder specified and no default model set. Either set a model or specify an embedder name."
             )
 
-        name = name or corpus.label
+        collection_name = name or corpus.label
 
-        if len(corpus) > 0:
-            if not self._client.collections.exists(name):
-                self._config.add_corpus(
-                    corpus=name,
-                    embedder=embedder or self.model.name,
-                    properties=properties or {},
+        collection: Collection = (
+            self._client.collections.get(name=collection_name)
+            if self._client.collections.exists(collection_name)
+            else self._init_collection(collection_name, embedder, properties)
+        )
+
+        # TODO: implement other model type
+        try:
+            return self._insert_using_custom_model(corpus, collection)
+        except WeaviateQueryError as e:
+            logger.error("Error while ingesting corpus '%s': %s", collection_name, e)
+            if not self._client.collections.exists(collection_name):
+                logger.debug(
+                    f"Removing collection '{collection_name}' from config database"
                 )
-                # TODO: allow for embedded vectorizers
-                self._client.collections.create(
-                    name, vectorizer_config=wvc.config.Configure.Vectorizer.none()
-                )
-            collection = self._client.collections.get(name=name)
-            # TODO: implement other model type
+                self._config.delete_corpus(collection_name)
+
+    def _init_collection(
+        self,
+        collection_name: str,
+        embedder: Optional[str] = None,
+        properties: Optional[dict[str, Any]] = None,
+    ) -> Collection:
+        """Initialise a collection in the database.
+
+        Args:
+            collection_name (str): The name of the collection. Defaults to the corpus label.
+            embedder (str, optional): The name of the embedder to use. Defaults to the model name.
+            properties (dict[str, Any], optional): Additional properties to store in the database. Defaults to None.
+
+        Returns:
+            Collection: the collection object
+
+        """
+
+        self._config.add_corpus(
+            corpus=collection_name,
+            embedder=embedder or self.model.name,
+            properties=properties or {},
+        )
+
+        # TODO: allow for embedded vectorizers
+        collection: Collection = self._client.collections.create(
+            collection_name, vectorizer_config=wvc.config.Configure.Vectorizer.none()
+        )
+        for field, field_info in Passage.Metadata.model_fields.items():
             try:
-                self._insert_using_custom_model(corpus, collection)
-            except WeaviateQueryError as e:
-                logger.error("Error while ingesting corpus '%s': %s", name, e)
-                if not self._client.collections.exists(name):
-                    logger.info(f"Removing collection '{name}' to config database")
-                    self._config.delete_corpus(name)
+                collection.config.add_property(
+                    Property(
+                        name=field, data_type=DataType(field_info.annotation.__name__)
+                    )
+                )
+            except ValueError as e:
+                logging.warning(
+                    "Could not derive Weaviate data type for field '%s': %s", field, e
+                )
+
+        return collection
 
     def delete_collection(self, name):
         self._client.collections.delete(name)
@@ -472,28 +511,32 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             A new corpus with passages close to the input corpus
         """
         passages: dict[Passage, float] = dict()
-        exclude_passages = exclude_passages or set(corpus.passages)
+        if len(corpus) == 0:
+            logging.warning("Empty corpus, no neighbors to find.")
+        else:
+            exclude_passages = exclude_passages or set(corpus.passages)
 
-        for collection in collections or self.get_available_collections():
-            centroid = corpus.centroid(use_2d_embeddings=False).tolist()
+            for collection in collections or self.get_available_collections():
+                centroid = corpus.centroid(use_2d_embeddings=False).tolist()
 
-            for passage, distance in self.query_vector_neighbors(
-                collection,
-                centroid,
-                k + len(exclude_passages),  # account for excluded passages
-                max_distance=distance,
-                year_span=year_span,
-                metadata_not=metadata_not,
-            ):
-                if passage not in exclude_passages:
-                    passages[passage] = min(
-                        distance, passages.get(passage, float("inf"))
-                    )
+                for passage, distance in self.query_vector_neighbors(
+                    collection,
+                    centroid,
+                    k + len(exclude_passages),  # account for excluded passages
+                    max_distance=distance,
+                    year_span=year_span,
+                    metadata_not=metadata_not,
+                ):
+                    if passage not in exclude_passages:
+                        passages[passage] = min(
+                            distance, passages.get(passage, float("inf"))
+                        )
 
         _sorted = sorted(passages.items(), key=lambda x: x[1])
 
         # FIXME: the cosine distances from Weaviate are not the same as the ones from Corpus.distances()
         passages = [passage for passage, _ in _sorted[:k]]
+
         label = f"{corpus.label} {k} neighbours"
 
         return Corpus(passages, label, umap_model=corpus.umap)
@@ -767,9 +810,7 @@ class QueryBuilder:
             filters.append(Filter.by_property(text_field).contains_any(filter_words))
 
         if year_span is not None:
-            filters.extend(
-                year_span.to_weaviate_filter(field_name=year_field, field_type=str)
-            )
+            filters.extend(year_span.to_weaviate_filter(field_name=year_field))
 
         if metadata:
             filters.extend(
