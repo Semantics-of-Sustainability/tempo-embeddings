@@ -57,7 +57,7 @@ class TestWeaviateDatabase:
                 else dict1[key] == value
             ), f"Mismatch for key '{key}': {dict1[key]} != {value}"
 
-    def test_ingest(self, weaviate_db_manager, corpus):
+    def test_ingest(self, weaviate_db_manager, corpus, test_ingestions: int = 2):
         expected_collections = [
             {"name": "TempoEmbeddings", "count": 1, "vector_shape": {}},
             {"name": "TestCorpus", "count": 5, "vector_shape": {"default": 768}},
@@ -75,6 +75,11 @@ class TestWeaviateDatabase:
             )
 
         weaviate_db_manager.model.embed_corpus.assert_called_once()
+
+        if test_ingestions > 1:
+            # Check idempotency
+            weaviate_db_manager.model.embed_corpus.reset_mock()
+            self.test_ingest(weaviate_db_manager, corpus, test_ingestions - 1)
 
     def test_get_collection_count(self, weaviate_db_manager_with_data):
         assert (

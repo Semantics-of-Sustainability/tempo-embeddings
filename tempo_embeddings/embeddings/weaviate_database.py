@@ -239,7 +239,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
 
         # TODO: implement other model type
         try:
-            self._insert_using_custom_model(corpus, collection)
+            return self._insert_using_custom_model(corpus, collection)
         except WeaviateQueryError as e:
             logger.error("Error while ingesting corpus '%s': %s", collection_name, e)
             if not self._client.collections.exists(collection_name):
@@ -261,16 +261,10 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             embedder (str, optional): The name of the embedder to use. Defaults to the model name.
             properties (dict[str, Any], optional): Additional properties to store in the database. Defaults to None.
 
-        Raises:
-            ValueError: If the collection already exists
-
         Returns:
             Collection: the collection object
 
         """
-
-        if self._client.collections.exists(collection_name):
-            raise ValueError(f"Collection '{collection_name}' already exists.")
 
         self._config.add_corpus(
             corpus=collection_name,
