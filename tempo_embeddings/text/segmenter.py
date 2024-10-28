@@ -156,50 +156,41 @@ class Segmenter(abc.ABC):
         return self._split_sentences(merged_sentences)
 
     def passages(
-        self,
-        text: str,
-        *,
-        metadata: Optional[dict[str, Any]] = None,
-        deduplicate: bool = True,
+        self, text: str, *, metadata: Optional[dict[str, Any]] = None
     ) -> Iterable[Passage]:
         """Yield passages from the text.
 
         Args:
             text: the text to split into passages.
             metadata: the metadata to attach to the passages.
-            deduplicate: whether to remove duplicate sentences. Default to True.
         Yields:
             Passage: the passages from the text.
         """
-        seen_sentences: set[str] = set()
 
         for idx, sentence in enumerate(self.split(text)):
-            if deduplicate:
-                _sentence = (
-                    re.sub(self._ALPHABET_REGEX, "", sentence).casefold().strip()
-                )
-                if _sentence in seen_sentences:
-                    logging.info("Duplicate sentence found: '%s'", sentence)
-                    continue
-                seen_sentences.add(_sentence)
-
             metadata = (metadata or {}) | {"sentence_index": idx}
+
             yield Passage(sentence, metadata)
 
     def passages_from_dict_reader(
         self,
         reader: csv.DictReader,
+        min_length: int = settings.PASSAGE_LENGTH,
         *,
         provenance: str,
         text_columns: list[str],
         filter_terms: Optional[Iterable[str]] = None,
-    ) -> tuple[Passage, ...]:
+    ) -> list[Passage]:
         """Read passages from a CSV file.
 
         Args:
-            file: the CSV file to read.
+            reader: a CSV reader object
+            min_length: the minimum sentence length. Defaults to settings.PASSAGE_LENGTH
+            provenance: the name of the CSV file.
+            text_columns: the columns in the CSV file that contain text.
+            filter_terms: a list of terms; if given, only passages containing these terms are returned.
         Return:
-            tuple[Passage]: the passages from the CSV file.
+            list[Passage]: the passages from the CSV file.
         """
         for column in text_columns:
             if column not in reader.fieldnames:
@@ -224,8 +215,9 @@ class Segmenter(abc.ABC):
                 ):
                     continue
 
-                column_passages: Iterable[Passage] = self.passages(
-                    row[text_column], metadata=row_metadata
+                column_passages: Iterable[Passage] = Passage.merge(
+                    self.passages(row[text_column], metadata=row_metadata),
+                    min_length=min_length,
                 )
 
                 if filter_terms:
@@ -238,7 +230,7 @@ class Segmenter(abc.ABC):
                                 )
                 else:
                     passages.extend(column_passages)
-        return tuple(passages)
+        return passages
 
     @classmethod
     @lru_cache(maxsize=4)

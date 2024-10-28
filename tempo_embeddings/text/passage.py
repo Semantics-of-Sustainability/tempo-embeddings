@@ -273,6 +273,24 @@ class Passage:
     def __repr__(self) -> str:
         return f"Passage({self._text!r}, {self.metadata!r}, {self._highlighting!r})"
 
+    def __add__(self, other: "Passage") -> "Passage":
+        """Concatenates two passages.
+
+        Note: self.metadata overrides other.metadata
+
+        Args:
+            other: The Passage to concatenate with.
+        Returns:
+            A new Passage object with the concatenated text and metadata.
+        """
+        return Passage(
+            text=self._text + " " + other.text,
+            metadata=other.metadata | self.metadata,
+            highlighting=self.highlighting,
+            full_word_spans=self.full_word_spans,
+            char2tokens=self.char2tokens,
+        )
+
     def _partial_match(self, token: str, case_sensitive) -> Iterable[Highlighting]:
         if case_sensitive:
             text = self._text
@@ -381,3 +399,33 @@ class Passage:
         passage.tokenized_text = text.split()
 
         return passage
+
+    @staticmethod
+    def merge(passages: Iterable["Passage"], *, min_length: int) -> Iterable["Passage"]:
+        """Merges the passages in the input iterable into passages of (at least) the specified length.
+
+        Args:
+            passages: An iterable of passages to merge that can be converted into an iterator.
+            min_length: The minimum length of the merged passages.
+        Yields:
+            The merged passages.
+        """
+        # TODO: add max_length and/or do not merge if min_length is exceeded
+
+        passage_iterator = iter(passages)
+
+        try:
+            passage = next(passage_iterator)
+        except StopIteration:
+            logging.debug("No passages to merge.")
+        else:
+            while len(passage) < min_length:
+                try:
+                    passage += next(passage_iterator)
+                except StopIteration:
+                    logging.debug("No passages to merge with.")
+                    break
+            yield passage
+
+            # Proceed with remaining passages
+            yield from Passage.merge(passage_iterator, min_length=min_length)

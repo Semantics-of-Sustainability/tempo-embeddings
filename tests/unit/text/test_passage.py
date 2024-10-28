@@ -15,6 +15,30 @@ def passage():
 
 class TestPassage:
     @pytest.mark.parametrize(
+        "passage1, passage2, expected",
+        [
+            (Passage("test1"), Passage("test2"), Passage("test1 test2")),
+            (
+                Passage("test1", metadata={"key": "value"}),
+                Passage("test2"),
+                Passage("test1 test2", metadata={"key": "value"}),
+            ),
+            (
+                Passage("test1", metadata={"key1": "value1"}),
+                Passage("test2", metadata={"key2": "value2"}),
+                Passage("test1 test2", metadata={"key1": "value1", "key2": "value2"}),
+            ),
+            (
+                Passage("test1", metadata={"key1": "value1"}),
+                Passage("test2", metadata={"key1": "value2"}),
+                Passage("test1 test2", metadata={"key1": "value1"}),
+            ),
+        ],
+    )
+    def test_add(self, passage1, passage2, expected):
+        assert passage1 + passage2 == expected
+
+    @pytest.mark.parametrize(
         "term, expected",
         [("test", True), ("test passage", True), ("TEST", True), ("not", False)],
     )
@@ -163,3 +187,20 @@ class TestPassage:
             assert (
                 Passage.from_weaviate_record(_object, collection=collection) == expected
             )
+
+    @pytest.mark.parametrize(
+        "passages,min_length,expected",
+        [
+            ([], 512, []),
+            ([Passage("test")], 512, [Passage("test")]),
+            ([Passage("test")], 3, [Passage("test")]),
+            (
+                [Passage("test1"), Passage("test2")],
+                5,
+                [Passage("test1"), Passage("test2")],
+            ),
+            ([Passage("test1"), Passage("test2")], 10, [Passage("test1 test2")]),
+        ],
+    )
+    def test_merge(self, passages, min_length, expected):
+        assert list(Passage.merge(passages, min_length=min_length)) == expected

@@ -57,6 +57,9 @@ DEFAULT_LANGUAGE_MODEL: str = (
 SEGMENTER: str = os.environ.get("SEGMENTER", "sentence_splitter")
 WTPSPLIT_MODEL = os.environ.get("WTPSPLIT_MODEL", "sat-3l-sm")
 
+# ~4 * max model input size (in tokens)
+PASSAGE_LENGTH = int(os.environ.get("PASSAGE_LENGTH", 2048))
+
 DEVICE: Optional[str] = os.environ.get("DEVICE")
 
 WEAVIATE_CONFIG_COLLECTION: str = "TempoEmbeddings"

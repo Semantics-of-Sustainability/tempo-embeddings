@@ -149,11 +149,10 @@ class TestSegmenter:
 
 class TestSentenceSplitter:
     @pytest.mark.parametrize(
-        "text,deduplicate,expected",
+        "text,expected",
         [
             (
                 "This is a test. This is another test.",
-                True,
                 [
                     Passage("This is a test.", metadata={"sentence_index": 0}),
                     Passage("This is another test.", metadata={"sentence_index": 1}),
@@ -161,17 +160,6 @@ class TestSentenceSplitter:
             ),
             (
                 "This is a test. This is a test.",
-                True,
-                [Passage("This is a test.", metadata={"sentence_index": 0})],
-            ),
-            (
-                "This is a test. THIS is a test.",
-                True,
-                [Passage("This is a test.", metadata={"sentence_index": 0})],
-            ),
-            (
-                "This is a test. This is a test.",
-                False,
                 [
                     Passage("This is a test.", metadata={"sentence_index": 0}),
                     Passage("This is a test.", metadata={"sentence_index": 1}),
@@ -179,18 +167,17 @@ class TestSentenceSplitter:
             ),
         ],
     )
-    def test_passages(self, text, deduplicate, expected):
-        passages = SentenceSplitterSegmenter("en", min_sentence_length=5).passages(
-            text, deduplicate=deduplicate
-        )
+    def test_passages(self, text, expected):
+        passages = SentenceSplitterSegmenter("en", min_sentence_length=5).passages(text)
         assert list(passages) == expected
 
     @pytest.mark.parametrize(
-        "_csv, provenance, filter_terms, expected",
+        "_csv, min_length, provenance, filter_terms, expected",
         [
-            ("content\n", "test provenance", None, []),
+            ("content\n", 512, "test provenance", None, []),
             (
                 "content\nsome text",
+                512,
                 "test provenance",
                 None,
                 [
@@ -202,6 +189,7 @@ class TestSentenceSplitter:
             ),
             (
                 "content\nsome filter text",
+                512,
                 "test provenance",
                 ["filter"],
                 [
@@ -212,12 +200,43 @@ class TestSentenceSplitter:
                     )
                 ],
             ),
-            ("content\nsome text", "test provenance", ["filter"], []),
+            ("content\nsome text", 512, "test provenance", ["filter"], []),
+            (
+                "content\nThis is the first sentence. This is the second sentence.\n",
+                512,
+                "test provenance",
+                None,
+                [
+                    Passage(
+                        "This is the first sentence. This is the second sentence.",
+                        {"provenance": "test provenance", "sentence_index": 0},
+                    )
+                ],
+            ),
+            (
+                "content\nThis is the first sentence. This is the second sentence.\n",
+                10,
+                "test provenance",
+                None,
+                [
+                    Passage(
+                        "This is the first sentence.",
+                        {"provenance": "test provenance", "sentence_index": 0},
+                    ),
+                    Passage(
+                        "This is the second sentence.",
+                        {"provenance": "test provenance", "sentence_index": 1},
+                    ),
+                ],
+            ),
         ],
     )
-    def test_passages_from_dict_reader(self, _csv, provenance, filter_terms, expected):
+    def test_passages_from_dict_reader(
+        self, _csv, min_length, provenance, filter_terms, expected
+    ):
         passages = SentenceSplitterSegmenter("en").passages_from_dict_reader(
             csv.DictReader(StringIO(_csv)),
+            min_length=min_length,
             provenance=provenance,
             text_columns=["content"],
             filter_terms=filter_terms,
