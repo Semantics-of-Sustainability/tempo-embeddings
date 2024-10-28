@@ -195,7 +195,7 @@ class WtpSegmenter(Segmenter):
         self._model.half().to(device)
 
     def split(self, text: str) -> Iterable[str]:
-        return self._model.split(text)
+        return self._model.split(text, strip_whitespace=True)
 
 
 class StanzaSegmenter(Segmenter):
