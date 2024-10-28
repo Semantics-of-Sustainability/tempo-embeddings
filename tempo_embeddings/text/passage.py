@@ -400,32 +400,36 @@ class Passage:
 
         return passage
 
-    @staticmethod
-    def merge(passages: Iterable["Passage"], *, min_length: int) -> Iterable["Passage"]:
+    def merge_until(self, passages: list["Passage"], *, length: int) -> "Passage":
         """Merges the passages in the input iterable into passages of (at least) the specified length.
+
+        Merged passages are removed in-place from the passages list.
+
+        Args:
+            passages: A sequence of passages to merge with until the length would be exceeded.
+            length: The minimum length of the merged passages.
+        Returns:
+            A new Passage potentially merged to increase its length.
+        """
+
+        if passages and (len(self) + len(passages[0]) <= length):
+            return (self + passages.pop(0)).merge_until(passages, length=length)
+        return self
+
+    @staticmethod
+    def merge(passages: list["Passage"], *, length: int) -> list["Passage"]:
+        """Merges the passages in the input iterable into passages until they would exceed the specified length.
 
         Args:
             passages: An iterable of passages to merge that can be converted into an iterator.
-            min_length: The minimum length of the merged passages.
-        Yields:
+            length: The length of the merged passages.
+        Returns:
             The merged passages.
         """
-        # TODO: add max_length and/or do not merge if min_length is exceeded
-
-        passage_iterator = iter(passages)
-
-        try:
-            passage = next(passage_iterator)
-        except StopIteration:
-            logging.debug("No passages to merge.")
+        if passages:
+            return [
+                passages.pop(0).merge_until(passages, length=length)
+            ] + Passage.merge(passages, length=length)
         else:
-            while len(passage) < min_length:
-                try:
-                    passage += next(passage_iterator)
-                except StopIteration:
-                    logging.debug("No passages to merge with.")
-                    break
-            yield passage
-
-            # Proceed with remaining passages
-            yield from Passage.merge(passage_iterator, min_length=min_length)
+            logging.debug("No passages to merge.")
+            return []

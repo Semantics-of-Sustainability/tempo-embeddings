@@ -203,4 +203,29 @@ class TestPassage:
         ],
     )
     def test_merge(self, passages, min_length, expected):
-        assert list(Passage.merge(passages, min_length=min_length)) == expected
+        assert Passage.merge(passages, length=min_length) == expected
+
+    @pytest.mark.parametrize(
+        "passage, passages, length, expected, expected_remaining",
+        [
+            (Passage("test"), [], 5, Passage("test"), []),
+            (Passage("test"), [], 3, Passage("test"), []),
+            (
+                Passage("test1"),
+                [Passage("test2"), Passage("test3")],
+                512,
+                Passage("test1 test2 test3"),
+                [],
+            ),
+            (
+                Passage("test1"),
+                [Passage("test2"), Passage("test3")],
+                12,
+                Passage("test1 test2"),
+                [Passage("test3")],
+            ),
+        ],
+    )
+    def test_merge_until(self, passage, passages, length, expected, expected_remaining):
+        assert passage.merge_until(passages, length=length) == expected
+        assert passages == expected_remaining

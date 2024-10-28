@@ -79,7 +79,7 @@ class Segmenter(abc.ABC):
     def passages_from_dict_reader(
         self,
         reader: csv.DictReader,
-        min_length: int = settings.PASSAGE_LENGTH,
+        length: int = settings.PASSAGE_LENGTH,
         *,
         provenance: str,
         text_columns: list[str],
@@ -89,7 +89,7 @@ class Segmenter(abc.ABC):
 
         Args:
             reader: a CSV reader object
-            min_length: the minimum sentence length. Defaults to settings.PASSAGE_LENGTH
+            length: the minimum sentence length. Defaults to settings.PASSAGE_LENGTH
             provenance: the name of the CSV file.
             text_columns: the columns in the CSV file that contain text.
             filter_terms: a list of terms; if given, only passages containing these terms are returned.
@@ -120,8 +120,8 @@ class Segmenter(abc.ABC):
                     continue
 
                 column_passages: Iterable[Passage] = Passage.merge(
-                    self.passages(row[text_column], metadata=row_metadata),
-                    min_length=min_length,
+                    list(self.passages(row[text_column], metadata=row_metadata)),
+                    length=length,
                 )
 
                 if filter_terms:

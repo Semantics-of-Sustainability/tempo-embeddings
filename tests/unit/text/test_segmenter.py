@@ -106,7 +106,7 @@ class TestSentenceSplitter:
         assert list(passages) == expected
 
     @pytest.mark.parametrize(
-        "_csv, min_length, provenance, filter_terms, expected",
+        "_csv, length, provenance, filter_terms, expected",
         [
             ("content\n", 512, "test provenance", None, []),
             (
@@ -166,11 +166,11 @@ class TestSentenceSplitter:
         ],
     )
     def test_passages_from_dict_reader(
-        self, _csv, min_length, provenance, filter_terms, expected
+        self, _csv, length, provenance, filter_terms, expected
     ):
         passages = SentenceSplitterSegmenter("en").passages_from_dict_reader(
             csv.DictReader(StringIO(_csv)),
-            min_length=min_length,
+            length=length,
             provenance=provenance,
             text_columns=["content"],
             filter_terms=filter_terms,
