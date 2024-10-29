@@ -686,7 +686,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         objects: Iterable[dict[str, Any]],
         collection_name: str,
         *,
-        total_count: int = None,
+        total_count: Optional[int] = None,
         batch_size: int = 100,
     ) -> int:
         """Import a collection of objects into the database.
@@ -724,6 +724,9 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                 )
 
                 count += 1
+
+        if collection.batch.failed_objects:
+            logger.error(collection.batch.failed_objects)
 
         if total_count is not None and count != total_count:
             logger.warning(
