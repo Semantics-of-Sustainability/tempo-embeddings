@@ -283,7 +283,7 @@ class Passage:
         Returns:
             A new Passage object with the concatenated text and metadata.
         """
-        # check conflicting metadata
+
         skip_fields = {"sentence_index"}
         intersecting_fields = set(self.metadata.keys()) & set(other.metadata.keys())
 
@@ -293,6 +293,7 @@ class Passage:
                     f"Conflicting metadata when merging two passages: '{field}': '{self.metadata[field]}'/'{other.metadata[field]}'"
                 )
 
+        # FIXME: dropping the highlighting of the 'other' passage; allow for multiple highlightings?
         return Passage(
             text=self._text + " " + other.text,
             metadata=other.metadata | self.metadata,
