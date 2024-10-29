@@ -1,6 +1,5 @@
 import argparse
 
-import weaviate
 from tempo_embeddings.embeddings.weaviate_database import WeaviateDatabaseManager
 from tempo_embeddings.settings import DEFAULT_LANGUAGE_MODEL
 
@@ -31,11 +30,20 @@ if __name__ == "__main__":
         default=8087,
         help="Weaviate server port, defaults to 8087 to match the setting in docker-compose.yml",
     )
+    weaviate_args.add_argument("--use-ssl", action="store_true", help="Use SSL.")
+    weaviate_args.add_argument(
+        "--api-key", type=str, required=False, help="Weaviate API key"
+    )
 
     args = parser.parse_args()
 
-    with weaviate.connect_to_local(args.weaviate_host, args.weaviate_port) as client:
-        db = WeaviateDatabaseManager(client=client, model=DEFAULT_LANGUAGE_MODEL)
-        db.export_from_collection(args.corpus, args.output)
+    db = WeaviateDatabaseManager.from_args(
+        model_name=DEFAULT_LANGUAGE_MODEL,
+        http_host=args.weaviate_host,
+        http_port=args.weaviate_port,
+        use_ssl=args.use_ssl,
+        api_key=args.api_key,
+    )
+    db.export_from_collection(args.corpus, args.output)
 
     args.output.close()

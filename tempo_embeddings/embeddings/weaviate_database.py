@@ -780,7 +780,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
     def from_args(
         cls,
         *,
-        model_name: str,
+        model_name: Optional[str],
         ### weaviate arguments:
         http_host: str,
         http_port: int = 8087,
@@ -816,11 +816,12 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             grpc_secure=http_secure,
             auth_credentials=Auth.api_key(api_key) if api_key else None,
         )
-        return cls(
-            SentenceTransformerModelWrapper.from_pretrained(model_name),
-            client=weaviate_client,
-            batch_size=batch_size,
+        model = (
+            SentenceTransformerModelWrapper.from_pretrained(model_name)
+            if model_name
+            else None
         )
+        return cls(model, client=weaviate_client, batch_size=batch_size)
 
 
 class QueryBuilder:
