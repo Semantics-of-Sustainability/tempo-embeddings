@@ -40,30 +40,13 @@ class Segmenter(abc.ABC):
             backend = "cpu"
         return backend
 
-    def __init__(
-        self,
-        language: str,
-        *,
-        min_sentence_length: int = 20,
-        max_sentence_length: int = 1000,
-    ) -> None:
+    def __init__(self, language: str) -> None:
         """The common constructor for inheriting segmenters.
 
         Args:
             language: the language code for the segmenter. Specifics depend on the segmenter.
-            min_sentence_length: the minimum length of a sentence in characters. Defaults to 20.
-            max_sentence_length: the maximum length of a sentence in characters. Defaults to 1000.
-
-        Raises:
-            ValueError: if min_sentence_length >= max_sentence_length.
         """
-        if min_sentence_length >= max_sentence_length:
-            raise ValueError(
-                f"Minimum sentence length ({min_sentence_length}) must be less than maximum sentence length ({max_sentence_length})."
-            )
         self._language = language
-        self._min_sentence_length = min_sentence_length
-        self._max_sentence_length = max_sentence_length
 
     @abc.abstractmethod
     def split(self, text: str) -> Iterable[str]:
@@ -76,130 +59,42 @@ class Segmenter(abc.ABC):
         """
         return NotImplemented
 
-    def _merge_sentences(self, sentences: list[str]) -> Iterable[str]:
-        """Merge short sentences into longer units.
-
-        Args:
-            sentences (list[str]): the sentences to merge.
-        Yields:
-            str: the merged sentences.
-        """
-        i = 0
-        while i < len(sentences):
-            current_sentence = sentences[i]
-            while len(current_sentence) < self._min_sentence_length:
-                i += 1
-                try:
-                    current_sentence += " " + sentences[i]
-                except IndexError:
-                    # FIXME: this can result in a final sentence that is too short
-                    break
-            yield current_sentence
-            i += 1
-
-    def _split_sentence(self, sentence: str) -> Iterable[str]:
-        """Split a sentence into shorter units.
-
-        Args:
-            sentence: the sentence to split.
-        Yields:
-            str: the split sentences.
-        """
-        split_at: Optional[int] = None
-
-        if len(sentence) > self._max_sentence_length:
-            center = len(sentence) // 2
-
-            left_semicolon: int = sentence.rfind(";", 1, center)
-            right_semicolon: int = sentence.find(";", center, len(sentence) - 2)
-
-            # TODO: use other delimiters
-
-            if left_semicolon == -1 and right_semicolon == -1:
-                split_at = None  # No splitting marker found.
-            elif left_semicolon == -1:
-                split_at = right_semicolon
-            elif right_semicolon == -1:
-                split_at = left_semicolon
-            elif abs(left_semicolon - center) <= abs(right_semicolon - center):
-                split_at = left_semicolon
-            else:
-                split_at = right_semicolon
-
-        if split_at is None:
-            yield sentence.strip()
-        else:
-            split_at = split_at + 1  # Include the delimiter
-            yield from self._split_sentence(sentence[:split_at])
-            yield from self._split_sentence(sentence[split_at:])
-
-    def _split_sentences(self, sentences: Iterable[str]) -> Iterable[str]:
-        """Split long sentences into shorter units.
-
-        Args:
-            sentences: the sentences to split.
-        Yields:
-            str: the split sentences.
-        """
-        for sentence in sentences:
-            yield from self._split_sentence(sentence)
-
-    def _fit_lengths(self, sentences: Iterable[str]) -> list[str]:
-        """Fit the sentences to a minimum and maximum length.
-
-        Args:
-            sentences: the sentences to fit.
-        Yields:
-            str: the sentences after merging and splitting.
-        """
-        merged_sentences = self._merge_sentences(list(sentences))
-        return self._split_sentences(merged_sentences)
-
     def passages(
-        self,
-        text: str,
-        *,
-        metadata: Optional[dict[str, Any]] = None,
-        deduplicate: bool = True,
+        self, text: str, *, metadata: Optional[dict[str, Any]] = None
     ) -> Iterable[Passage]:
         """Yield passages from the text.
 
         Args:
             text: the text to split into passages.
             metadata: the metadata to attach to the passages.
-            deduplicate: whether to remove duplicate sentences. Default to True.
         Yields:
             Passage: the passages from the text.
         """
-        seen_sentences: set[str] = set()
 
         for idx, sentence in enumerate(self.split(text)):
-            if deduplicate:
-                _sentence = (
-                    re.sub(self._ALPHABET_REGEX, "", sentence).casefold().strip()
-                )
-                if _sentence in seen_sentences:
-                    logging.info("Duplicate sentence found: '%s'", sentence)
-                    continue
-                seen_sentences.add(_sentence)
-
             metadata = (metadata or {}) | {"sentence_index": idx}
+
             yield Passage(sentence, metadata)
 
     def passages_from_dict_reader(
         self,
         reader: csv.DictReader,
+        length: int = settings.PASSAGE_LENGTH,
         *,
         provenance: str,
         text_columns: list[str],
         filter_terms: Optional[Iterable[str]] = None,
-    ) -> tuple[Passage, ...]:
+    ) -> list[Passage]:
         """Read passages from a CSV file.
 
         Args:
-            file: the CSV file to read.
+            reader: a CSV reader object
+            length: the minimum sentence length. Defaults to settings.PASSAGE_LENGTH
+            provenance: the name of the CSV file.
+            text_columns: the columns in the CSV file that contain text.
+            filter_terms: a list of terms; if given, only passages containing these terms are returned.
         Return:
-            tuple[Passage]: the passages from the CSV file.
+            list[Passage]: the passages from the CSV file.
         """
         for column in text_columns:
             if column not in reader.fieldnames:
@@ -224,8 +119,9 @@ class Segmenter(abc.ABC):
                 ):
                     continue
 
-                column_passages: Iterable[Passage] = self.passages(
-                    row[text_column], metadata=row_metadata
+                column_passages: Iterable[Passage] = Passage.merge(
+                    list(self.passages(row[text_column], metadata=row_metadata)),
+                    length=length,
                 )
 
                 if filter_terms:
@@ -238,7 +134,7 @@ class Segmenter(abc.ABC):
                                 )
                 else:
                     passages.extend(column_passages)
-        return tuple(passages)
+        return passages
 
     @classmethod
     @lru_cache(maxsize=4)
@@ -275,7 +171,7 @@ class SentenceSplitterSegmenter(Segmenter):
         self._model = SentenceSplitter(language=self._language)
 
     def split(self, text: str) -> Iterable[str]:
-        return self._fit_lengths(self._model.split(text))
+        return self._model.split(text)
 
 
 class WtpSegmenter(Segmenter):
@@ -299,7 +195,7 @@ class WtpSegmenter(Segmenter):
         self._model.half().to(device)
 
     def split(self, text: str) -> Iterable[str]:
-        return self._fit_lengths(self._model.split(text))
+        return self._model.split(text, strip_whitespace=True)
 
 
 class StanzaSegmenter(Segmenter):
@@ -312,9 +208,7 @@ class StanzaSegmenter(Segmenter):
         self._model = stanza.Pipeline(lang=self._language, processors=processors)
 
     def split(self, text: str) -> Iterable[str]:
-        return self._fit_lengths(
-            (sentence.text for sentence in self._model(text).sentences)
-        )
+        return (sentence.text for sentence in self._model(text).sentences)
 
 
 class WindowSegmenter(Segmenter):
@@ -329,12 +223,6 @@ class WindowSegmenter(Segmenter):
         **kwargs,
     ) -> None:
         super().__init__(language=language, **kwargs)
-
-        for arg in ("min_sentence_length", "max_sentence_length"):
-            if arg in kwargs:
-                logging.warning(
-                    f"{self.__class__.__name__} does not use '{arg}' argument."
-                )
 
         self._window_size = window_size
 

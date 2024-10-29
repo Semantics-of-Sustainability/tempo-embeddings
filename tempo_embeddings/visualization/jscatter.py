@@ -25,6 +25,7 @@ class JScatterVisualizer:
             "label",
             "top words",
             "collection",
+            "recId",
         ],
         fillna: dict[str, str] = None,
         color_by: str = "label",

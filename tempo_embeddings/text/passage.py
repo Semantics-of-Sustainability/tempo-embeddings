@@ -273,6 +273,35 @@ class Passage:
     def __repr__(self) -> str:
         return f"Passage({self._text!r}, {self.metadata!r}, {self._highlighting!r})"
 
+    def __add__(self, other: "Passage") -> "Passage":
+        """Concatenates two passages.
+
+        Note: self.metadata overrides other.metadata
+
+        Args:
+            other: The Passage to concatenate with.
+        Returns:
+            A new Passage object with the concatenated text and metadata.
+        """
+
+        skip_fields = {"sentence_index"}
+        intersecting_fields = set(self.metadata.keys()) & set(other.metadata.keys())
+
+        for field in intersecting_fields - skip_fields:
+            if self.metadata[field] != other.metadata[field]:
+                raise RuntimeError(
+                    f"Conflicting metadata when merging two passages: '{field}': '{self.metadata[field]}'/'{other.metadata[field]}'"
+                )
+
+        # FIXME: dropping the highlighting of the 'other' passage; allow for multiple highlightings?
+        return Passage(
+            text=self._text + " " + other.text,
+            metadata=other.metadata | self.metadata,
+            highlighting=self.highlighting,
+            full_word_spans=self.full_word_spans,
+            char2tokens=self.char2tokens,
+        )
+
     def _partial_match(self, token: str, case_sensitive) -> Iterable[Highlighting]:
         if case_sensitive:
             text = self._text
@@ -381,3 +410,39 @@ class Passage:
         passage.tokenized_text = text.split()
 
         return passage
+
+    def merge_until(self, passages: list["Passage"], *, length: int) -> "Passage":
+        """Merges the passages in the input iterable into passages of (at least) the specified length.
+
+        Merged passages are removed in-place from the passages list.
+
+        Args:
+            passages: A sequence of passages to merge with until the length would be exceeded.
+            length: The minimum length of the merged passages.
+        Returns:
+            A new Passage potentially merged to increase its length.
+        """
+
+        if len(self) > length * 1.5:
+            logging.warning("Very long passage (%d characters): %s", len(self), self)
+        elif passages and (len(self) + len(passages[0]) <= length):
+            return (self + passages.pop(0)).merge_until(passages, length=length)
+        return self
+
+    @staticmethod
+    def merge(passages: list["Passage"], *, length: int) -> list["Passage"]:
+        """Merges the passages in the input iterable into passages until they would exceed the specified length.
+
+        Args:
+            passages: An list of passages to merge. This list is emptied in-place.
+            length: The length of the merged passages.
+        Returns:
+            The merged passages.
+        """
+        if passages:
+            return [
+                passages.pop(0).merge_until(passages, length=length)
+            ] + Passage.merge(passages, length=length)
+        else:
+            logging.debug("No passages to merge.")
+            return []

@@ -1,5 +1,4 @@
 import csv
-import logging
 from contextlib import nullcontext as does_not_raise
 from io import StringIO
 
@@ -17,71 +16,6 @@ from tempo_embeddings.text.segmenter import (
 
 
 class TestSegmenter:
-    @pytest.mark.parametrize(
-        "sentence,max_sentence_length,expected",
-        [
-            ("This is a test.", 200, ["This is a test."]),
-            ("This is; a test.", 200, ["This is; a test."]),
-            ("This is; a test.", 5, ["This is;", "a test."]),
-            ("This; is a test.", 5, ["This;", "is a test."]),
-            ("This; is a; test.", 5, ["This;", "is a;", "test."]),
-            ("This is a test.", 5, ["This is a test."]),
-            ("This; is a; test.", 12, ["This; is a;", "test."]),
-            ("This; is a; test.", 10, ["This;", "is a;", "test."]),
-        ],
-    )
-    def test_split_sentence(self, sentence, max_sentence_length, expected):
-        sentences = SentenceSplitterSegmenter(
-            language="en",
-            min_sentence_length=0,
-            max_sentence_length=max_sentence_length,
-        )._split_sentence(sentence)
-
-        assert list(sentences) == expected
-
-    @pytest.mark.parametrize(
-        "sentences,min_sentence_length,expected",
-        [
-            (["This is a sentence."], 0, ["This is a sentence."]),
-            (
-                ["This is a sentence.", "This is another sentence."],
-                0,
-                ["This is a sentence.", "This is another sentence."],
-            ),
-            (
-                ["This is a sentence.", "This is another sentence."],
-                5,
-                ["This is a sentence.", "This is another sentence."],
-            ),
-            (
-                ["This is a sentence.", "This is another sentence."],
-                20,
-                ["This is a sentence. This is another sentence."],
-            ),
-            pytest.param(
-                ["This is a sentence.", "Short."],
-                19,
-                ["This is a sentence. Short."],
-                marks=pytest.mark.xfail(reason="Trailing short sentence."),
-            ),
-            pytest.param(
-                ["This is a sentence."],
-                2000,
-                ["This is a sentence."],
-                marks=pytest.mark.xfail(
-                    raises=ValueError,
-                    reason="Minimum sentence length must be smaller than maximum sentence length.",
-                ),
-            ),
-        ],
-    )
-    def test_merge_sentences(self, sentences, min_sentence_length, expected):
-        merged = SentenceSplitterSegmenter(
-            language="en", min_sentence_length=min_sentence_length
-        )._merge_sentences(sentences)
-
-        assert list(merged) == expected
-
     @pytest.mark.parametrize(
         "segmenter, language, kwargs, expected_type, expected_exception",
         [
@@ -124,17 +58,17 @@ class TestSegmenter:
         "segmenter, text, expected",
         [
             (
-                SentenceSplitterSegmenter("en", min_sentence_length=5),
+                SentenceSplitterSegmenter("en"),
                 "This is a test. This is another test.",
                 ["This is a test.", "This is another test."],
             ),
             (
-                WtpSegmenter("en", min_sentence_length=5),
-                "This is a test This is another test.",
-                ["This is a test", "This is another test."],
+                WtpSegmenter("en"),
+                "This is a test. This is another test.",
+                ["This is a test.", "This is another test."],
             ),
             (
-                StanzaSegmenter("en", min_sentence_length=5),
+                StanzaSegmenter("en"),
                 "This is a test This is another test.",
                 ["This is a test", "This is another test."],
             ),
@@ -149,11 +83,10 @@ class TestSegmenter:
 
 class TestSentenceSplitter:
     @pytest.mark.parametrize(
-        "text,deduplicate,expected",
+        "text,expected",
         [
             (
                 "This is a test. This is another test.",
-                True,
                 [
                     Passage("This is a test.", metadata={"sentence_index": 0}),
                     Passage("This is another test.", metadata={"sentence_index": 1}),
@@ -161,17 +94,6 @@ class TestSentenceSplitter:
             ),
             (
                 "This is a test. This is a test.",
-                True,
-                [Passage("This is a test.", metadata={"sentence_index": 0})],
-            ),
-            (
-                "This is a test. THIS is a test.",
-                True,
-                [Passage("This is a test.", metadata={"sentence_index": 0})],
-            ),
-            (
-                "This is a test. This is a test.",
-                False,
                 [
                     Passage("This is a test.", metadata={"sentence_index": 0}),
                     Passage("This is a test.", metadata={"sentence_index": 1}),
@@ -179,18 +101,17 @@ class TestSentenceSplitter:
             ),
         ],
     )
-    def test_passages(self, text, deduplicate, expected):
-        passages = SentenceSplitterSegmenter("en", min_sentence_length=5).passages(
-            text, deduplicate=deduplicate
-        )
+    def test_passages(self, text, expected):
+        passages = SentenceSplitterSegmenter("en").passages(text)
         assert list(passages) == expected
 
     @pytest.mark.parametrize(
-        "_csv, provenance, filter_terms, expected",
+        "_csv, length, provenance, filter_terms, expected",
         [
-            ("content\n", "test provenance", None, []),
+            ("content\n", 512, "test provenance", None, []),
             (
                 "content\nsome text",
+                512,
                 "test provenance",
                 None,
                 [
@@ -202,6 +123,7 @@ class TestSentenceSplitter:
             ),
             (
                 "content\nsome filter text",
+                512,
                 "test provenance",
                 ["filter"],
                 [
@@ -212,12 +134,43 @@ class TestSentenceSplitter:
                     )
                 ],
             ),
-            ("content\nsome text", "test provenance", ["filter"], []),
+            ("content\nsome text", 512, "test provenance", ["filter"], []),
+            (
+                "content\nThis is the first sentence. This is the second sentence.\n",
+                512,
+                "test provenance",
+                None,
+                [
+                    Passage(
+                        "This is the first sentence. This is the second sentence.",
+                        {"provenance": "test provenance", "sentence_index": 0},
+                    )
+                ],
+            ),
+            (
+                "content\nThis is the first sentence. This is the second sentence.\n",
+                10,
+                "test provenance",
+                None,
+                [
+                    Passage(
+                        "This is the first sentence.",
+                        {"provenance": "test provenance", "sentence_index": 0},
+                    ),
+                    Passage(
+                        "This is the second sentence.",
+                        {"provenance": "test provenance", "sentence_index": 1},
+                    ),
+                ],
+            ),
         ],
     )
-    def test_passages_from_dict_reader(self, _csv, provenance, filter_terms, expected):
+    def test_passages_from_dict_reader(
+        self, _csv, length, provenance, filter_terms, expected
+    ):
         passages = SentenceSplitterSegmenter("en").passages_from_dict_reader(
             csv.DictReader(StringIO(_csv)),
+            length=length,
             provenance=provenance,
             text_columns=["content"],
             filter_terms=filter_terms,
@@ -261,20 +214,9 @@ class TestWindowSegmenter:
             ),
         ],
     )
-    def test_passages(self, text, window_size, window_overlap, expected, caplog):
-        with caplog.at_level(logging.WARNING):
-            passages = WindowSegmenter(
-                min_sentence_length=0,
-                window_size=window_size,
-                window_overlap=window_overlap,
-            ).passages(text)
-
-        assert caplog.record_tuples == [
-            (
-                "root",
-                logging.WARNING,
-                "WindowSegmenter does not use 'min_sentence_length' argument.",
-            )
-        ]
+    def test_passages(self, text, window_size, window_overlap, expected):
+        passages = WindowSegmenter(
+            window_size=window_size, window_overlap=window_overlap
+        ).passages(text)
 
         assert list(passages) == expected
