@@ -424,7 +424,9 @@ class Passage:
         """
 
         if len(self) > length * 1.5:
-            logging.warning("Very long passage (%d characters): %s", len(self), self)
+            logging.warning(
+                "Very long passage (%d characters): %s", len(self), self.metadata
+            )
         elif passages and (len(self) + len(passages[0]) <= length):
             return (self + passages.pop(0)).merge_until(passages, length=length)
         return self

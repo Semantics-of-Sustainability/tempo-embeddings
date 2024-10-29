@@ -5,9 +5,7 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-import weaviate
 from tempo_embeddings import settings
-from tempo_embeddings.embeddings.model import SentenceTransformerModelWrapper
 from tempo_embeddings.embeddings.weaviate_database import WeaviateDatabaseManager
 from tempo_embeddings.io.corpus_reader import CorpusReader
 
@@ -79,6 +77,13 @@ def arguments_parser():
         default=8087,
         help="Weaviate server port, defaults to 8087 to match the setting in docker-compose.yml",
     )
+    weaviate_args.add_argument(
+        "--grpc-port", type=int, default=50051, help="Weaviate gRPC port"
+    )
+    weaviate_args.add_argument("--use-ssl", action="store_true", help="Use SSL.")
+    weaviate_args.add_argument(
+        "--api-key", type=str, required=False, help="Weaviate API key"
+    )
     # TODO: add options for logging (level, output file)
 
     return parser
@@ -107,42 +112,42 @@ if __name__ == "__main__":
         line.strip() for line in args.filter_terms_file
     ]
 
-    with weaviate.connect_to_local(args.weaviate_host, args.weaviate_port) as client:
-        # TODO: model requires a different wrapper class for non-SentenceBert models
-        db = WeaviateDatabaseManager(
-            client=client,
-            model=SentenceTransformerModelWrapper.from_pretrained(args.language_model),
-            batch_size=args.batch_size,
-        )
+    # TODO: model requires a different wrapper class for non-SentenceBert models
+    db = WeaviateDatabaseManager.from_args(
+        model_name=args.language_model,
+        http_host=args.weaviate_host,
+        http_port=args.weaviate_port,
+        http_secure=args.use_ssl,
+        api_key=args.api_key,
+        batch_size=args.batch_size,
+    )
 
-        if args.reset_db:
-            db.reset()
+    if args.reset_db:
+        db.reset()
 
-        db.validate_config()
+    db.validate_config()
 
-        for corpus_name in tqdm(corpora, desc="Reading", unit="corpus"):
-            if args.overwrite:
-                db.delete_collection(corpus_name)
+    for corpus_name in tqdm(corpora, desc="Reading", unit="corpus"):
+        if args.overwrite:
+            db.delete_collection(corpus_name)
 
-            try:
-                ingested_files = set(db.get_metadata_values(corpus_name, "provenance"))
-            except ValueError as e:
-                logging.debug(e)
-                ingested_files = set()
-            logging.info(f"Skipping {len(ingested_files)} files for '{corpus_name}'.")
+        try:
+            ingested_files = set(db.get_metadata_values(corpus_name, "provenance"))
+        except ValueError as e:
+            logging.debug(e)
+            ingested_files = set()
+        logging.info(f"Skipping {len(ingested_files)} files for '{corpus_name}'.")
 
-            corpus_config = corpus_reader[corpus_name]
-            for corpus in corpus_config.build_corpora(
-                filter_terms, skip_files=ingested_files, max_files=args.max_files
-            ):
-                db.ingest(
-                    corpus,
-                    corpus_name,
-                    embedder=args.language_model,
-                    properties=corpus_config.asdict(
-                        properties=["language", "segmenter"]
-                    ),
-                )
+        corpus_config = corpus_reader[corpus_name]
+        for corpus in corpus_config.build_corpora(
+            filter_terms, skip_files=ingested_files, max_files=args.max_files
+        ):
+            db.ingest(
+                corpus,
+                corpus_name,
+                embedder=args.language_model,
+                properties=corpus_config.asdict(properties=["language", "segmenter"]),
+            )
 
     if args.filter_terms_file is not None:
         args.filter_terms_file.close()

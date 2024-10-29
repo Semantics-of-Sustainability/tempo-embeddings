@@ -9,6 +9,7 @@ from tqdm import tqdm
 
 import weaviate
 import weaviate.classes as wvc
+from weaviate.auth import Auth
 from weaviate.classes.config import DataType, Property
 from weaviate.classes.query import Filter, MetadataQuery
 from weaviate.exceptions import UnexpectedStatusCodeError, WeaviateQueryError
@@ -18,7 +19,7 @@ from ..settings import STRICT, WEAVIATE_CONFIG_COLLECTION
 from ..text.corpus import Corpus
 from ..text.passage import Passage
 from ..text.year_span import YearSpan
-from .model import TransformerModelWrapper
+from .model import SentenceTransformerModelWrapper, TransformerModelWrapper
 from .vector_database import VectorDatabaseManagerWrapper
 
 Collection = TypeVar("Collection")
@@ -231,11 +232,15 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
 
         collection_name = name or corpus.label
 
-        collection: Collection = (
-            self._client.collections.get(name=collection_name)
-            if self._client.collections.exists(collection_name)
-            else self._init_collection(collection_name, embedder, properties)
-        )
+        if self._client.collections.exists(collection_name):
+            collection: Collection = self._client.collections.get(name=collection_name)
+        else:
+            self._config.add_corpus(
+                corpus=collection_name,
+                embedder=embedder or self.model.name,
+                properties=properties or {},
+            )
+            collection = self._init_collection(collection_name, embedder, properties)
 
         # TODO: implement other model type
         try:
@@ -256,6 +261,8 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
     ) -> Collection:
         """Initialise a collection in the database.
 
+        Note: this does not add it to the configuration database, so WeaviateConfigDB.add_corpus() should be called separately.
+
         Args:
             collection_name (str): The name of the collection. Defaults to the corpus label.
             embedder (str, optional): The name of the embedder to use. Defaults to the model name.
@@ -265,12 +272,6 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             Collection: the collection object
 
         """
-
-        self._config.add_corpus(
-            corpus=collection_name,
-            embedder=embedder or self.model.name,
-            properties=properties or {},
-        )
 
         # TODO: allow for embedded vectorizers
         collection: Collection = self._client.collections.create(
@@ -685,7 +686,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         objects: Iterable[dict[str, Any]],
         collection_name: str,
         *,
-        total_count: int = None,
+        total_count: Optional[int] = None,
         batch_size: int = 100,
     ) -> int:
         """Import a collection of objects into the database.
@@ -702,9 +703,14 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         """
         count = 0
 
-        with self._client.collections.get(collection_name).batch.fixed_size(
-            batch_size=batch_size
-        ) as batch:
+        collection: Collection = (
+            self._client.collections.get(name=collection_name)
+            if self._client.collections.exists(collection_name)
+            else self._init_collection(
+                collection_name, self._config[collection_name]["embedder"]
+            )
+        )
+        with collection.batch.fixed_size(batch_size=batch_size) as batch:
             for _object in tqdm(
                 objects,
                 desc=f"Importing {collection_name}",
@@ -718,6 +724,9 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                 )
 
                 count += 1
+
+        if collection.batch.failed_objects:
+            logger.error(collection.batch.failed_objects)
 
         if total_count is not None and count != total_count:
             logger.warning(
@@ -774,6 +783,53 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                     "Collection '%s' exists in the database but is not registered in the configuration database.",
                     collection,
                 )
+
+    @classmethod
+    def from_args(
+        cls,
+        *,
+        model_name: Optional[str],
+        ### weaviate arguments:
+        http_host: str,
+        http_port: int = 8087,
+        http_secure: bool = False,
+        grpc_host: str = None,
+        grpc_port: int = 50051,
+        api_key: Optional[str] = None,
+        ###
+        batch_size: int = 8,
+    ):
+        """Initialize a WeaviateDatabaseManager by initializing a model wrapper and a Weaviate client.
+
+        Note: the model_name is currently expected to be a SentenceTransformer model.
+
+        Args:
+            model_name (str): The name of the model to use for a SentenceTransformerModelWrapper
+            http_host (str): The Weaviate server host
+            http_port (int, optional): The Weaviate server port. Defaults to 8087.
+            http_secure (bool, optional): Use SSL. Defaults to False.
+            grpc_host (str, optional): The Weaviate gRPC host. Defaults to None.
+            grpc_port (int, optional): The Weaviate gRPC port. Defaults to 50051.
+            api_key (Optional[str], optional): The Weaviate API key. Defaults to None.
+            batch_size (int, optional): The batch size. Defaults to 8.
+        Returns:
+            WeaviateDatabaseManager: The initialized database manager
+        """
+        weaviate_client = weaviate.connect_to_custom(
+            http_host,
+            http_port,
+            http_secure,
+            grpc_host=grpc_host or http_host,
+            grpc_port=grpc_port,
+            grpc_secure=http_secure,
+            auth_credentials=Auth.api_key(api_key) if api_key else None,
+        )
+        model = (
+            SentenceTransformerModelWrapper.from_pretrained(model_name)
+            if model_name
+            else None
+        )
+        return cls(model, client=weaviate_client, batch_size=batch_size)
 
 
 class QueryBuilder:
