@@ -232,11 +232,15 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
 
         collection_name = name or corpus.label
 
-        collection: Collection = (
-            self._client.collections.get(name=collection_name)
-            if self._client.collections.exists(collection_name)
-            else self._init_collection(collection_name, embedder, properties)
-        )
+        if self._client.collections.exists(collection_name):
+            collection: Collection = self._client.collections.get(name=collection_name)
+        else:
+            self._config.add_corpus(
+                corpus=collection_name,
+                embedder=embedder or self.model.name,
+                properties=properties or {},
+            )
+            collection = self._init_collection(collection_name, embedder, properties)
 
         # TODO: implement other model type
         try:
@@ -257,6 +261,8 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
     ) -> Collection:
         """Initialise a collection in the database.
 
+        Note: this does not add it to the configuration database, so WeaviateConfigDB.add_corpus() should be called separately.
+
         Args:
             collection_name (str): The name of the collection. Defaults to the corpus label.
             embedder (str, optional): The name of the embedder to use. Defaults to the model name.
@@ -266,12 +272,6 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             Collection: the collection object
 
         """
-
-        self._config.add_corpus(
-            corpus=collection_name,
-            embedder=embedder or self.model.name,
-            properties=properties or {},
-        )
 
         # TODO: allow for embedded vectorizers
         collection: Collection = self._client.collections.create(
@@ -703,9 +703,14 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         """
         count = 0
 
-        with self._client.collections.get(collection_name).batch.fixed_size(
-            batch_size=batch_size
-        ) as batch:
+        collection: Collection = (
+            self._client.collections.get(name=collection_name)
+            if self._client.collections.exists(collection_name)
+            else self._init_collection(
+                collection_name, self._config[collection_name]["embedder"]
+            )
+        )
+        with collection.batch.fixed_size(batch_size=batch_size) as batch:
             for _object in tqdm(
                 objects,
                 desc=f"Importing {collection_name}",
