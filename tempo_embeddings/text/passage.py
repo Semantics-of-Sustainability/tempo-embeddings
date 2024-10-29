@@ -283,6 +283,16 @@ class Passage:
         Returns:
             A new Passage object with the concatenated text and metadata.
         """
+        # check conflicting metadata
+        skip_fields = {"sentence_index"}
+        intersecting_fields = set(self.metadata.keys()) & set(other.metadata.keys())
+
+        for field in intersecting_fields - skip_fields:
+            if self.metadata[field] != other.metadata[field]:
+                raise RuntimeError(
+                    f"Conflicting metadata when merging two passages: '{field}': '{self.metadata[field]}'/'{other.metadata[field]}'"
+                )
+
         return Passage(
             text=self._text + " " + other.text,
             metadata=other.metadata | self.metadata,
@@ -412,7 +422,9 @@ class Passage:
             A new Passage potentially merged to increase its length.
         """
 
-        if passages and (len(self) + len(passages[0]) <= length):
+        if len(self) > length * 1.5:
+            logging.warning("Very long passage (%d characters): %s", len(self), self)
+        elif passages and (len(self) + len(passages[0]) <= length):
             return (self + passages.pop(0)).merge_until(passages, length=length)
         return self
 
@@ -421,7 +433,7 @@ class Passage:
         """Merges the passages in the input iterable into passages until they would exceed the specified length.
 
         Args:
-            passages: An iterable of passages to merge that can be converted into an iterator.
+            passages: An list of passages to merge. This list is emptied in-place.
             length: The length of the merged passages.
         Returns:
             The merged passages.

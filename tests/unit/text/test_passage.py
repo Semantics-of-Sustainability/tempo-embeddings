@@ -1,4 +1,5 @@
 import platform
+from contextlib import nullcontext as does_not_raise
 
 import pytest
 
@@ -15,28 +16,38 @@ def passage():
 
 class TestPassage:
     @pytest.mark.parametrize(
-        "passage1, passage2, expected",
+        "passage1, passage2, expected, exception",
         [
-            (Passage("test1"), Passage("test2"), Passage("test1 test2")),
+            (Passage("test1"), Passage("test2"), Passage("test1 test2"), None),
             (
                 Passage("test1", metadata={"key": "value"}),
                 Passage("test2"),
                 Passage("test1 test2", metadata={"key": "value"}),
+                None,
             ),
             (
                 Passage("test1", metadata={"key1": "value1"}),
                 Passage("test2", metadata={"key2": "value2"}),
                 Passage("test1 test2", metadata={"key1": "value1", "key2": "value2"}),
+                None,
             ),
             (
                 Passage("test1", metadata={"key1": "value1"}),
                 Passage("test2", metadata={"key1": "value2"}),
                 Passage("test1 test2", metadata={"key1": "value1"}),
+                pytest.raises(RuntimeError),
+            ),
+            (
+                Passage("test1", metadata={"sentence_index": 1}),
+                Passage("test2", metadata={"sentence_index": 2}),
+                Passage("test1 test2", metadata={"sentence_index": 1}),
+                None,
             ),
         ],
     )
-    def test_add(self, passage1, passage2, expected):
-        assert passage1 + passage2 == expected
+    def test_add(self, passage1, passage2, expected, exception):
+        with exception or does_not_raise():
+            assert passage1 + passage2 == expected
 
     @pytest.mark.parametrize(
         "term, expected",
