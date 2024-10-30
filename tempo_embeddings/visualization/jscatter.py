@@ -115,11 +115,10 @@ class JScatterVisualizer:
 
         return button
 
-    def visualize(self) -> list[widgets.Widget]:
+    def visualize(self) -> None:
         """Display the initial visualization."""
         widgets = self._plot._widgets + [self._cluster_button()]
         display(*widgets)
-        return widgets
 
 
 class PlotWidgets:
