@@ -1,8 +1,16 @@
+from unittest import mock
+
 import pytest
 from ipywidgets.widgets import Button, HBox, Output, SelectionRangeSlider
 
 from tempo_embeddings.text.corpus import Corpus
 from tempo_embeddings.visualization.jscatter import JScatterVisualizer, PlotWidgets
+
+
+@pytest.fixture
+def mock_display():
+    with mock.patch("tempo_embeddings.visualization.jscatter.display") as mock_display:
+        yield mock_display
 
 
 class TestJScatterVisualizer:
@@ -22,13 +30,21 @@ class TestJScatterVisualizer:
         # TODO: test for continuous filter
     )
     def test_visualize(
-        self, corpus, cat_fields, cont_fields, cont_widget_types, cat_widget_types
+        self,
+        mock_display,
+        corpus,
+        cat_fields,
+        cont_fields,
+        cont_widget_types,
+        cat_widget_types,
     ):
         visualizer = JScatterVisualizer(
             corpus, categorical_fields=cat_fields, continuous_filter_fields=cont_fields
         )
 
-        widgets = visualizer.visualize()
+        visualizer.visualize()
+
+        widgets = mock_display.call_args.args
 
         categorical_filters = widgets[1].children
         continous_filters = widgets[2].children
@@ -39,9 +55,11 @@ class TestJScatterVisualizer:
 
         assert visualizer._cluster_plot is None
 
-    def test_cluster_button(self, corpus):
+    def test_cluster_button(self, mock_display, corpus):
         visualizer = JScatterVisualizer(corpus)
-        widgets = visualizer.visualize()
+        visualizer.visualize()
+
+        widgets = mock_display.call_args.args
 
         assert visualizer.clusters is None
 
