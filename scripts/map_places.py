@@ -1,5 +1,6 @@
 import csv
 import re
+from collections import defaultdict, deque
 
 import folium
 from folium.plugins import HeatMapWithTime
@@ -17,7 +18,7 @@ def is_valid_place_name(place_name: str) -> bool:
     return True
 
 
-def create_map(input_csv, output, limit=1000):
+def create_map(input_csv, output, limit=1000, window_size=7):
     geocoder = Geocoder()  # Initialize the Geocoder
     map_ = folium.Map(location=[52.3676, 4.9041], zoom_start=6)  # Centered on Amsterdam
     heat_data = defaultdict(list)
@@ -34,7 +35,7 @@ def create_map(input_csv, output, limit=1000):
         next(reader)  # Skip header
 
         for i, row in enumerate(
-            tqdm(reader, desc="Processing places", total=total_lines)
+            tqdm(reader, unit="row", desc="Processing places", total=total_lines)
         ):
             if i >= limit:
                 break
@@ -51,10 +52,17 @@ def create_map(input_csv, output, limit=1000):
                 date = row["date"][:10]  # Extract the date part (YYYY-MM-DD)
                 heat_data[date].append([latitude, longitude])
 
-    heat_data_sorted = [heat_data[date] for date in sorted(heat_data)]
-    HeatMapWithTime(
-        heat_data_sorted, index=[date for date in sorted(heat_data)]
-    ).add_to(map_)
+    # Apply rolling window to smooth the heatmap
+    sorted_dates = sorted(heat_data)
+    smoothed_heat_data = []
+    window = deque(maxlen=window_size)
+
+    for date in sorted_dates:
+        window.append(heat_data[date])
+        combined_data = [coord for day_data in window for coord in day_data]
+        smoothed_heat_data.append(combined_data)
+
+    HeatMapWithTime(smoothed_heat_data, index=sorted_dates).add_to(map_)
     pins_group.add_to(map_)
     folium.LayerControl().add_to(map_)  # Add layer control to toggle pins
     map_.save(output)  # Save the map to the file
@@ -62,7 +70,6 @@ def create_map(input_csv, output, limit=1000):
 
 if __name__ == "__main__":
     import argparse
-    from collections import defaultdict
 
     parser = argparse.ArgumentParser(
         description="Create a map of places from a CSV file."
@@ -78,6 +85,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--limit", type=int, default=1000, help="Limit the number of places to process"
     )
+    parser.add_argument(
+        "--window-size",
+        type=int,
+        default=7,
+        help="Window size for smoothing the heatmap",
+    )
     args = parser.parse_args()
 
-    create_map(args.input_csv, args.output.name, args.limit)
+    create_map(args.input_csv, args.output.name, args.limit, args.window_size)
