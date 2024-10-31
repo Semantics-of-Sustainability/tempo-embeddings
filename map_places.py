@@ -1,26 +1,11 @@
 import csv
-import logging
 import re
-import time
-from functools import lru_cache
 
 import folium
 from folium.plugins import HeatMapWithTime
-from geopy.geocoders import Nominatim
 from tqdm import tqdm
 
-last_request_time = 0  # Global variable to store the time of the last request
-
-
-@lru_cache(maxsize=1000000)
-def geocode_place(geolocator, place_name):
-    global last_request_time
-    current_time = time.time()
-    elapsed_time = current_time - last_request_time
-    if elapsed_time < 1:
-        time.sleep(1)  # Respect the rate limit of 1 request per second
-    last_request_time = time.time()
-    return geolocator.geocode(place_name)
+from geocoder import Geocoder
 
 
 def is_valid_place_name(place_name: str) -> bool:
@@ -33,9 +18,12 @@ def is_valid_place_name(place_name: str) -> bool:
 
 
 def create_map(input_csv, output, limit=1000):
-    geolocator = Nominatim(timeout=10, user_agent="place_mapper")
+    geocoder = Geocoder()  # Initialize the Geocoder
     map_ = folium.Map(location=[52.3676, 4.9041], zoom_start=6)  # Centered on Amsterdam
     heat_data = defaultdict(list)
+
+    # Create a feature group for the location pins
+    pins_group = folium.FeatureGroup(name="Location Pins")
 
     with open(input_csv, mode="r", encoding="utf-8") as csvfile:
         reader = csv.DictReader(csvfile)
@@ -53,23 +41,21 @@ def create_map(input_csv, output, limit=1000):
             place_name = row["place_name"]
             if not is_valid_place_name(place_name):
                 continue
-            location = geocode_place(geolocator, place_name)
-            if location:
+            location = geocoder.geocode_place(place_name)
+            if location and location[0] is not None and location[1] is not None:
+                latitude, longitude = location[0], location[1]
                 # Add pin for each location:
-                # folium.Marker(
-                #     [location.latitude, location.longitude],
-                #     popup=f"{place_name} ({row['date']})",
-                # ).add_to(map_)
+                folium.Marker(
+                    [latitude, longitude],
+                    popup=f"{place_name} ({row['date']})",
+                ).add_to(pins_group)
                 date = row["date"][:10]  # Extract the date part (YYYY-MM-DD)
-                heat_data[date].append([location.latitude, location.longitude])
-
-            if (i + 1) % 10 == 0:
-                logging.debug(
-                    f"Cache info after {i + 1} iterations: {geocode_place.cache_info()}"
-                )
+                heat_data[date].append([latitude, longitude])
 
     heat_data_sorted = [heat_data[date] for date in sorted(heat_data)]
     HeatMapWithTime(heat_data_sorted).add_to(map_)
+    pins_group.add_to(map_)
+    folium.LayerControl().add_to(map_)  # Add layer control to toggle pins
     map_.save(output)  # Save the map to the file
 
 
@@ -93,4 +79,4 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    create_map(args.input_csv, args.output, args.limit)
+    create_map(args.input_csv, args.output.name, args.limit)
