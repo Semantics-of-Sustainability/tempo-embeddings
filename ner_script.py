@@ -1,5 +1,7 @@
 import argparse
 import csv
+import sys
+from functools import lru_cache
 
 import spacy
 from tqdm import tqdm
@@ -7,6 +9,7 @@ from tqdm import tqdm
 from tempo_embeddings.io.corpus_reader import CorpusReader
 
 
+@lru_cache(maxsize=None)
 def load_spacy_model(language: str):
     if language == "en":
         return spacy.load("en_core_web_sm")
@@ -48,7 +51,11 @@ if __name__ == "__main__":
     )
     parser.add_argument("--corpora", nargs="+", help="List of corpora to process")
     parser.add_argument(
-        "--output", "-o", default="place_names.csv", help="Output CSV file"
+        "--output",
+        "-o",
+        type=argparse.FileType("w"),
+        default=sys.stdout,
+        help="Output CSV file",
     )
     args = parser.parse_args()
 
