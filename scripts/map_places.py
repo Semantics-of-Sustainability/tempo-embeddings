@@ -5,7 +5,7 @@ import folium
 from folium.plugins import HeatMapWithTime
 from tqdm import tqdm
 
-from geocoder import Geocoder
+from tempo_embeddings.io.geocoder import Geocoder
 
 
 def is_valid_place_name(place_name: str) -> bool:

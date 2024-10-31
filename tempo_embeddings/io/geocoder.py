@@ -69,8 +69,7 @@ class Geocoder:
 
         location = self.geolocator.geocode(place_name)
         if location:
-            lat, long = location.latitude, location.longitude
+            self.cache_location(place_name, location.latitude, location.longitude)
         else:
-            lat, long = None, None
-        self.cache_location(place_name, lat, long)
-        return lat, long
+            self.cache_location(place_name, None, None)  # Cache place with no location
+        return location
