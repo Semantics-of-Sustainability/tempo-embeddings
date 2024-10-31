@@ -52,7 +52,9 @@ def create_map(input_csv, output, limit=1000):
                 heat_data[date].append([latitude, longitude])
 
     heat_data_sorted = [heat_data[date] for date in sorted(heat_data)]
-    HeatMapWithTime(heat_data_sorted).add_to(map_)
+    HeatMapWithTime(
+        heat_data_sorted, index=[date for date in sorted(heat_data)]
+    ).add_to(map_)
     pins_group.add_to(map_)
     folium.LayerControl().add_to(map_)  # Add layer control to toggle pins
     map_.save(output)  # Save the map to the file
