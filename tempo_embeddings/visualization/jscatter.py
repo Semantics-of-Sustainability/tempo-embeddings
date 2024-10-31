@@ -20,8 +20,13 @@ class JScatterVisualizer:
         categorical_fields: list[str] = ["collection", "label"],
         continuous_filter_fields: list[str] = ["year"],
         tooltip_fields: list[str] = [
-            "year",
+            "article_tit",  # Delpher
+            "title",  # StatenGeneraal
             "text",
+            "year",
+            "genre",
+            "chamber",  # StatenGeneraal
+            # Derived fields
             "label",
             "top words",
             "collection",
@@ -173,6 +178,10 @@ class PlotWidgets:
             .fillna(self._fillna)
             .convert_dtypes()
         )
+
+        for field in self._tooltip_fields:
+            if field not in self._df.columns:
+                logging.warning(f"Tooltip field '{field}' not found.")
         return self._df
 
     def _init_scatter(self) -> jscatter.Scatter:
