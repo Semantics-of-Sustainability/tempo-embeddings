@@ -41,9 +41,8 @@ def create_map(input_csv, output, limit=1000):
             place_name = row["place_name"]
             if not is_valid_place_name(place_name):
                 continue
-            location = geocoder.geocode_place(place_name)
-            if location and location[0] is not None and location[1] is not None:
-                latitude, longitude = location[0], location[1]
+            latitude, longitude = geocoder.geocode_place(place_name)
+            if latitude and longitude:
                 # Add pin for each location:
                 folium.Marker(
                     [latitude, longitude],

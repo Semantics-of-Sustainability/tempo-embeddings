@@ -1,22 +1,36 @@
+import logging
 import sqlite3
 import time
+from typing import Optional, Tuple
 
+from geopy.exc import GeocoderTimedOut
 from geopy.geocoders import Nominatim
 
 
 class Geocoder:
     def __init__(
-        self, db_path="geocode_cache.db", user_agent="place_mapper", timeout=10
-    ):
+        self,
+        db_path: str = "geocode_cache.db",
+        user_agent: str = "place_mapper",
+        timeout: int = 10,
+    ) -> None:
+        """
+        Initializes the Geocoder class.
+
+        Args:
+            db_path (str): Path to the SQLite database file.
+            user_agent (str): User agent for the Nominatim geolocator.
+            timeout (int): Timeout for the geolocator requests.
+        """
         self.db_path = db_path
         self.geolocator = Nominatim(user_agent=user_agent, timeout=timeout)
         self.init_db()
-        self.last_request_time = (
-            0  # Global variable to store the time of the last request
-        )
+        self.last_request_time = 0
 
-    def init_db(self):
-        """Initialize the SQLite database."""
+    def init_db(self) -> None:
+        """
+        Initializes the SQLite database.
+        """
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         cursor.execute(
@@ -31,8 +45,16 @@ class Geocoder:
         conn.commit()
         conn.close()
 
-    def get_cached_location(self, place_name):
-        """Retrieve a cached location from the SQLite database."""
+    def get_cached_location(self, place_name: str) -> Optional[Tuple[float, float]]:
+        """
+        Retrieves a cached location from the SQLite database.
+
+        Args:
+            place_name (str): Name of the place to retrieve the location for.
+
+        Returns:
+            Optional[Tuple[float, float]]: A tuple containing the latitude and longitude, or None if not found.
+        """
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         cursor.execute(
@@ -43,8 +65,17 @@ class Geocoder:
         conn.close()
         return result
 
-    def cache_location(self, place_name, latitude, longitude):
-        """Cache a location in the SQLite database."""
+    def cache_location(
+        self, place_name: str, latitude: Optional[float], longitude: Optional[float]
+    ) -> None:
+        """
+        Caches a location in the SQLite database.
+
+        Args:
+            place_name (str): Name of the place to cache.
+            latitude (float): Latitude of the place.
+            longitude (float): Longitude of the place.
+        """
         if latitude is None or longitude is None:
             latitude, longitude = float("nan"), float("nan")
         conn = sqlite3.connect(self.db_path)
@@ -56,7 +87,16 @@ class Geocoder:
         conn.commit()
         conn.close()
 
-    def geocode_place(self, place_name):
+    def geocode_place(self, place_name: str) -> Optional[Tuple[float, float]]:
+        """
+        Geocodes a place name using the Nominatim geolocator.
+
+        Args:
+            place_name (str): Name of the place to geocode.
+
+        Returns:
+            Optional[Tuple[float, float]]: A tuple containing the latitude and longitude, or None if not found.
+        """
         cached_location = self.get_cached_location(place_name)
         if cached_location:
             return cached_location
@@ -67,9 +107,16 @@ class Geocoder:
             time.sleep(1)  # Respect the rate limit of 1 request per second
         self.last_request_time = time.time()
 
-        location = self.geolocator.geocode(place_name)
+        try:
+            location = self.geolocator.geocode(place_name)
+        except GeocoderTimedOut as e:
+            logging.error(f"Geocoding request for '{place_name}' timed out: {e}")
+            location = None
+
         if location:
-            self.cache_location(place_name, location.latitude, location.longitude)
+            lat, long = location.latitude, location.longitude
         else:
-            self.cache_location(place_name, None, None)  # Cache place with no location
-        return location
+            lat, long = None, None
+
+        self.cache_location(place_name, lat, long)
+        return lat, long
