@@ -10,12 +10,8 @@ from tempo_embeddings.io.geocoder import Geocoder
 
 
 def is_valid_place_name(place_name: str) -> bool:
-    """Check if the place name is valid (not too short and not mostly special characters)."""
-    if len(place_name) < 3:
-        return False
-    if re.fullmatch(r"\W+", place_name):
-        return False
-    return True
+    """Check if the place name is valid (contains at least 3 letters)."""
+    return len(re.findall(r"[a-zA-Z]", place_name)) >= 3
 
 
 def create_map(input_csv, output, limit=1000, window_size=7):
