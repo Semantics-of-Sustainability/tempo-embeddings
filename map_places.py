@@ -1,9 +1,11 @@
 import csv
+import logging
 import re
 import time
 from functools import lru_cache
 
 import folium
+from folium.plugins import HeatMapWithTime
 from geopy.geocoders import Nominatim
 from tqdm import tqdm
 
@@ -33,6 +35,7 @@ def is_valid_place_name(place_name: str) -> bool:
 def create_map(input_csv, output, limit=1000):
     geolocator = Nominatim(timeout=10, user_agent="place_mapper")
     map_ = folium.Map(location=[52.3676, 4.9041], zoom_start=6)  # Centered on Amsterdam
+    heat_data = defaultdict(list)
 
     with open(input_csv, mode="r", encoding="utf-8") as csvfile:
         reader = csv.DictReader(csvfile)
@@ -52,16 +55,27 @@ def create_map(input_csv, output, limit=1000):
                 continue
             location = geocode_place(geolocator, place_name)
             if location:
-                folium.Marker(
-                    [location.latitude, location.longitude],
-                    popup=f"{place_name} ({row['date']})",
-                ).add_to(map_)
+                # Add pin for each location:
+                # folium.Marker(
+                #     [location.latitude, location.longitude],
+                #     popup=f"{place_name} ({row['date']})",
+                # ).add_to(map_)
+                date = row["date"][:10]  # Extract the date part (YYYY-MM-DD)
+                heat_data[date].append([location.latitude, location.longitude])
 
-    map_.save(output.name)  # Save the map to the file
+            if (i + 1) % 10 == 0:
+                logging.debug(
+                    f"Cache info after {i + 1} iterations: {geocode_place.cache_info()}"
+                )
+
+    heat_data_sorted = [heat_data[date] for date in sorted(heat_data)]
+    HeatMapWithTime(heat_data_sorted).add_to(map_)
+    map_.save(output)  # Save the map to the file
 
 
 if __name__ == "__main__":
     import argparse
+    from collections import defaultdict
 
     parser = argparse.ArgumentParser(
         description="Create a map of places from a CSV file."
