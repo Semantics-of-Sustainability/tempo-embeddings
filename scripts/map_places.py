@@ -146,6 +146,4 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    create_map(
-        args.input_csv, args.output.name, args.title, args.limit, args.window_size
-    )
+    create_map(args.input, args.output.name, args.title, args.limit, args.window_size)
