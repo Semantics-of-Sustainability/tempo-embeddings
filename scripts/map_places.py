@@ -24,7 +24,7 @@ def create_map(input_csv, output, title=None, limit=1000, window_size=7):
     if title:
         title_html = f"""
             <div style="position: fixed;
-                        top: 10px; left: 50px; width: 100%; height: 50px;
+                        top: 10px; left: 50%; transform: translateX(-50%); width: auto; height: 50px;
                         background-color: white; z-index: 9999; font-size: 24px;">
                 <center>{title}</center>
             </div>
