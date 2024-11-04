@@ -14,10 +14,22 @@ def is_valid_place_name(place_name: str) -> bool:
     return len(re.findall(r"[a-zA-Z]", place_name)) >= 3
 
 
-def create_map(input_csv, output, limit=1000, window_size=7):
+def create_map(input_csv, output, title=None, limit=1000, window_size=7):
     geocoder = Geocoder()  # Initialize the Geocoder
     map_ = folium.Map(location=[52.3676, 4.9041], zoom_start=6)  # Centered on Amsterdam
     heat_data = defaultdict(list)
+    added_locations = set()  # Track added locations
+
+    # Add a title to the map if provided
+    if title:
+        title_html = f"""
+            <div style="position: fixed;
+                        top: 10px; left: 50px; width: 100%; height: 50px;
+                        background-color: white; z-index: 9999; font-size: 24px;">
+                <center>{title}</center>
+            </div>
+        """
+        map_.get_root().html.add_child(folium.Element(title_html))
 
     # Create a feature group for the location pins
     pins_group = folium.FeatureGroup(name="Location Pins", show=False)
@@ -40,10 +52,13 @@ def create_map(input_csv, output, limit=1000, window_size=7):
                 continue
             latitude, longitude = geocoder.geocode_place(place_name)
             if latitude and longitude:
-                folium.Marker(
-                    [latitude, longitude],
-                    popup=f"{place_name} ({row['date']})",
-                ).add_to(pins_group)
+                location = (latitude, longitude)
+                if location not in added_locations:
+                    folium.Marker(
+                        [latitude, longitude],
+                        popup=f"{place_name} ({row['date']})",
+                    ).add_to(pins_group)
+                    added_locations.add(location)
                 date = row["date"][:10]  # Extract the date part (YYYY-MM-DD)
                 heat_data[date].append([latitude, longitude])
 
@@ -80,6 +95,9 @@ if __name__ == "__main__":
         help="Output HTML file for the map",
     )
     parser.add_argument(
+        "--title", help="Title to be included in the map", required=False
+    )
+    parser.add_argument(
         "--limit", type=int, default=1000, help="Limit the number of places to process"
     )
     parser.add_argument(
@@ -90,4 +108,6 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    create_map(args.input_csv, args.output.name, args.limit, args.window_size)
+    create_map(
+        args.input_csv, args.output.name, args.title, args.limit, args.window_size
+    )
