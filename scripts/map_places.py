@@ -1,6 +1,7 @@
 import csv
 import re
 from collections import defaultdict, deque
+from typing import Optional
 
 import folium
 import pandas as pd
@@ -15,14 +16,16 @@ def read_data_list(input_csv, limit, geocoder):
     heat_data = defaultdict(list)
     with open(input_csv, mode="r", encoding="utf-8") as csvfile:
         reader = csv.DictReader(csvfile)
-        total_lines = min(sum(1 for _ in csvfile) - 1, limit)
+        total_lines = sum(1 for _ in reader) - 1
+        if limit:
+            total_lines = min(total_lines, limit)
         csvfile.seek(0)  # Reset file pointer to the beginning
         next(reader)  # Skip header
 
         for i, row in enumerate(
             tqdm(reader, unit="row", desc="Processing places", total=total_lines)
         ):
-            if i >= limit:
+            if limit and i >= limit:
                 break
             place_name = row["place_name"]
             if len(re.findall(r"[a-zA-Z]", place_name)) >= 3:
@@ -80,7 +83,7 @@ def create_smoothed_heat_data(heat_data, window_size):
     return smoothed_heat_data, sorted_dates
 
 
-def create_map(input_csv, output, title=None, limit=1000, window_size=7):
+def create_map(input_csv, output, title: str, limit: Optional[int], window_size: int):
     geocoder = Geocoder()  # Initialize the Geocoder
     map_ = folium.Map(location=[52.3676, 4.9041], zoom_start=6)  # Centered on Amsterdam
 
@@ -118,7 +121,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Create a map of places from a CSV file."
     )
-    parser.add_argument("--input-csv", help="Input CSV file with place names")
+    parser.add_argument("--input", "-i", help="Input CSV file with place names")
     parser.add_argument(
         "--output",
         "-o",
@@ -130,7 +133,10 @@ if __name__ == "__main__":
         "--title", help="Title to be included in the map", required=False
     )
     parser.add_argument(
-        "--limit", type=int, default=1000, help="Limit the number of places to process"
+        "--limit",
+        type=int,
+        required=False,
+        help="Limit the number of places to process",
     )
     parser.add_argument(
         "--window-size",
