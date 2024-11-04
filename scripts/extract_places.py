@@ -29,7 +29,12 @@ def main(corpora, csvfile):
         corpus_config = corpus_reader[corpus_name]
         nlp = load_spacy_model(corpus_config.language)
         for corpus in corpus_config.build_corpora(filter_terms=[]):
-            for passage in tqdm(corpus.passages, desc=corpus_name, unit="passage"):
+            provenance = (
+                corpus.passages[0].metadata.get("provenance")
+                if corpus.passages
+                else corpus_name
+            )
+            for passage in tqdm(corpus.passages, desc=provenance, unit="passage"):
                 doc = nlp(passage.text)
                 for ent in doc.ents:
                     if ent.label_ == "GPE":  # GPE (Geopolitical Entity) for place names
