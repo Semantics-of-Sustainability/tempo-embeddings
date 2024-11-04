@@ -35,9 +35,9 @@ _CORPUS_DIRS: list[Path] = [
     # Snellius:
     Path().home() / "data",
     # Yoda drive mounted on MacOS:
-    # Path(
-    #     "/Volumes/i-lab.data.uu.nl/research-semantics-of-sustainability/semantics-of-sustainability/data"
-    # ),
+    Path(
+        "/Volumes/i-lab.data.uu.nl/research-semantics-of-sustainability/semantics-of-sustainability/data"
+    ),
 ]
 """Directories in which corpora are stored; the first one found is used."""
 
@@ -47,7 +47,7 @@ try:
     print(f"Using corpus directory: '{CORPUS_DIR}'")
 except StopIteration:
     logging.error(f"No corpus directory found in {_CORPUS_DIRS}")
-    CORPUS_DIR = None
+    CORPUS_DIR = Path(".")
 
 DEFAULT_LANGUAGE_MODEL: str = (
     "NetherlandsForensicInstitute/robbert-2022-dutch-sentence-transformers"
