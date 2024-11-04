@@ -66,6 +66,19 @@ def create_markers(df, pins_group):
         )
 
 
+def create_smoothed_heat_data(heat_data, window_size):
+    sorted_dates = sorted(heat_data)
+    smoothed_heat_data = []
+    window = deque(maxlen=window_size)
+
+    for date in sorted_dates:
+        window.append(heat_data[date])
+        combined_data = [coord for day_data in window for coord in day_data]
+        smoothed_heat_data.append(combined_data)
+
+    return smoothed_heat_data, sorted_dates
+
+
 def create_map(input_csv, output, title=None, limit=1000, window_size=7):
     geocoder = Geocoder()  # Initialize the Geocoder
     map_ = folium.Map(location=[52.3676, 4.9041], zoom_start=6)  # Centered on Amsterdam
@@ -90,15 +103,7 @@ def create_map(input_csv, output, title=None, limit=1000, window_size=7):
 
     create_markers(df, pins_group)
 
-    # Apply rolling window to smooth the heatmap
-    sorted_dates = sorted(heat_data)
-    smoothed_heat_data = []
-    window = deque(maxlen=window_size)
-
-    for date in sorted_dates:
-        window.append(heat_data[date])
-        combined_data = [coord for day_data in window for coord in day_data]
-        smoothed_heat_data.append(combined_data)
+    smoothed_heat_data, sorted_dates = create_smoothed_heat_data(heat_data, window_size)
 
     HeatMapWithTime(
         smoothed_heat_data, index=sorted_dates, name="Time-Space Heat Map"
