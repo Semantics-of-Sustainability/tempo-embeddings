@@ -111,12 +111,12 @@ class Geocoder:
             location = self.geolocator.geocode(place_name)
         except GeocoderTimedOut as e:
             logging.error(f"Geocoding request for '{place_name}' timed out: {e}")
-            location = None
-
-        if location:
-            lat, long = location.latitude, location.longitude
-        else:
             lat, long = None, None
+        else:
+            if location:
+                lat, long = location.latitude, location.longitude
+            else:
+                lat, long = None, None
+            self.cache_location(place_name, lat, long)
 
-        self.cache_location(place_name, lat, long)
         return lat, long
