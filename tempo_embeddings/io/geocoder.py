@@ -3,7 +3,7 @@ import sqlite3
 import time
 from typing import Optional, Tuple
 
-from geopy.exc import GeocoderTimedOut
+from geopy.exc import GeocoderServiceError
 from geopy.geocoders import Nominatim
 
 
@@ -109,7 +109,7 @@ class Geocoder:
 
         try:
             location = self.geolocator.geocode(place_name)
-        except GeocoderTimedOut as e:
+        except GeocoderServiceError as e:
             logging.error(f"Geocoding request for '{place_name}' timed out: {e}")
             lat, long = None, None
         else:
