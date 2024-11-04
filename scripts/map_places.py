@@ -35,7 +35,8 @@ def read_data_list(input_csv, limit, geocoder):
     return data, heat_data
 
 
-def create_markers(df, pins_group):
+def add_markers(data, pins_group):
+    df = pd.DataFrame(data, columns=["place_name", "latitude", "longitude", "date"])
     grouped = (
         df.groupby(["latitude", "longitude"])
         .agg(
@@ -99,9 +100,7 @@ def create_map(input_csv, output, title=None, limit=1000, window_size=7):
 
     data, heat_data = read_data_list(input_csv, limit, geocoder)
 
-    df = pd.DataFrame(data, columns=["place_name", "latitude", "longitude", "date"])
-
-    create_markers(df, pins_group)
+    add_markers(data, pins_group)
 
     smoothed_heat_data, sorted_dates = create_smoothed_heat_data(heat_data, window_size)
 
