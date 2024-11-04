@@ -5,7 +5,7 @@ import string
 from typing import Any, Iterable, Optional
 
 from dateutil.parser import ParserError, parse
-from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from .highlighting import Highlighting
 
@@ -29,7 +29,7 @@ class Passage:
                     if not value.tzinfo:
                         value = value.replace(tzinfo=datetime.timezone.utc)
                 except ParserError as e:
-                    raise ValidationError(e)
+                    raise ValueError("Error in Metadata") from e
             return value
 
     def __init__(
@@ -43,6 +43,11 @@ class Passage:
         char2tokens: Optional[list[int]] = None,
         unique_id: str = None,
     ):
+        """
+        Initializes a Passage object.
+
+        Raises:
+            ValidationError: If the metadata is invalid."""
         # pylint: disable=too-many-arguments
         self._text = text.strip()
         self._unique_id = unique_id
@@ -423,9 +428,9 @@ class Passage:
             A new Passage potentially merged to increase its length.
         """
 
-        if len(self) > length * 1.5:
-            logging.warning(
-                "Very long passage (%d characters): %s", len(self), self.metadata
+        if len(self) > length * 2:
+            logging.info(
+                "Very long passage (%d >> %d): %s", len(self), length, self.metadata
             )
         elif passages and (len(self) + len(passages[0]) <= length):
             return (self + passages.pop(0)).merge_until(passages, length=length)

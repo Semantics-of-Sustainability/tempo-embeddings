@@ -3,6 +3,7 @@ from contextlib import nullcontext as does_not_raise
 from io import StringIO
 
 import pytest
+from pydantic import ValidationError
 
 from tempo_embeddings.text.highlighting import Highlighting
 from tempo_embeddings.text.passage import Passage
@@ -104,6 +105,37 @@ class TestSentenceSplitter:
     def test_passages(self, text, expected):
         passages = SentenceSplitterSegmenter("en").passages(text)
         assert list(passages) == expected
+
+    @pytest.mark.parametrize(
+        "text,metadata,strict,expected,exception",
+        [
+            ("text", {}, True, [Passage("text", metadata={"sentence_index": 0})], None),
+            (
+                "text",
+                {"date": "01-05-1889"},
+                True,
+                [Passage("text", metadata={"date": "01-05-1889", "sentence_index": 0})],
+                None,
+            ),
+            (
+                "text",
+                {"date": "01-05-1889"},
+                False,
+                [Passage("text", metadata={"date": "01-05-1889", "sentence_index": 0})],
+                None,
+            ),
+            ("text", {"date": "99-05-1889"}, True, [], pytest.raises(ValidationError)),
+            ("text", {"date": "99-05-1889"}, False, [], None),
+        ],
+    )
+    def test_passages_metadata_strict(
+        self, text, metadata, strict, expected, exception
+    ):
+        with exception or does_not_raise():
+            passages = SentenceSplitterSegmenter("en").passages(
+                text, metadata=metadata, strict=strict
+            )
+            assert list(passages) == expected
 
     @pytest.mark.parametrize(
         "_csv, length, provenance, filter_terms, expected",
