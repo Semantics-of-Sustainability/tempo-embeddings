@@ -35,27 +35,7 @@ def read_data_list(input_csv, limit, geocoder):
     return data, heat_data
 
 
-def create_map(input_csv, output, title=None, limit=1000, window_size=7):
-    geocoder = Geocoder()  # Initialize the Geocoder
-    map_ = folium.Map(location=[52.3676, 4.9041], zoom_start=6)  # Centered on Amsterdam
-
-    # Add a title to the map if provided
-    if title:
-        title_html = f"""
-            <div style="position: fixed;
-                        top: 10px; left: 50%; transform: translateX(-50%); width: auto; height: 50px;
-                        background-color: white; z-index: 9999; font-size: 24px;">
-                <center>{title}</center>
-            </div>
-        """
-        map_.get_root().html.add_child(folium.Element(title_html))
-
-    # Create a feature group for the location pins
-    pins_group = folium.FeatureGroup(name="Location Pins", show=False)
-
-    data, heat_data = read_data_list(input_csv, limit, geocoder)
-
-    df = pd.DataFrame(data, columns=["place_name", "latitude", "longitude", "date"])
+def create_markers(df, pins_group):
     grouped = (
         df.groupby(["latitude", "longitude"])
         .agg(
@@ -84,6 +64,31 @@ def create_map(input_csv, output, title=None, limit=1000, window_size=7):
         folium.Marker([row["latitude"], row["longitude"]], popup=table_html).add_to(
             pins_group
         )
+
+
+def create_map(input_csv, output, title=None, limit=1000, window_size=7):
+    geocoder = Geocoder()  # Initialize the Geocoder
+    map_ = folium.Map(location=[52.3676, 4.9041], zoom_start=6)  # Centered on Amsterdam
+
+    # Add a title to the map if provided
+    if title:
+        title_html = f"""
+            <div style="position: fixed;
+                        top: 10px; left: 50%; transform: translateX(-50%); width: auto; height: 50px;
+                        background-color: white; z-index: 9999; font-size: 24px;">
+                <center>{title}</center>
+            </div>
+        """
+        map_.get_root().html.add_child(folium.Element(title_html))
+
+    # Create a feature group for the location pins
+    pins_group = folium.FeatureGroup(name="Location Pins", show=False)
+
+    data, heat_data = read_data_list(input_csv, limit, geocoder)
+
+    df = pd.DataFrame(data, columns=["place_name", "latitude", "longitude", "date"])
+
+    create_markers(df, pins_group)
 
     # Apply rolling window to smooth the heatmap
     sorted_dates = sorted(heat_data)
