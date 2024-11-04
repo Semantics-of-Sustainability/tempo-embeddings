@@ -20,7 +20,7 @@ def create_map(input_csv, output, limit=1000, window_size=7):
     heat_data = defaultdict(list)
 
     # Create a feature group for the location pins
-    pins_group = folium.FeatureGroup(name="Location Pins")
+    pins_group = folium.FeatureGroup(name="Location Pins", show=False)
 
     with open(input_csv, mode="r", encoding="utf-8") as csvfile:
         reader = csv.DictReader(csvfile)
@@ -40,7 +40,6 @@ def create_map(input_csv, output, limit=1000, window_size=7):
                 continue
             latitude, longitude = geocoder.geocode_place(place_name)
             if latitude and longitude:
-                # Add pin for each location:
                 folium.Marker(
                     [latitude, longitude],
                     popup=f"{place_name} ({row['date']})",
@@ -58,7 +57,9 @@ def create_map(input_csv, output, limit=1000, window_size=7):
         combined_data = [coord for day_data in window for coord in day_data]
         smoothed_heat_data.append(combined_data)
 
-    HeatMapWithTime(smoothed_heat_data, index=sorted_dates).add_to(map_)
+    HeatMapWithTime(
+        smoothed_heat_data, index=sorted_dates, name="Time-Space Heat Map"
+    ).add_to(map_)
     pins_group.add_to(map_)
     folium.LayerControl().add_to(map_)  # Add layer control to toggle pins
     map_.save(output)  # Save the map to the file
