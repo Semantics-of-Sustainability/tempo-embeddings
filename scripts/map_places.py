@@ -3,6 +3,7 @@ import re
 from collections import defaultdict, deque
 
 import folium
+import pandas as pd
 from folium.plugins import HeatMapWithTime
 from tqdm import tqdm
 
@@ -18,7 +19,6 @@ def create_map(input_csv, output, title=None, limit=1000, window_size=7):
     geocoder = Geocoder()  # Initialize the Geocoder
     map_ = folium.Map(location=[52.3676, 4.9041], zoom_start=6)  # Centered on Amsterdam
     heat_data = defaultdict(list)
-    added_locations = set()  # Track added locations
 
     # Add a title to the map if provided
     if title:
@@ -33,6 +33,8 @@ def create_map(input_csv, output, title=None, limit=1000, window_size=7):
 
     # Create a feature group for the location pins
     pins_group = folium.FeatureGroup(name="Location Pins", show=False)
+
+    data = []
 
     with open(input_csv, mode="r", encoding="utf-8") as csvfile:
         reader = csv.DictReader(csvfile)
@@ -52,15 +54,39 @@ def create_map(input_csv, output, title=None, limit=1000, window_size=7):
                 continue
             latitude, longitude = geocoder.geocode_place(place_name)
             if latitude and longitude:
-                location = (latitude, longitude)
-                if location not in added_locations:
-                    folium.Marker(
-                        [latitude, longitude],
-                        popup=f"{place_name} ({row['date']})",
-                    ).add_to(pins_group)
-                    added_locations.add(location)
                 date = row["date"][:10]  # Extract the date part (YYYY-MM-DD)
+                data.append([place_name, latitude, longitude, date])
                 heat_data[date].append([latitude, longitude])
+
+    df = pd.DataFrame(data, columns=["place_name", "latitude", "longitude", "date"])
+    grouped = (
+        df.groupby(["latitude", "longitude"])
+        .agg(
+            {
+                "place_name": lambda x: list(set(x)),
+                "date": lambda x: list(sorted(set(x))),
+            }
+        )
+        .reset_index()
+    )
+
+    for _, row in grouped.iterrows():
+        table_html = """
+        <div style="width: 300px;">
+            <table style="width: 100%;">
+                <tr><th>Place Name</th><th>Dates</th></tr>
+        """
+        for place_name in row["place_name"]:
+            place_dates = df[
+                (df["latitude"] == row["latitude"])
+                & (df["longitude"] == row["longitude"])
+                & (df["place_name"] == place_name)
+            ]["date"].tolist()
+            table_html += f"<tr><td>{place_name}</td><td>{', '.join(sorted(set(place_dates)))}</td></tr>"
+        table_html += "</table></div>"
+        folium.Marker([row["latitude"], row["longitude"]], popup=table_html).add_to(
+            pins_group
+        )
 
     # Apply rolling window to smooth the heatmap
     sorted_dates = sorted(heat_data)
