@@ -9,6 +9,7 @@ from typing import Any, Iterable, Optional
 import stanza
 import torch
 import wtpsplit
+from pydantic import ValidationError
 from sentence_splitter import SentenceSplitter
 
 from .. import settings
@@ -60,13 +61,18 @@ class Segmenter(abc.ABC):
         return NotImplemented
 
     def passages(
-        self, text: str, *, metadata: Optional[dict[str, Any]] = None
+        self,
+        text: str,
+        *,
+        metadata: Optional[dict[str, Any]] = None,
+        strict: bool = False,
     ) -> Iterable[Passage]:
         """Yield passages from the text.
 
         Args:
             text: the text to split into passages.
             metadata: the metadata to attach to the passages.
+            strict: if True, raise an error on invalid metadata. Otherwise, log a warning.
         Yields:
             Passage: the passages from the text.
         """
@@ -74,7 +80,18 @@ class Segmenter(abc.ABC):
         for idx, sentence in enumerate(self.split(text)):
             metadata = (metadata or {}) | {"sentence_index": idx}
 
-            yield Passage(sentence, metadata)
+            try:
+                yield Passage(sentence, metadata)
+            except ValidationError as e:
+                if strict:
+                    raise e
+                else:
+                    logging.warning(
+                        "Skipping sentence %d with invalid metadata in '%s': %s",
+                        idx,
+                        metadata.get("provenance"),
+                        e,
+                    )
 
     def passages_from_dict_reader(
         self,
