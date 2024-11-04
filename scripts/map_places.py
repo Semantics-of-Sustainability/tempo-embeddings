@@ -10,15 +10,34 @@ from tqdm import tqdm
 from tempo_embeddings.io.geocoder import Geocoder
 
 
-def is_valid_place_name(place_name: str) -> bool:
-    """Check if the place name is valid (contains at least 3 letters)."""
-    return len(re.findall(r"[a-zA-Z]", place_name)) >= 3
+def read_data_list(input_csv, limit, geocoder):
+    data = []
+    heat_data = defaultdict(list)
+    with open(input_csv, mode="r", encoding="utf-8") as csvfile:
+        reader = csv.DictReader(csvfile)
+        total_lines = min(sum(1 for _ in csvfile) - 1, limit)
+        csvfile.seek(0)  # Reset file pointer to the beginning
+        next(reader)  # Skip header
+
+        for i, row in enumerate(
+            tqdm(reader, unit="row", desc="Processing places", total=total_lines)
+        ):
+            if i >= limit:
+                break
+            place_name = row["place_name"]
+            if len(re.findall(r"[a-zA-Z]", place_name)) >= 3:
+                # skip invalid place names
+                latitude, longitude = geocoder.geocode_place(place_name)
+                if latitude and longitude:
+                    date = row["date"][:10]  # Extract the date part (YYYY-MM-DD)
+                    data.append([place_name, latitude, longitude, date])
+                    heat_data[date].append([latitude, longitude])
+    return data, heat_data
 
 
 def create_map(input_csv, output, title=None, limit=1000, window_size=7):
     geocoder = Geocoder()  # Initialize the Geocoder
     map_ = folium.Map(location=[52.3676, 4.9041], zoom_start=6)  # Centered on Amsterdam
-    heat_data = defaultdict(list)
 
     # Add a title to the map if provided
     if title:
@@ -34,29 +53,7 @@ def create_map(input_csv, output, title=None, limit=1000, window_size=7):
     # Create a feature group for the location pins
     pins_group = folium.FeatureGroup(name="Location Pins", show=False)
 
-    data = []
-
-    with open(input_csv, mode="r", encoding="utf-8") as csvfile:
-        reader = csv.DictReader(csvfile)
-        total_lines = min(
-            sum(1 for _ in csvfile) - 1, limit
-        )  # Count lines excluding header and adapt to limit
-        csvfile.seek(0)  # Reset file pointer to the beginning
-        next(reader)  # Skip header
-
-        for i, row in enumerate(
-            tqdm(reader, unit="row", desc="Processing places", total=total_lines)
-        ):
-            if i >= limit:
-                break
-            place_name = row["place_name"]
-            if not is_valid_place_name(place_name):
-                continue
-            latitude, longitude = geocoder.geocode_place(place_name)
-            if latitude and longitude:
-                date = row["date"][:10]  # Extract the date part (YYYY-MM-DD)
-                data.append([place_name, latitude, longitude, date])
-                heat_data[date].append([latitude, longitude])
+    data, heat_data = read_data_list(input_csv, limit, geocoder)
 
     df = pd.DataFrame(data, columns=["place_name", "latitude", "longitude", "date"])
     grouped = (
