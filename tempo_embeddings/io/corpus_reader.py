@@ -1,4 +1,6 @@
+import csv
 import json
+import logging
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
@@ -62,15 +64,18 @@ class CorpusConfig:
 
         for file in tqdm(files[:max_files], desc=self.directory.name, unit="file"):
             if self.loader_type == "csv":
-                yield Corpus.from_csv_file(
-                    filepath=file,
-                    text_columns=self.text_columns,
-                    filter_terms=filter_terms,
-                    encoding=self.encoding,
-                    compression=self.compression,
-                    delimiter=self.delimiter,
-                    segmenter=segmenter,
-                )
+                try:
+                    yield Corpus.from_csv_file(
+                        filepath=file,
+                        text_columns=self.text_columns,
+                        filter_terms=filter_terms,
+                        encoding=self.encoding,
+                        compression=self.compression,
+                        delimiter=self.delimiter,
+                        segmenter=segmenter,
+                    )
+                except csv.Error as e:
+                    logging.error("Error reading file %s: %s", file, e)
             else:
                 raise NotImplementedError(f"Unrecognized format '{self.file_type}'")
 
