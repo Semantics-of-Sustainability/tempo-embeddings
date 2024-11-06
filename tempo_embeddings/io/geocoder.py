@@ -24,10 +24,10 @@ class Geocoder:
         """
         self.db_path = db_path
         self.geolocator = Nominatim(user_agent=user_agent, timeout=timeout)
-        self.init_db()
+        self._init_db()
         self.last_request_time = 0
 
-    def init_db(self) -> None:
+    def _init_db(self) -> None:
         """
         Initializes the SQLite database.
         """
@@ -45,7 +45,7 @@ class Geocoder:
         conn.commit()
         conn.close()
 
-    def get_cached_location(self, place_name: str) -> Optional[Tuple[float, float]]:
+    def _get_cached_location(self, place_name: str) -> Optional[Tuple[float, float]]:
         """
         Retrieves a cached location from the SQLite database.
 
@@ -65,7 +65,7 @@ class Geocoder:
         conn.close()
         return result
 
-    def cache_location(
+    def _cache_location(
         self, place_name: str, latitude: Optional[float], longitude: Optional[float]
     ) -> None:
         """
@@ -97,26 +97,26 @@ class Geocoder:
         Returns:
             Optional[Tuple[float, float]]: A tuple containing the latitude and longitude, or None if not found.
         """
-        cached_location = self.get_cached_location(place_name)
+        cached_location = self._get_cached_location(place_name)
         if cached_location:
-            return cached_location
-
-        current_time = time.time()
-        elapsed_time = current_time - self.last_request_time
-        if elapsed_time < 1:
-            time.sleep(1)  # Respect the rate limit of 1 request per second
-        self.last_request_time = time.time()
-
-        try:
-            location = self.geolocator.geocode(place_name)
-        except GeocoderServiceError as e:
-            logging.error(f"Geocoding request for '{place_name}' timed out: {e}")
-            lat, long = None, None
+            lat, long = cached_location
         else:
-            if location:
-                lat, long = location.latitude, location.longitude
-            else:
+            current_time = time.time()
+            elapsed_time = current_time - self.last_request_time
+            if elapsed_time < 1:
+                time.sleep(1)  # Respect the rate limit of 1 request per second
+            self.last_request_time = time.time()
+
+            try:
+                location = self.geolocator.geocode(place_name)
+            except GeocoderServiceError as e:
+                logging.error(f"Geocoding request for '{place_name}' timed out: {e}")
                 lat, long = None, None
-            self.cache_location(place_name, lat, long)
+            else:
+                if location:
+                    lat, long = location.latitude, location.longitude
+                else:
+                    lat, long = None, None
+                self._cache_location(place_name, lat, long)
 
         return lat, long
