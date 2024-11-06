@@ -7,6 +7,7 @@ from pathlib import Path
 
 import spacy
 import spacy.cli
+from spacy.language import Language
 from tqdm import tqdm
 
 from tempo_embeddings.io.corpus_reader import CorpusReader
@@ -15,9 +16,7 @@ MODEL_NAMES: dict[str, str] = {"en": "en_core_web_sm", "nl": "nl_core_news_sm"}
 
 
 @lru_cache(maxsize=None)
-def load_spacy_model(
-    language: str, *, download: bool = True
-) -> spacy.language.Language:
+def load_spacy_model(language: str, *, download: bool = True) -> Language:
     """Load SpaCy model for a given language.
 
     Args:
@@ -30,20 +29,22 @@ def load_spacy_model(
 
     try:
         model_name = MODEL_NAMES[language]
-        model: spacy.language.Language = spacy.load(model_name)
+        model: Language = spacy.load(model_name)
     except KeyError as e:
-        raise ValueError(f"No SpaCy model available for language: {language}") from e
+        raise ValueError(
+            f"No SpaCy model available for language '{language}'. Available languages are: {list(MODEL_NAMES.keys())}"
+        ) from e
     except OSError as e:
         if download:
             logging.warning(
-                f"Could not load SpaCy model '{model_name}': '{e}. Trying to download ..."
+                f"Failed to load Spacy model for language '{language}': '{e}. '{e}'. Downloading and re-trying."
             )
             spacy.cli.download(model_name)
 
             # retry loading the model, but don't retry downloading:
             model = load_spacy_model(language, download=False)
         else:
-            raise e
+            raise RuntimeError(e)
     return model
 
 
@@ -91,22 +92,24 @@ def main(corpora, csvfile: Path, resume: bool):
             for corpus in corpus_config.build_corpora(
                 filter_terms=[], skip_files=skip_files
             ):
-                provenance = (
-                    corpus.passages[0].metadata.get("provenance")
-                    if corpus.passages
-                    else corpus_name
-                )
-                for passage in tqdm(corpus.passages, desc=provenance, unit="passage"):
-                    doc = nlp(passage.text)
-                    for ent in doc.ents:
-                        if ent.label_ == "GPE":
-                            writer.writerow(
-                                {
-                                    "date": passage.metadata["date"],
-                                    "source": corpus_name,
-                                    "place_name": ent.text,
-                                }
-                            )
+                try:
+                    provenance = corpus.passages[0].metadata.get("provenance")
+                except IndexError:
+                    logging.warning(f"Empty corpus: {corpus_name}")
+                    continue
+                rows = [
+                    {
+                        "date": passage.metadata["date"],
+                        "source": corpus_name,
+                        "place_name": ent.text,
+                    }
+                    for passage in tqdm(
+                        corpus.passages, desc=provenance, unit="passage"
+                    )
+                    for ent in nlp(passage.text).ents
+                    if ent.label_ == "GPE"
+                ]
+                writer.writerows(rows)
 
 
 if __name__ == "__main__":
