@@ -1,7 +1,9 @@
 import argparse
 import csv
+import logging
 import sys
 from functools import lru_cache
+from pathlib import Path
 
 import spacy
 from tqdm import tqdm
@@ -19,32 +21,66 @@ def load_spacy_model(language: str):
         raise ValueError(f"No SpaCy model available for language: {language}")
 
 
-def main(corpora, csvfile):
-    fieldnames = ["date", "source", "place_name"]
-    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-    writer.writeheader()
+def extract_years_from_csv(csvfile: Path):
+    years = set()
+    with csvfile.open(mode="r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            date = row["date"]
+            if date != "unknown":
+                year = date.split("-")[0]
+                years.add(year)
+    return years
 
-    corpus_reader = CorpusReader(corpora=corpora)
-    for corpus_name in corpora:
-        corpus_config = corpus_reader[corpus_name]
-        nlp = load_spacy_model(corpus_config.language)
-        for corpus in corpus_config.build_corpora(filter_terms=[]):
-            provenance = (
-                corpus.passages[0].metadata.get("provenance")
-                if corpus.passages
-                else corpus_name
-            )
-            for passage in tqdm(corpus.passages, desc=provenance, unit="passage"):
-                doc = nlp(passage.text)
-                for ent in doc.ents:
-                    if ent.label_ == "GPE":  # GPE (Geopolitical Entity) for place names
-                        writer.writerow(
-                            {
-                                "date": passage.metadata.get("date", "unknown"),
-                                "source": corpus_name,
-                                "place_name": ent.text,
-                            }
-                        )
+
+def main(corpora, csvfile: Path, resume: bool):
+    file_exists = csvfile.exists()
+
+    if resume and file_exists:
+        years_to_skip = extract_years_from_csv(csvfile)
+        logging.info(f"Skipping years: {years_to_skip}")
+    else:
+        years_to_skip = set()
+
+    fieldnames = ["date", "source", "place_name"]
+    with csvfile.open(mode="a", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+
+        if not file_exists:
+            writer.writeheader()
+
+        corpus_reader = CorpusReader(corpora=corpora)
+
+        for corpus_name in corpora:
+            corpus_config = corpus_reader[corpus_name]
+            nlp = load_spacy_model(corpus_config.language)
+
+            skip_files: set[str] = {
+                file.name
+                for file in corpus_config.files()
+                if any(year in file.name for year in years_to_skip)
+            }
+            logging.debug(f"Skipping files: {skip_files}")
+
+            for corpus in corpus_config.build_corpora(
+                filter_terms=[], skip_files=skip_files
+            ):
+                provenance = (
+                    corpus.passages[0].metadata.get("provenance")
+                    if corpus.passages
+                    else corpus_name
+                )
+                for passage in tqdm(corpus.passages, desc=provenance, unit="passage"):
+                    doc = nlp(passage.text)
+                    for ent in doc.ents:
+                        if ent.label_ == "GPE":
+                            writer.writerow(
+                                {
+                                    "date": passage.metadata["date"],
+                                    "source": corpus_name,
+                                    "place_name": ent.text,
+                                }
+                            )
 
 
 if __name__ == "__main__":
@@ -55,10 +91,18 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output",
         "-o",
-        type=argparse.FileType("x", encoding="utf-8"),
-        default=sys.stdout,
+        type=Path,
+        default=Path(sys.stdout.name),
         help="Output CSV file",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume from the last run by reading the existing output file",
     )
     args = parser.parse_args()
 
-    main(args.corpora, args.output)
+    if not args.resume and args.output.exists():
+        parser.error(f"Output file already exists: {args.output}")
+
+    main(args.corpora, args.output, args.resume)
