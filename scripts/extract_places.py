@@ -6,19 +6,45 @@ from functools import lru_cache
 from pathlib import Path
 
 import spacy
+import spacy.cli
 from tqdm import tqdm
 
 from tempo_embeddings.io.corpus_reader import CorpusReader
 
+MODEL_NAMES: dict[str, str] = {"en": "en_core_web_sm", "nl": "nl_core_news_sm"}
+
 
 @lru_cache(maxsize=None)
-def load_spacy_model(language: str):
-    if language == "en":
-        return spacy.load("en_core_web_sm")
-    elif language == "nl":
-        return spacy.load("nl_core_news_sm")
-    else:
-        raise ValueError(f"No SpaCy model available for language: {language}")
+def load_spacy_model(
+    language: str, *, download: bool = True
+) -> spacy.language.Language:
+    """Load SpaCy model for a given language.
+
+    Args:
+        language (str): Language code.
+        download (bool): Whether to download the model if not available.
+    Raises:
+        ValueError: If no model is available for the given language.
+        OSError: If the model cannot be loaded and 'download' is False.
+    """
+
+    try:
+        model_name = MODEL_NAMES[language]
+        model: spacy.language.Language = spacy.load(model_name)
+    except KeyError as e:
+        raise ValueError(f"No SpaCy model available for language: {language}") from e
+    except OSError as e:
+        if download:
+            logging.warning(
+                f"Could not load SpaCy model '{model_name}': '{e}. Trying to download ..."
+            )
+            spacy.cli.download(model_name)
+
+            # retry loading the model, but don't retry downloading:
+            model = load_spacy_model(language, download=False)
+        else:
+            raise e
+    return model
 
 
 def extract_years_from_csv(csvfile: Path):
