@@ -11,7 +11,13 @@ from tqdm import tqdm
 from tempo_embeddings.io.geocoder import Geocoder
 
 
-def read_data_list(input_csv, limit, geocoder):
+def read_data_list(
+    input_csv,
+    limit: Optional[int],
+    geocoder: Geocoder,
+    start_year: Optional[int],
+    end_year: Optional[int],
+):
     data = []
     heat_data = defaultdict(list)
     with open(input_csv, mode="r", encoding="utf-8") as csvfile:
@@ -28,17 +34,23 @@ def read_data_list(input_csv, limit, geocoder):
             if limit and i >= limit:
                 break
             place_name = row["place_name"]
-            if len(re.findall(r"[a-zA-Z]", place_name)) >= 3:
-                # skip invalid place names
+            date = row["date"][:10]  # Extract the date part (YYYY-MM-DD)
+            year = int(date[:4])
+
+            if (
+                (start_year is None or year >= start_year)
+                and (end_year is None or year <= end_year)
+                and len(re.findall(r"[a-zA-Z]", place_name)) >= 3  # valid place name?
+            ):
                 latitude, longitude = geocoder.geocode_place(place_name)
                 if latitude and longitude:
-                    date = row["date"][:10]  # Extract the date part (YYYY-MM-DD)
                     data.append([place_name, latitude, longitude, date])
                     heat_data[date].append([latitude, longitude])
+
     return data, heat_data
 
 
-def add_markers(data, pins_group):
+def add_markers(data: list, pins_group: folium.Element):
     df = pd.DataFrame(data, columns=["place_name", "latitude", "longitude", "date"])
     grouped = (
         df.groupby(["latitude", "longitude"])
@@ -70,7 +82,7 @@ def add_markers(data, pins_group):
         )
 
 
-def create_smoothed_heat_data(heat_data, window_size):
+def create_smoothed_heat_data(heat_data: list, window_size: int):
     sorted_dates = sorted(heat_data)
     smoothed_heat_data = []
     window = deque(maxlen=window_size)
@@ -83,7 +95,15 @@ def create_smoothed_heat_data(heat_data, window_size):
     return smoothed_heat_data, sorted_dates
 
 
-def create_map(input_csv, output, title: str, limit: Optional[int], window_size: int):
+def create_map(
+    input_csv,
+    output,
+    title: str,
+    limit: Optional[int],
+    window_size: int,
+    start_year: Optional[int],
+    end_year: Optional[int],
+):
     geocoder = Geocoder()  # Initialize the Geocoder
     map_ = folium.Map(location=[52.3676, 4.9041], zoom_start=6)  # Centered on Amsterdam
 
@@ -101,7 +121,7 @@ def create_map(input_csv, output, title: str, limit: Optional[int], window_size:
     # Create a feature group for the location pins
     pins_group = folium.FeatureGroup(name="Location Pins", show=False)
 
-    data, heat_data = read_data_list(input_csv, limit, geocoder)
+    data, heat_data = read_data_list(input_csv, limit, geocoder, start_year, end_year)
 
     add_markers(data, pins_group)
 
@@ -144,6 +164,23 @@ if __name__ == "__main__":
         default=7,
         help="Window size for smoothing the heatmap",
     )
+    parser.add_argument(
+        "--start-year", "--start", type=int, help="Start year to include in the map"
+    )
+    parser.add_argument(
+        "--end-year", "--end", type=int, help="End year to include in the map"
+    )
     args = parser.parse_args()
 
-    create_map(args.input, args.output.name, args.title, args.limit, args.window_size)
+    if args.start_year and args.end_year and args.start_year >= args.end_year:
+        parser.error("START_YEAR must be smaller than END_YEAR")
+
+    create_map(
+        args.input,
+        args.output.name,
+        args.title,
+        args.limit,
+        args.window_size,
+        args.start_year,
+        args.end_year,
+    )
