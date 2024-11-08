@@ -10,14 +10,30 @@ from tqdm import tqdm
 
 from tempo_embeddings.io.geocoder import Geocoder
 
+# TODO: use (named) tuple for coordinates
+# TODO simplify read_data_list to use a single loop and single return variable
+
 
 def read_data_list(
-    input_csv,
+    input_csv: str,
     limit: Optional[int],
     geocoder: Geocoder,
     start_year: Optional[int],
     end_year: Optional[int],
-):
+) -> tuple[list[list[str, float, float]], dict[str, list[list[float]]]]:
+    """
+    Reads data from a CSV file and filters it based on the provided criteria.
+
+    Args:
+        input_csv (str): Path to the input CSV file.
+        limit (Optional[int]): Maximum number of rows to process.
+        geocoder (Geocoder): Geocoder instance for geocoding place names.
+        start_year (Optional[int]): Start year for filtering data.
+        end_year (Optional[int]): End year for filtering data.
+
+    Returns:
+        tuple: A tuple containing the filtered data and heatmap data.
+    """
     data = []
     heat_data = defaultdict(list)
     with open(input_csv, mode="r", encoding="utf-8") as csvfile:
@@ -50,7 +66,16 @@ def read_data_list(
     return data, heat_data
 
 
-def add_markers(data: list, pins_group: folium.Element):
+def add_markers(
+    data: list[list[str, float, float]], pins_group: folium.Element
+) -> None:
+    """
+    Adds markers to the map for each unique location.
+
+    Args:
+        data (list): List of place data.
+        pins_group (folium.Element): Folium feature group to add the markers to.
+    """
     df = pd.DataFrame(data, columns=["place_name", "latitude", "longitude", "date"])
     grouped = (
         df.groupby(["latitude", "longitude"])
@@ -82,7 +107,19 @@ def add_markers(data: list, pins_group: folium.Element):
         )
 
 
-def create_smoothed_heat_data(heat_data: list, window_size: int):
+def create_smoothed_heat_data(
+    heat_data: dict[str, list[list[float]]], window_size: int
+) -> tuple[list[list[list[float]]], list[str]]:
+    """
+    Creates smoothed heatmap data using a sliding window.
+
+    Args:
+        heat_data (dict): Heatmap data.
+        window_size (int): Size of the sliding window.
+
+    Returns:
+        tuple: A tuple containing the smoothed heatmap data and sorted dates.
+    """
     sorted_dates = sorted(heat_data)
     smoothed_heat_data = []
     window = deque(maxlen=window_size)
@@ -96,14 +133,26 @@ def create_smoothed_heat_data(heat_data: list, window_size: int):
 
 
 def create_map(
-    input_csv,
-    output,
-    title: str,
+    input_csv: str,
+    output: str,
+    title: Optional[str],
     limit: Optional[int],
     window_size: int,
     start_year: Optional[int],
     end_year: Optional[int],
-):
+) -> None:
+    """
+    Creates a map with location pins and a time-space heatmap.
+
+    Args:
+        input_csv (str): Path to the input CSV file.
+        output (str): Path to the output HTML file.
+        title (Optional[str]): Title to be included in the map.
+        limit (Optional[int]): Maximum number of rows to process.
+        window_size (int): Size of the sliding window for smoothing the heatmap.
+        start_year (Optional[int]): Start year for filtering data.
+        end_year (Optional[int]): End year for filtering data.
+    """
     geocoder = Geocoder()  # Initialize the Geocoder
     map_ = folium.Map(location=[52.3676, 4.9041], zoom_start=6)  # Centered on Amsterdam
 
