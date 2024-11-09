@@ -55,7 +55,7 @@ def read_data_list(
 
             if (
                 (start_year is None or year >= start_year)
-                and (end_year is None or year <= end_year)
+                and (end_year is None or year < end_year)
                 and len(re.findall(r"[a-zA-Z]", place_name)) >= 3  # valid place name?
             ):
                 latitude, longitude = geocoder.geocode_place(place_name)
