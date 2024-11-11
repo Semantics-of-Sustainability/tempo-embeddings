@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 from tempo_embeddings.io.corpus_reader import CorpusReader
 
-MODEL_NAMES: dict[str, str] = {"en": "en_core_web_sm", "nl": "nl_core_news_sm"}
+MODEL_NAMES: dict[str, str] = {"en": "en_core_web_sm", "nl": "nl_core_news_lg"}
 
 
 @lru_cache(maxsize=None)
