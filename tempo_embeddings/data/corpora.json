@@ -91,5 +91,14 @@
         "encoding": "utf-8",
         "delimiter": "\t",
         "language": "nl"
+    },
+    "PeopleAndParliament": {
+        "glob_pattern": "people_parliament_????-????.csv.gz",
+        "text_columns": [
+            "speech"
+        ],
+        "compression": "gzip",
+        "delimiter": ";",
+        "language": "nl"
     }
 }
