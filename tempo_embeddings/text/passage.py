@@ -5,7 +5,7 @@ import string
 from typing import Any, Iterable, Optional
 
 from dateutil.parser import ParserError, parse
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .highlighting import Highlighting
 
@@ -19,6 +19,7 @@ class Passage:
         year: int = None
         date: datetime.datetime = None
         sentence_index: int = None
+        origin_id: str = Field(alias="id", default=None)
 
         @field_validator("date", mode="before")
         @classmethod
