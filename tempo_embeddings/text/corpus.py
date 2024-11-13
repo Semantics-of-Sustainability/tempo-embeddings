@@ -3,7 +3,7 @@ import gzip
 import logging
 import random
 from collections import Counter, defaultdict
-from itertools import groupby
+from itertools import groupby, islice
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
@@ -584,7 +584,10 @@ class Corpus:
     @classmethod
     def from_csv_files(cls, files: Iterable[Path], **kwargs):
         """Read input data from multiple CSV files in a directory."""
-        return sum((cls.from_csv_file(file, **kwargs) for file in files), Corpus())
+        return sum(
+            (corpus for file in files for corpus in cls.from_csv_file(file, **kwargs)),
+            Corpus(),
+        )
 
     @classmethod
     def from_csv_file(
@@ -592,22 +595,24 @@ class Corpus:
         filepath: Path,
         text_columns: list[str],
         *,
+        max_corpus_size: Optional[int] = None,
         segmenter: Segmenter,
         filter_terms: list[str] = None,
         encoding=DEFAULT_ENCODING,
         compression: Optional[str] = None,
         **dict_reader_kwargs,
-    ):
+    ) -> Iterable["Corpus"]:
         """Read input data from a CSV file."""
 
         open_func = gzip.open if compression == "gzip" else open
 
         with open_func(filepath, "rt", encoding=encoding) as f:
             try:
-                return cls.from_csv_stream(
+                yield from cls.from_csv_stream(
                     f,
                     text_columns,
                     filter_terms=filter_terms,
+                    max_corpus_size=max_corpus_size,
                     segmenter=segmenter,
                     **dict_reader_kwargs,
                 )
@@ -621,16 +626,23 @@ class Corpus:
         file_handler,
         text_columns: list[str],
         *,
+        max_corpus_size: Optional[int] = None,
         segmenter: Segmenter,
         filter_terms: list[str] = None,
         **dict_reader_kwargs,
-    ):
+    ) -> Iterable["Corpus"]:
         reader = csv.DictReader(file_handler, **dict_reader_kwargs)
 
-        passages = segmenter.passages_from_dict_reader(
-            reader,
-            provenance=file_handler.name,
-            text_columns=text_columns,
-            filter_terms=filter_terms,
+        passages = iter(
+            segmenter.passages_from_dict_reader(
+                reader,
+                provenance=file_handler.name,
+                text_columns=text_columns,
+                filter_terms=filter_terms,
+            )
         )
-        return Corpus(passages)
+        if max_corpus_size:
+            while batch := tuple(islice(passages, max_corpus_size)):
+                yield Corpus(batch)
+        else:
+            yield Corpus(tuple(passages))

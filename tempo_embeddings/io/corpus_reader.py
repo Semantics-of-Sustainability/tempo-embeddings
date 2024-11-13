@@ -42,14 +42,18 @@ class CorpusConfig:
         *,
         skip_files: Optional[set[str]] = None,
         max_files: Optional[int] = None,
+        max_corpus_size: Optional[int] = 10000,
         **segmenter_kwargs,
     ) -> Iterable[Corpus]:
-        """Build one corpus per file from the configuration.
+        """Build a sequence of corpora; at least one per file.
+
+        If max_corpus_size is given, split the corpus into smaller ones of this size.
 
         Args:
             filter_terms: a list of terms to filter out.
             skip_files: a set of file names to skip. Defaults to None.
             max_files: the maximum number of files to process.
+            max_corpus_size: the maximum size (number of passages) of each generated corpus
             **segmenter_kwargs: additional parameters to pass to the segmenter
 
         Yields:
@@ -65,13 +69,14 @@ class CorpusConfig:
         for file in tqdm(files[:max_files], desc=self.directory.name, unit="file"):
             if self.loader_type == "csv":
                 try:
-                    yield Corpus.from_csv_file(
+                    yield from Corpus.from_csv_file(
                         filepath=file,
                         text_columns=self.text_columns,
                         filter_terms=filter_terms,
                         encoding=self.encoding,
                         compression=self.compression,
                         delimiter=self.delimiter,
+                        max_corpus_size=max_corpus_size,
                         segmenter=segmenter,
                     )
                 except csv.Error as e:
