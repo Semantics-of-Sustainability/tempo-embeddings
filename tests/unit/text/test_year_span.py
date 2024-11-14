@@ -1,3 +1,4 @@
+import datetime
 from contextlib import nullcontext as does_not_raise
 
 import pytest
@@ -27,18 +28,49 @@ class TestYearSpan:
     @pytest.mark.parametrize(
         "start, end, field_name, expected",
         [
-            (2000, None, "year", [Filter.by_property("year").greater_or_equal(2000)]),
-            (None, 2000, "year", [Filter.by_property("year").less_or_equal(2000)]),
+            (
+                2000,
+                None,
+                "year",
+                [
+                    Filter.by_property("year").greater_or_equal(
+                        datetime.datetime(2000, 1, 1, 0, 0, 0)
+                    )
+                ],
+            ),
+            (
+                None,
+                2000,
+                "year",
+                [
+                    Filter.by_property("year").less_or_equal(
+                        datetime.datetime(2000, 12, 31, 23, 59, 59)
+                    )
+                ],
+            ),
             (
                 2000,
                 2020,
                 "year",
                 [
-                    Filter.by_property("year").greater_or_equal(2000),
-                    Filter.by_property("year").less_or_equal(2020),
+                    Filter.by_property("year").greater_or_equal(
+                        datetime.datetime(2000, 1, 1, 0, 0, 0)
+                    ),
+                    Filter.by_property("year").less_or_equal(
+                        datetime.datetime(2020, 12, 31, 23, 59, 59)
+                    ),
                 ],
             ),
-            (2000, None, "field", [Filter.by_property("field").greater_or_equal(2000)]),
+            (
+                2000,
+                None,
+                "field",
+                [
+                    Filter.by_property("field").greater_or_equal(
+                        datetime.datetime(2000, 1, 1, 0, 0, 0)
+                    )
+                ],
+            ),
         ],
     )
     def test_to_weaviate_filter(self, start, end, field_name, expected):

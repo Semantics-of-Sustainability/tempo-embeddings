@@ -16,7 +16,7 @@ class Passage:
     class Metadata(BaseModel):
         model_config = ConfigDict(extra="allow")
 
-        year: int = None
+        year: Optional[int] = None
         date: datetime.datetime = None
         sentence_index: int = None
         origin_id: str = Field(alias="id", default=None)

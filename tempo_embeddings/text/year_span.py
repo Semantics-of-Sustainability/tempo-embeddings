@@ -1,4 +1,5 @@
-from typing import Iterable, Optional
+import datetime
+from typing import Any, Iterable, Optional
 
 from pydantic import model_validator
 from pydantic.dataclasses import dataclass
@@ -29,8 +30,30 @@ class YearSpan:
 
         return self
 
+    def _to_types(self, field_type: type) -> tuple[Any, Any]:
+        if field_type == datetime.datetime:
+            # Special case: datetime
+            if self.start is None:
+                start_date = None
+            else:
+                start_date = datetime.datetime(
+                    year=self.start, month=1, day=1, hour=0, minute=0, second=0
+                )
+            if self.end is None:
+                end_date = None
+            else:
+                end_date = datetime.datetime(
+                    year=self.end, month=12, day=31, hour=23, minute=59, second=59
+                )
+        else:
+            # default case:
+            start_date = field_type(self.start) if self.start is not None else None
+            end_date = field_type(self.end) if self.end is not None else None
+
+        return start_date, end_date
+
     def to_weaviate_filter(
-        self, *, field_name: str, field_type=int
+        self, *, field_name: str, field_type=datetime.datetime
     ) -> Iterable[Filter]:
         """Generate filters for querying Weaviate based on the year span.
 
@@ -42,9 +65,10 @@ class YearSpan:
         Yield:
             Filters for querying Weaviate.
         """
+
+        start, end = self._to_types(field_type)
         if self.start is not None:
-            yield Filter.by_property(field_name).greater_or_equal(
-                field_type(self.start)
-            )
+            yield Filter.by_property(field_name).greater_or_equal(start)
         if self.end is not None:
-            yield Filter.by_property(field_name).less_or_equal(field_type(self.end))
+            # TODO: make end of range exclusive (less_than(end))
+            yield Filter.by_property(field_name).less_or_equal(end)

@@ -1,3 +1,4 @@
+import datetime
 import gzip
 import json
 import logging
@@ -442,8 +443,12 @@ class TestQueryBuilder:
                 Filter.all_of(
                     [
                         Filter.by_property("passage").contains_any(["test term"]),
-                        Filter.by_property("year").greater_or_equal(1999),
-                        Filter.by_property("year").less_or_equal(2000),
+                        Filter.by_property("date").greater_or_equal(
+                            datetime.datetime(1999, 1, 1, 0, 0, 0)
+                        ),
+                        Filter.by_property("date").less_or_equal(
+                            datetime.datetime(2000, 12, 31, 23, 59, 59)
+                        ),
                     ]
                 ),
             ),
@@ -455,8 +460,12 @@ class TestQueryBuilder:
                 Filter.all_of(
                     [
                         Filter.by_property("passage").contains_any(["test term"]),
-                        Filter.by_property("year").greater_or_equal(1999),
-                        Filter.by_property("year").less_or_equal(2000),
+                        Filter.by_property("date").greater_or_equal(
+                            datetime.datetime(1999, 1, 1, 0, 0, 0)
+                        ),
+                        Filter.by_property("date").less_or_equal(
+                            datetime.datetime(2000, 12, 31, 23, 59, 59)
+                        ),
                         Filter.by_property("test metadata").equal("test value"),
                     ]
                 ),
@@ -469,8 +478,12 @@ class TestQueryBuilder:
                 Filter.all_of(
                     [
                         Filter.by_property("passage").contains_any(["test term"]),
-                        Filter.by_property("year").greater_or_equal(1999),
-                        Filter.by_property("year").less_or_equal(2000),
+                        Filter.by_property("date").greater_or_equal(
+                            datetime.datetime(1999, 1, 1, 0, 0, 0)
+                        ),
+                        Filter.by_property("date").less_or_equal(
+                            datetime.datetime(2000, 12, 31, 23, 59, 59)
+                        ),
                         Filter.by_property("test metadata 1").equal("test value 1"),
                         Filter.by_property("test metadata 2").equal("test value 2"),
                     ]

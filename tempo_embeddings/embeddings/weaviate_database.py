@@ -841,7 +841,7 @@ class QueryBuilder:
         metadata_not: Optional[dict[str, Any]] = None,
         *,
         text_field: str = "passage",
-        year_field: str = "year",
+        year_field: str = "date",
     ) -> Optional[Filter]:
         """Generic method to build a Weaviate Filter.
 
