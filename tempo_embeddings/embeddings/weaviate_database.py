@@ -430,6 +430,41 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             label += ": '" + "; ".join(filter_words) + "'"
         return Corpus(passages, label)
 
+    def doc_frequencies_per_year(
+        self,
+        term: str,
+        collection: str,
+        start_year: int,
+        end_year: int,
+        metadata: Optional[dict[str, Any]] = None,
+        metadata_not: Optional[dict[str, Any]] = None,
+    ) -> dict[int, float]:
+        """Get the number of documents that contain a term in the collection per year.
+
+        Args:
+            term (str): The term to count
+            collection (str): collection to query
+            start_year (int): The start year
+            end_year (int): The end year
+            metadata (dict[str, Any]): Additional metadata filters
+            metadata_not (dict[str, Any]): Additional metadata filters to exclude
+        """
+        frequencies: dict[int, float] = {}
+        collection = self._client.collections.get(collection)
+        for year in range(start_year, end_year + 1):
+            year_span = YearSpan(year, year)
+            filters = QueryBuilder.build_filter(
+                filter_words=[term],
+                year_span=year_span,
+                metadata=metadata,
+                metadata_not=metadata_not,
+                year_field="date",
+            )
+            response = collection.aggregate.over_all(filters=filters, total_count=True)
+            frequencies[year] = response.total_count
+
+        return frequencies
+
     def doc_frequency(
         self,
         term: str,
