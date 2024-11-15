@@ -46,9 +46,8 @@ class JScatterVisualizer:
 
         self._tooltip_fields = tooltip_fields or corpus.metadata_fields()
         self._continuous_filter_fields = continuous_filter_fields
-        self._categorical_fields = (
-            categorical_fields
-            or corpus.metadata_fields() - self._continuous_filter_fields
+        self._categorical_fields = categorical_fields or (
+            corpus.metadata_fields() | {"label"} - set(self._continuous_filter_fields)
         )
         self._fillna = fillna
         self._color_by = color_by
@@ -243,33 +242,32 @@ class PlotWidgets:
         Returns:
             widgets.VBox: A widget containing the selection widget and the output widget
         """
-        # FIXME: this not work for filtering by "top words"
+        # FIXME: this does not work for filtering by "top words"
 
-        if field not in self._df.columns:
-            logging.warning(f"Categorical field '{field}' not found, ignoring")
-            return
+        if field in self._df.columns:
+            options = self._df[field].dropna().unique().tolist()
+            if field in self._df.columns and 1 < len(options) <= 50:
+                selector = widgets.SelectMultiple(
+                    options=options,
+                    value=options,  # TODO: filter out outliers
+                    description=field,
+                    layout={"width": "max-content"},
+                    rows=min(len(options), 10),
+                )
 
-        options = self._df[field].dropna().unique().tolist()
+                selector_output = widgets.Output()
 
-        if len(options) > 1:
-            selector = widgets.SelectMultiple(
-                options=options,
-                value=options,  # TODO: filter out outliers
-                description=field,
-                layout={"width": "max-content"},
-                rows=min(len(options), 10),
-            )
+                def handle_change(change):
+                    self._filter(field, self._df.query(f"{field} in @change.new").index)
 
-            selector_output = widgets.Output()
+                selector.observe(handle_change, names="value")
 
-            def handle_change(change):
-                self._filter(field, self._df.query(f"{field} in @change.new").index)
-
-            selector.observe(handle_change, names="value")
-
-            return selector, selector_output
+                return selector, selector_output
+            else:
+                logging.warning(f"Skipping field {field} with {len(options)} option(s)")
+                return
         else:
-            logging.debug(f"Skipping field {field} with only {len(options)} option(s)")
+            logging.warning(f"Skipping missing field: '{field}'.")
 
     def _continuous_field_filter(
         self, field: str
