@@ -101,17 +101,17 @@ class Segmenter(abc.ABC):
         provenance: str,
         text_columns: list[str],
         filter_terms: Optional[Iterable[str]] = None,
-    ) -> list[Passage]:
+    ) -> Iterable[Passage]:
         """Read passages from a CSV file.
 
         Args:
             reader: a CSV reader object
-            length: the minimum sentence length. Defaults to settings.PASSAGE_LENGTH
+            length: the passage length; shorter passages are merged. Defaults to settings.PASSAGE_LENGTH
             provenance: the name of the CSV file.
             text_columns: the columns in the CSV file that contain text.
             filter_terms: a list of terms; if given, only passages containing these terms are returned.
-        Return:
-            list[Passage]: the passages from the CSV file.
+        Yields:
+            Passage: the passages from the CSV file.
         """
         for column in text_columns:
             if column not in reader.fieldnames:
@@ -119,7 +119,6 @@ class Segmenter(abc.ABC):
                     f"Text column(s) {text_columns} not found in CSV file '{provenance}'."
                 )
 
-        passages = []
         metadata = {"provenance": basename(provenance)}
         for row in reader:
             row_metadata = metadata | {
@@ -146,12 +145,10 @@ class Segmenter(abc.ABC):
                     for passage in column_passages:
                         for term in filter_terms:
                             if passage.contains(term):
-                                passages.extend(
-                                    passage.highlight(term, exact_match=False)
-                                )
+                                yield from passage.highlight(term, exact_match=False)
+
                 else:
-                    passages.extend(column_passages)
-        return passages
+                    yield from column_passages
 
     @classmethod
     @lru_cache(maxsize=4)

@@ -3,7 +3,7 @@ import gzip
 import logging
 import random
 from collections import Counter, defaultdict
-from itertools import groupby
+from itertools import groupby, islice
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
@@ -19,6 +19,7 @@ from umap.umap_ import UMAP
 from ..settings import DEFAULT_ENCODING, OUTLIERS_LABEL, STRICT
 from .passage import Passage
 from .segmenter import Segmenter
+from .util import any_to_int
 
 
 class Corpus:
@@ -396,7 +397,7 @@ class Corpus:
         *,
         start: Optional[int] = None,
         stop: Optional[int] = None,
-        metadata_field: str = "year",
+        date_field: str = "date",
     ) -> Iterable["Corpus"]:
         """Split the corpus into windows of a given size.
 
@@ -406,26 +407,27 @@ class Corpus:
             step_size: The step size between windows.
             start (Optional[int]): The start of the first window. Defaults to the minimum value in the metadata field.
             stop (Optional[int]): The end of the last window (excluded). Defaults to the maximum value in the metadata field.
-            metadata_field (str): The metadata field to use for splitting the corpus. Defaults to 'year'
+            date_field (str): The metadata field to use for splitting the corpus. Defaults to 'date'
         Yields:
             Corpus: A new corpus with the passages for each non-empty window.
         """
 
-        start: int = start or min(
-            (int(value) for value in self.get_metadatas(metadata_field))
+        dates: list[int] = sorted(
+            (any_to_int(date) for date in self.get_metadatas(date_field))
         )
-        stop: int = stop or (
-            max((int(value) for value in self.get_metadatas(metadata_field))) + 1
-        )
+        if start is None:
+            start = dates[0]
+        if stop is None:
+            stop = dates[-1] + 1
 
-        bins = range(start, stop, step_size)
+        bin_starts = range(start, stop, step_size)
         passages = defaultdict(list)
         for passage in self.passages:
             try:
                 bin: int = next(
                     bin_start
-                    for bin_start in bins
-                    if int(passage.metadata.get(metadata_field))
+                    for bin_start in bin_starts
+                    if any_to_int(passage.metadata.get(date_field))
                     in range(bin_start, min(bin_start + step_size, stop))
                 )
                 passages[bin].append(passage)
@@ -584,7 +586,10 @@ class Corpus:
     @classmethod
     def from_csv_files(cls, files: Iterable[Path], **kwargs):
         """Read input data from multiple CSV files in a directory."""
-        return sum((cls.from_csv_file(file, **kwargs) for file in files), Corpus())
+        return sum(
+            (corpus for file in files for corpus in cls.from_csv_file(file, **kwargs)),
+            Corpus(),
+        )
 
     @classmethod
     def from_csv_file(
@@ -592,22 +597,24 @@ class Corpus:
         filepath: Path,
         text_columns: list[str],
         *,
+        max_corpus_size: Optional[int] = None,
         segmenter: Segmenter,
         filter_terms: list[str] = None,
         encoding=DEFAULT_ENCODING,
         compression: Optional[str] = None,
         **dict_reader_kwargs,
-    ):
+    ) -> Iterable["Corpus"]:
         """Read input data from a CSV file."""
 
         open_func = gzip.open if compression == "gzip" else open
 
         with open_func(filepath, "rt", encoding=encoding) as f:
             try:
-                return cls.from_csv_stream(
+                yield from cls.from_csv_stream(
                     f,
                     text_columns,
                     filter_terms=filter_terms,
+                    max_corpus_size=max_corpus_size,
                     segmenter=segmenter,
                     **dict_reader_kwargs,
                 )
@@ -621,16 +628,23 @@ class Corpus:
         file_handler,
         text_columns: list[str],
         *,
+        max_corpus_size: Optional[int] = None,
         segmenter: Segmenter,
         filter_terms: list[str] = None,
         **dict_reader_kwargs,
-    ):
+    ) -> Iterable["Corpus"]:
         reader = csv.DictReader(file_handler, **dict_reader_kwargs)
 
-        passages = segmenter.passages_from_dict_reader(
-            reader,
-            provenance=file_handler.name,
-            text_columns=text_columns,
-            filter_terms=filter_terms,
+        passages = iter(
+            segmenter.passages_from_dict_reader(
+                reader,
+                provenance=file_handler.name,
+                text_columns=text_columns,
+                filter_terms=filter_terms,
+            )
         )
-        return Corpus(passages)
+        if max_corpus_size:
+            while batch := tuple(islice(passages, max_corpus_size)):
+                yield Corpus(batch)
+        else:
+            yield Corpus(tuple(passages))

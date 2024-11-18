@@ -1,7 +1,13 @@
 from unittest import mock
 
 import pytest
-from ipywidgets.widgets import Button, HBox, Output, SelectionRangeSlider
+from ipywidgets.widgets import (
+    Button,
+    HBox,
+    Output,
+    SelectionRangeSlider,
+    SelectMultiple,
+)
 
 from tempo_embeddings.text.corpus import Corpus
 from tempo_embeddings.visualization.jscatter import JScatterVisualizer, PlotWidgets
@@ -19,7 +25,12 @@ class TestJScatterVisualizer:
         [
             (["provenance"], ["year"], [], [SelectionRangeSlider, Output]),
             (["provenance"], [], [], []),
-            ([], ["year"], [], [SelectionRangeSlider, Output]),
+            (
+                [],
+                ["year"],
+                [SelectMultiple, Output, SelectMultiple, Output],
+                [SelectionRangeSlider, Output],
+            ),
             (
                 ["provenance", "invalid_1"],
                 ["year", "invalid_2"],

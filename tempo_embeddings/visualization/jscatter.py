@@ -14,34 +14,39 @@ from ..text.keyword_extractor import KeywordExtractor
 class JScatterVisualizer:
     """A class for creating interactive scatter plots with Jupyter widgets."""
 
+    DEFAULT_CONTINUOUS_FIELDS: set[str] = {"year"}
+
     def __init__(
         self,
         corpus,
-        categorical_fields: list[str] = ["collection", "label"],
-        continuous_filter_fields: list[str] = ["year"],
-        tooltip_fields: list[str] = [
-            "article_tit",  # Delpher
-            "title",  # StatenGeneraal
-            "text",
-            "year",
-            "genre",
-            "chamber",  # StatenGeneraal
-            # Derived fields
-            "label",
-            "top words",
-            "collection",
-            "recId",
-        ],
+        categorical_fields: Optional[list[str]] = None,
+        continuous_filter_fields: list[str] = DEFAULT_CONTINUOUS_FIELDS,
+        tooltip_fields: list[str] = None,
         fillna: dict[str, str] = None,
         color_by: str = "label",
         keyword_extractor: Optional[KeywordExtractor] = None,
     ):
+        """Create a JScatterVisualizer object to visualize a corpus.
+
+        Args:
+            corpus (Corpus): The corpus to visualize.
+            categorical_fields (list[str], optional): The categorical fields to filter on. Defaults to all metadata fields minus the continus fields.
+            continuous_filter_fields (list[str], optional): The continuous fields to filter on. Defaults to DEFAULT_CONTINUOUS_FIELDS.
+            tooltip_fields (list[str], optional): The fields to show in the tooltip. Defaults to all metadata fields.
+            fillna (dict[str, str], optional): The values to fill NaN values with.
+            color_by (str, optional): The field to color the scatter plot by.
+            keyword_extractor (KeywordExtractor, optional): The keyword extractor to use.
+
+        """
         self._keyword_extractor = keyword_extractor or KeywordExtractor(
             corpus, exclude_words=STOPWORDS
         )
-        self._categorical_fields = categorical_fields
+
+        self._tooltip_fields = tooltip_fields or corpus.metadata_fields()
         self._continuous_filter_fields = continuous_filter_fields
-        self._tooltip_fields = tooltip_fields
+        self._categorical_fields = categorical_fields or (
+            corpus.metadata_fields() | {"label"} - set(self._continuous_filter_fields)
+        )
         self._fillna = fillna
         self._color_by = color_by
 
@@ -179,9 +184,16 @@ class PlotWidgets:
             .convert_dtypes()
         )
 
+        # FIXME: field names should not be hardcoded
+        if "date" in self._df.columns:
+            if "year" not in self._df.columns:
+                self._df["year"] = self._df["date"].dt.year
+            self._df["date"] = self._df["date"].dt.strftime("%Y-%m-%d")
+
         for field in self._tooltip_fields:
             if field not in self._df.columns:
                 logging.warning(f"Tooltip field '{field}' not found.")
+
         return self._df
 
     def _init_scatter(self) -> jscatter.Scatter:
@@ -228,33 +240,32 @@ class PlotWidgets:
         Returns:
             widgets.VBox: A widget containing the selection widget and the output widget
         """
-        # FIXME: this not work for filtering by "top words"
+        # FIXME: this does not work for filtering by "top words"
 
-        if field not in self._df.columns:
-            logging.warning(f"Categorical field '{field}' not found, ignoring")
-            return
+        if field in self._df.columns:
+            options = self._df[field].dropna().unique().tolist()
+            if field in self._df.columns and 1 < len(options) <= 50:
+                selector = widgets.SelectMultiple(
+                    options=options,
+                    value=options,  # TODO: filter out outliers
+                    description=field,
+                    layout={"width": "max-content"},
+                    rows=min(len(options), 10),
+                )
 
-        options = self._df[field].dropna().unique().tolist()
+                selector_output = widgets.Output()
 
-        if len(options) > 1:
-            selector = widgets.SelectMultiple(
-                options=options,
-                value=options,  # TODO: filter out outliers
-                description=field,
-                layout={"width": "max-content"},
-                rows=min(len(options), 10),
-            )
+                def handle_change(change):
+                    self._filter(field, self._df.query(f"{field} in @change.new").index)
 
-            selector_output = widgets.Output()
+                selector.observe(handle_change, names="value")
 
-            def handle_change(change):
-                self._filter(field, self._df.query(f"{field} in @change.new").index)
-
-            selector.observe(handle_change, names="value")
-
-            return selector, selector_output
+                return selector, selector_output
+            else:
+                logging.warning(f"Skipping field {field} with {len(options)} option(s)")
+                return
         else:
-            logging.debug(f"Skipping field {field} with only {len(options)} option(s)")
+            logging.warning(f"Skipping missing field: '{field}'.")
 
     def _continuous_field_filter(
         self, field: str
@@ -266,31 +277,30 @@ class PlotWidgets:
         Returns:
             widgets.VBox: A widget containing a RangeSlider widget and the output widget
         """
-        if field not in self._df.columns:
+        if field in self._df.columns:
+            min_value = self._df[field].min()
+            max_value = self._df[field].max()
+
+            selection = widgets.SelectionRangeSlider(
+                options=[str(i) for i in range(min_value, max_value + 1)],
+                index=(0, max_value - min_value),
+                description=field,
+                continuous_update=True,
+            )
+
+            selection_output = widgets.Output()
+
+            def handle_slider_change(change):
+                start = int(change.new[0])  # noqa: F841
+                end = int(change.new[1])  # noqa: F841
+
+                self._filter(field, self._df.query("year > @start & year < @end").index)
+
+            selection.observe(handle_slider_change, names="value")
+
+            return selection, selection_output
+        else:
             logging.warning(f"Categorical field '{field}' not found, ignoring")
-            return
-
-        min_year = self._df[field].min()
-        max_year = self._df[field].max()
-
-        selection = widgets.SelectionRangeSlider(
-            options=[str(i) for i in range(min_year, max_year + 1)],
-            index=(0, max_year - min_year),
-            description=field,
-            continuous_update=True,
-        )
-
-        selection_output = widgets.Output()
-
-        def handle_slider_change(change):
-            start = int(change.new[0])  # noqa: F841
-            end = int(change.new[1])  # noqa: F841
-
-            self._filter(field, self._df.query("year > @start & year < @end").index)
-
-        selection.observe(handle_slider_change, names="value")
-
-        return selection, selection_output
 
     def _filter(self, field, index):
         """Filter the scatter plot based on the given field and index.

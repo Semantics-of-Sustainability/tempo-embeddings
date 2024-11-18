@@ -23,7 +23,6 @@ from .model import SentenceTransformerModelWrapper, TransformerModelWrapper
 from .vector_database import VectorDatabaseManagerWrapper
 
 Collection = TypeVar("Collection")
-logger = logging.getLogger(__name__)
 
 
 class WeaviateConfigDb:
@@ -36,6 +35,7 @@ class WeaviateConfigDb:
         client: weaviate.Client,
         *,
         collection_name: str = WEAVIATE_CONFIG_COLLECTION,
+        logger: Optional[logging.Logger] = None,
     ) -> None:
         self._client: weaviate.Client = client
         self._collection_name = collection_name
@@ -45,6 +45,7 @@ class WeaviateConfigDb:
             if self._exists()
             else self._create()
         )
+        self._logger = logger or logging.getLogger(self.__class__.__name__)
 
     def __contains__(self, corpus: str):
         return corpus in self.get_corpora()
@@ -135,6 +136,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         client: Optional[weaviate.Client] = None,
         config_collection_name: str = WEAVIATE_CONFIG_COLLECTION,
         batch_size: int = 8,
+        logger: Optional[logging.Logger] = None,
     ):
         super().__init__(batch_size)
 
@@ -147,6 +149,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         self._config = WeaviateConfigDb(
             self._client, collection_name=config_collection_name
         )
+        self._logger = logger or logging.getLogger(self.__class__.__name__)
 
     def __del__(self):
         try:
@@ -246,9 +249,11 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         try:
             return self._insert_using_custom_model(corpus, collection)
         except WeaviateQueryError as e:
-            logger.error("Error while ingesting corpus '%s': %s", collection_name, e)
+            self._logger.error(
+                "Error while ingesting corpus '%s': %s", collection_name, e
+            )
             if not self._client.collections.exists(collection_name):
-                logger.debug(
+                self._logger.debug(
                     f"Removing collection '{collection_name}' from config database"
                 )
                 self._config.delete_corpus(collection_name)
@@ -277,12 +282,10 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         collection: Collection = self._client.collections.create(
             collection_name, vectorizer_config=wvc.config.Configure.Vectorizer.none()
         )
-        for field, field_info in Passage.Metadata.model_fields.items():
+        for field, type_name in Passage.Metadata.model_field_names():
             try:
                 collection.config.add_property(
-                    Property(
-                        name=field, data_type=DataType(field_info.annotation.__name__)
-                    )
+                    Property(name=field, data_type=DataType(type_name))
                 )
             except ValueError as e:
                 logging.warning(
@@ -429,6 +432,41 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         if passages and filter_words:
             label += ": '" + "; ".join(filter_words) + "'"
         return Corpus(passages, label)
+
+    def doc_frequencies_per_year(
+        self,
+        term: str,
+        collection: str,
+        start_year: int,
+        end_year: int,
+        metadata: Optional[dict[str, Any]] = None,
+        metadata_not: Optional[dict[str, Any]] = None,
+    ) -> dict[int, float]:
+        """Get the number of documents that contain a term in the collection per year.
+
+        Args:
+            term (str): The term to count
+            collection (str): collection to query
+            start_year (int): The start year
+            end_year (int): The end year
+            metadata (dict[str, Any]): Additional metadata filters
+            metadata_not (dict[str, Any]): Additional metadata filters to exclude
+        """
+        frequencies: dict[int, float] = {}
+        collection = self._client.collections.get(collection)
+        for year in range(start_year, end_year + 1):
+            year_span = YearSpan(year, year)
+            filters = QueryBuilder.build_filter(
+                filter_words=[term],
+                year_span=year_span,
+                metadata=metadata,
+                metadata_not=metadata_not,
+                year_field="date",
+            )
+            response = collection.aggregate.over_all(filters=filters, total_count=True)
+            frequencies[year] = response.total_count
+
+        return frequencies
 
     def doc_frequency(
         self,
@@ -652,7 +690,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         filename_tgt = filepath or f"{collection_name}.json.gz"
 
         with gzip.open(filename_tgt, "wt", encoding="utf-8") as fileout:
-            logger.info("Writing into '%s' file...", filename_tgt)
+            self._logger.info("Writing into '%s' file...", filename_tgt)
 
             config = self.collection_config(collection_name)
 
@@ -665,7 +703,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                 unit="record",
                 desc=f"Exporting '{collection_name}'",
             ):
-                json.dump(_object, fileout)
+                json.dump(_object, fileout, default=str)
                 fileout.write("\n")
 
     def import_config(
@@ -726,10 +764,10 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                 count += 1
 
         if collection.batch.failed_objects:
-            logger.error(collection.batch.failed_objects)
+            self._logger.error(collection.batch.failed_objects)
 
         if total_count is not None and count != total_count:
-            logger.warning(
+            self._logger.warning(
                 "Total count mismatch: expected %d, but imported %d records",
                 total_count,
                 count,
@@ -749,7 +787,9 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
 
         """
         with gzip.open(filename_src, "rt", encoding="utf-8") as f:
-            logger.info("Importing into Weaviate '%s' collection...", filename_src)
+            self._logger.info(
+                "Importing into Weaviate '%s' collection...", filename_src
+            )
 
             config = json.loads(f.readline())
             collection_name = config["corpus"]
@@ -779,7 +819,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                 collection != self._config._collection_name
                 and collection not in self._config
             ):
-                logger.warning(
+                self._logger.warning(
                     "Collection '%s' exists in the database but is not registered in the configuration database.",
                     collection,
                 )
@@ -841,7 +881,7 @@ class QueryBuilder:
         metadata_not: Optional[dict[str, Any]] = None,
         *,
         text_field: str = "passage",
-        year_field: str = "year",
+        year_field: str = "date",
     ) -> Optional[Filter]:
         """Generic method to build a Weaviate Filter.
 
