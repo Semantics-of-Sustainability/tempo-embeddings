@@ -140,6 +140,7 @@ def create_map(
     window_size: int,
     start_year: Optional[int],
     end_year: Optional[int],
+    include_markers: bool,
 ) -> None:
     """
     Creates a map with location pins and a time-space heatmap.
@@ -172,7 +173,8 @@ def create_map(
 
     data, heat_data = read_data_list(input_csv, limit, geocoder, start_year, end_year)
 
-    add_markers(data, pins_group)
+    if include_markers:
+        add_markers(data, pins_group)
 
     smoothed_heat_data, sorted_dates = create_smoothed_heat_data(heat_data, window_size)
 
@@ -219,6 +221,11 @@ if __name__ == "__main__":
     parser.add_argument(
         "--end-year", "--end", type=int, help="End year to include in the map"
     )
+    parser.add_argument(
+        "--include-markers",
+        action="store_true",
+        help="Include indivdual location markers",
+    )
     args = parser.parse_args()
 
     if args.start_year and args.end_year and args.start_year >= args.end_year:
@@ -232,4 +239,5 @@ if __name__ == "__main__":
         args.window_size,
         args.start_year,
         args.end_year,
+        args.include_markers,
     )
