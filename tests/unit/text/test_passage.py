@@ -1,3 +1,4 @@
+import datetime
 import platform
 from contextlib import nullcontext as does_not_raise
 
@@ -195,6 +196,9 @@ class TestPassage:
             **STRICT,
         ):
             expected.set_metadata("collection", collection)
+            expected.set_metadata(
+                "date", expected.metadata["date"].replace(tzinfo=datetime.timezone.utc)
+            )
             assert (
                 Passage.from_weaviate_record(_object, collection=collection) == expected
             )

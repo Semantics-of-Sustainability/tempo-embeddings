@@ -25,7 +25,12 @@ class TestJScatterVisualizer:
         [
             (["provenance"], ["year"], [], [SelectionRangeSlider, Output]),
             (["provenance"], [], [], []),
-            ([], ["year"], [SelectMultiple, Output], [SelectionRangeSlider, Output]),
+            (
+                [],
+                ["year"],
+                [SelectMultiple, Output, SelectMultiple, Output],
+                [SelectionRangeSlider, Output],
+            ),
             (
                 ["provenance", "invalid_1"],
                 ["year", "invalid_2"],

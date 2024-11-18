@@ -1,5 +1,6 @@
 import logging
 from contextlib import nullcontext as does_not_raise
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -391,12 +392,13 @@ class TestCorpus:
 
     def test_to_dataframe(self, corpus):
         ids = [
-            "d7100151f2f6f9e3ebb34068a7309c60bcfdaa007d85d2160019259907e40d06",
-            "ad86cf6c28da0d0ae616c90326b44d68c49426d00a3aa0ba1ca9c8b5cdd8f280",
-            "9a644e0c393957dcea1ff66dfdfa8aa8d2fab5bbf2a037aa0c258468189a59f9",
-            "d733014f3bc3878a4f2a8f276e65d7d1408c6a4bb15f081489b607386095fba4",
-            "526ed2b3082137d48a2d337ce7550ecb9401070dc406c7dd5ac15e39520ecd19",
+            "0f530c9dc158fa3617bbba2cc4608a1787f5c6d3511c31f63e30b52559ef6984",
+            "fa74bca28a92c214697d779062e0cbec039b3311e08ea8db25c7c800d501e592",
+            "af3a5b273ddbaee014a8bf1c0f85303d627c17409312ee49dd540f519c3fe053",
+            "9ad46c0130642a5a6ef292d133fe4ec13d95c3814ca4626b1eebe595eb95fa98",
+            "4dd90a8f419df7910e4f627185bae80ec577ca46e75013f46c641d1323d6701a",
         ]
+
         corpus.top_words = ["word1", "word2"]
 
         expected = pd.DataFrame(
@@ -407,6 +409,7 @@ class TestCorpus:
                     "highlight_start": 1,
                     "highlight_end": 3,
                     "year": year,
+                    "date": datetime(year, 1, 1),
                     "provenance": "test_file",
                     "x": 0.0,
                     "y": 0.0,

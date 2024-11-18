@@ -34,7 +34,9 @@ class TestYearSpan:
                 "year",
                 [
                     Filter.by_property("year").greater_or_equal(
-                        datetime.datetime(2000, 1, 1, 0, 0, 0)
+                        datetime.datetime(
+                            2000, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
+                        )
                     )
                 ],
             ),
@@ -44,7 +46,9 @@ class TestYearSpan:
                 "year",
                 [
                     Filter.by_property("year").less_or_equal(
-                        datetime.datetime(2000, 12, 31, 23, 59, 59)
+                        datetime.datetime(
+                            2000, 12, 31, 23, 59, 59, tzinfo=datetime.timezone.utc
+                        )
                     )
                 ],
             ),
@@ -54,10 +58,14 @@ class TestYearSpan:
                 "year",
                 [
                     Filter.by_property("year").greater_or_equal(
-                        datetime.datetime(2000, 1, 1, 0, 0, 0)
+                        datetime.datetime(
+                            2000, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
+                        )
                     ),
                     Filter.by_property("year").less_or_equal(
-                        datetime.datetime(2020, 12, 31, 23, 59, 59)
+                        datetime.datetime(
+                            2020, 12, 31, 23, 59, 59, tzinfo=datetime.timezone.utc
+                        )
                     ),
                 ],
             ),
@@ -67,7 +75,9 @@ class TestYearSpan:
                 "field",
                 [
                     Filter.by_property("field").greater_or_equal(
-                        datetime.datetime(2000, 1, 1, 0, 0, 0)
+                        datetime.datetime(
+                            2000, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
+                        )
                     )
                 ],
             ),

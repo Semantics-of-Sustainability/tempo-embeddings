@@ -19,6 +19,7 @@ from umap.umap_ import UMAP
 from ..settings import DEFAULT_ENCODING, OUTLIERS_LABEL, STRICT
 from .passage import Passage
 from .segmenter import Segmenter
+from .util import any_to_int
 
 
 class Corpus:
@@ -396,7 +397,7 @@ class Corpus:
         *,
         start: Optional[int] = None,
         stop: Optional[int] = None,
-        metadata_field: str = "year",
+        date_field: str = "date",
     ) -> Iterable["Corpus"]:
         """Split the corpus into windows of a given size.
 
@@ -406,26 +407,27 @@ class Corpus:
             step_size: The step size between windows.
             start (Optional[int]): The start of the first window. Defaults to the minimum value in the metadata field.
             stop (Optional[int]): The end of the last window (excluded). Defaults to the maximum value in the metadata field.
-            metadata_field (str): The metadata field to use for splitting the corpus. Defaults to 'year'
+            date_field (str): The metadata field to use for splitting the corpus. Defaults to 'date'
         Yields:
             Corpus: A new corpus with the passages for each non-empty window.
         """
 
-        start: int = start or min(
-            (int(value) for value in self.get_metadatas(metadata_field))
+        dates: list[int] = sorted(
+            (any_to_int(date) for date in self.get_metadatas(date_field))
         )
-        stop: int = stop or (
-            max((int(value) for value in self.get_metadatas(metadata_field))) + 1
-        )
+        if start is None:
+            start = dates[0]
+        if stop is None:
+            stop = dates[-1] + 1
 
-        bins = range(start, stop, step_size)
+        bin_starts = range(start, stop, step_size)
         passages = defaultdict(list)
         for passage in self.passages:
             try:
                 bin: int = next(
                     bin_start
-                    for bin_start in bins
-                    if int(passage.metadata.get(metadata_field))
+                    for bin_start in bin_starts
+                    if any_to_int(passage.metadata.get(date_field))
                     in range(bin_start, min(bin_start + step_size, stop))
                 )
                 passages[bin].append(passage)

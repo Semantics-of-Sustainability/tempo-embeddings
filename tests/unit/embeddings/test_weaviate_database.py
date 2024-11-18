@@ -98,6 +98,7 @@ class TestWeaviateDatabase:
             assert passage.metadata == {
                 "provenance": "test_file",
                 "year": year,
+                "date": datetime.datetime(year, 1, 1, tzinfo=datetime.timezone.utc),
                 "collection": "TestCorpus",
             }
 
@@ -172,6 +173,9 @@ class TestWeaviateDatabase:
                 "passage": f"test text {i}",
                 "provenance": "test_file",
                 "year": 1950 + i,
+                "date": str(
+                    datetime.datetime(1950 + i, 1, 1, tzinfo=datetime.timezone.utc)
+                ),
                 "uuid": "5eec7ad3-4802-5c4b-82a5-3456bacec6b0",
                 "vector": np.zeros(768),
             }
@@ -216,6 +220,9 @@ class TestWeaviateDatabase:
             {
                 "provenance": "test_file",
                 "year": 1950 + i,
+                "date": str(
+                    datetime.datetime(1950 + i, 1, 1, tzinfo=datetime.timezone.utc)
+                ),
                 "passage": f"test text {str(i)}",
                 "highlighting": "1_3",
             }
@@ -279,7 +286,14 @@ class TestWeaviateDatabase:
         [
             (
                 "TestCorpus",
-                {"provenance", "year", "passage", "highlighting", "sentence_index"},
+                {
+                    "provenance",
+                    "year",
+                    "date",
+                    "passage",
+                    "highlighting",
+                    "sentence_index",
+                },
                 None,
             ),
             ("invalid", {}, pytest.raises(ValueError)),
@@ -444,10 +458,14 @@ class TestQueryBuilder:
                     [
                         Filter.by_property("passage").contains_any(["test term"]),
                         Filter.by_property("date").greater_or_equal(
-                            datetime.datetime(1999, 1, 1, 0, 0, 0)
+                            datetime.datetime(
+                                1999, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
+                            )
                         ),
                         Filter.by_property("date").less_or_equal(
-                            datetime.datetime(2000, 12, 31, 23, 59, 59)
+                            datetime.datetime(
+                                2000, 12, 31, 23, 59, 59, tzinfo=datetime.timezone.utc
+                            )
                         ),
                     ]
                 ),
@@ -461,10 +479,14 @@ class TestQueryBuilder:
                     [
                         Filter.by_property("passage").contains_any(["test term"]),
                         Filter.by_property("date").greater_or_equal(
-                            datetime.datetime(1999, 1, 1, 0, 0, 0)
+                            datetime.datetime(
+                                1999, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
+                            )
                         ),
                         Filter.by_property("date").less_or_equal(
-                            datetime.datetime(2000, 12, 31, 23, 59, 59)
+                            datetime.datetime(
+                                2000, 12, 31, 23, 59, 59, tzinfo=datetime.timezone.utc
+                            )
                         ),
                         Filter.by_property("test metadata").equal("test value"),
                     ]
@@ -479,10 +501,14 @@ class TestQueryBuilder:
                     [
                         Filter.by_property("passage").contains_any(["test term"]),
                         Filter.by_property("date").greater_or_equal(
-                            datetime.datetime(1999, 1, 1, 0, 0, 0)
+                            datetime.datetime(
+                                1999, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
+                            )
                         ),
                         Filter.by_property("date").less_or_equal(
-                            datetime.datetime(2000, 12, 31, 23, 59, 59)
+                            datetime.datetime(
+                                2000, 12, 31, 23, 59, 59, tzinfo=datetime.timezone.utc
+                            )
                         ),
                         Filter.by_property("test metadata 1").equal("test value 1"),
                         Filter.by_property("test metadata 2").equal("test value 2"),

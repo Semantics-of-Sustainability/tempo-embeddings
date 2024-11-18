@@ -700,7 +700,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                 unit="record",
                 desc=f"Exporting '{collection_name}'",
             ):
-                json.dump(_object, fileout)
+                json.dump(_object, fileout, default=str)
                 fileout.write("\n")
 
     def import_config(

@@ -1,3 +1,4 @@
+import datetime
 import shutil
 from pathlib import Path
 
@@ -31,8 +32,11 @@ def test_passages():
     return [
         Passage(
             f"test text {str(i)}",
-            # FIXME: year should be int type
-            metadata={"provenance": "test_file", "year": 1950 + i},
+            metadata={
+                "provenance": "test_file",
+                "year": 1950 + i,
+                "date": datetime.datetime(1950 + i, 1, 1),
+            },
             highlighting=Highlighting(1, 3),
             # TODO: make this deterministic for testing
             embedding=np.random.rand(768).tolist(),
