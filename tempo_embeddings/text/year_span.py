@@ -30,6 +30,40 @@ class YearSpan:
 
         return self
 
+    def _to_datetimes(
+        self,
+    ) -> tuple[Optional[datetime.datetime], Optional[datetime.datetime]]:
+        """Convert the start and end years to datetime objects.
+
+        Returns:
+            tuple[Optional[datetime.datetime], Optional[datetime.datetime]]: The start and end years converted to datetime objects.
+        """
+        return (
+            None
+            if self.start is None
+            else datetime.datetime(
+                year=self.start,
+                month=1,
+                day=1,
+                hour=0,
+                minute=0,
+                second=0,
+                tzinfo=datetime.timezone.utc,
+            )
+        ), (
+            None
+            if self.end is None
+            else datetime.datetime(
+                year=self.end,
+                month=12,
+                day=31,
+                hour=23,
+                minute=59,
+                second=59,
+                tzinfo=datetime.timezone.utc,
+            )
+        )
+
     def _to_types(self, field_type: type) -> tuple[Any, Any]:
         """Convert the start and end years to the given field type.
 
@@ -40,23 +74,7 @@ class YearSpan:
             tuple[Any, Any]: The start and end years converted to the given field type.
         """
         if field_type == datetime.datetime:
-            # Special case: datetime
-            if self.start is None:
-                start_date = None
-            else:
-                start_date = datetime.datetime(
-                    year=self.start, month=1, day=1, hour=0, minute=0, second=0
-                )
-                if not start_date.tzinfo:
-                    start_date = start_date.replace(tzinfo=datetime.timezone.utc)
-            if self.end is None:
-                end_date = None
-            else:
-                end_date = datetime.datetime(
-                    year=self.end, month=12, day=31, hour=23, minute=59, second=59
-                )
-                if not end_date.tzinfo:
-                    end_date = end_date.replace(tzinfo=datetime.timezone.utc)
+            return self._to_datetimes()
         else:
             # default case:
             start_date = field_type(self.start) if self.start is not None else None
