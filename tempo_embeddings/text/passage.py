@@ -2,10 +2,11 @@ import datetime
 import hashlib
 import logging
 import string
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable, Optional, Union, get_origin
 
 from dateutil.parser import ParserError, parse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic.fields import FieldInfo
 
 from .highlighting import Highlighting
 
@@ -32,6 +33,27 @@ class Passage:
                 except ParserError as e:
                     raise ValueError("Error in Metadata") from e
             return value
+
+        @classmethod
+        def model_field_names(cls) -> Iterable[tuple[str, str]]:
+            """Returns the names and (qualifier) type names of the model fields.
+
+            E.g. Optional[int] returns "int".
+
+            Yields:
+                tuple[str, str]: The name and type name of a model field.
+            """
+            for field, field_info in cls.model_fields.items():
+                yield field, cls._field_type_name(field_info)
+
+        @staticmethod
+        def _field_type_name(field_info: FieldInfo) -> str:
+            type_origin = get_origin(field_info.annotation)
+
+            if type_origin is Optional or type_origin is Union:
+                return field_info.annotation.__args__[0].__name__
+            else:
+                return field_info.annotation.__name__
 
     def __init__(
         self,

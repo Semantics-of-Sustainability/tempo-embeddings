@@ -244,3 +244,11 @@ class TestPassage:
     def test_merge_until(self, passage, passages, length, expected, expected_remaining):
         assert passage.merge_until(passages, length=length) == expected
         assert passages == expected_remaining
+
+    def test_model_field_names(self):
+        assert list(Passage.Metadata.model_field_names()) == [
+            ("year", "int"),
+            ("date", "datetime"),
+            ("sentence_index", "int"),
+            ("origin_id", "str"),
+        ]

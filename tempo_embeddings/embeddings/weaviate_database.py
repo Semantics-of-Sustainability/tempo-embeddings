@@ -282,12 +282,10 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         collection: Collection = self._client.collections.create(
             collection_name, vectorizer_config=wvc.config.Configure.Vectorizer.none()
         )
-        for field, field_info in Passage.Metadata.model_fields.items():
+        for field, type_name in Passage.Metadata.model_field_names():
             try:
                 collection.config.add_property(
-                    Property(
-                        name=field, data_type=DataType(field_info.annotation.__name__)
-                    )
+                    Property(name=field, data_type=DataType(type_name))
                 )
             except ValueError as e:
                 logging.warning(
