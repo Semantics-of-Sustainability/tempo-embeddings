@@ -101,10 +101,9 @@ class Geocoder:
         if cached_location:
             lat, long = cached_location
         else:
-            current_time = time.time()
-            elapsed_time = current_time - self.last_request_time
+            elapsed_time = time.time() - self.last_request_time
             if elapsed_time < 1:
-                time.sleep(1)  # Respect the rate limit of 1 request per second
+                time.sleep(1 - elapsed_time)
             self.last_request_time = time.time()
 
             try:

@@ -4,6 +4,7 @@ import logging
 import sys
 from functools import lru_cache
 from pathlib import Path
+from typing import Any, Iterable
 
 import spacy
 import spacy.cli
@@ -60,7 +61,25 @@ def extract_years_from_csv(csvfile: Path):
     return years
 
 
-def main(corpora, csvfile: Path, resume: bool):
+def extract_rows(
+    corpus, name: str, nlp, filter_terms: list[str], *, desc: str = ""
+) -> Iterable[dict[str, Any]]:
+    for passage in tqdm(corpus.passages, desc=desc or name, unit="passage"):
+        if not filter_terms or any(
+            term.casefold() in passage.text.casefold() for term in filter_terms
+        ):
+            for ent in nlp(passage.text).ents:
+                if ent.label_ == "GPE":
+                    yield (
+                        {
+                            "date": passage.metadata["date"],
+                            "source": name,
+                            "place_name": ent.text,
+                        }
+                    )
+
+
+def main(corpora, csvfile: Path, resume: bool, filter_terms: list[str]):
     file_exists = csvfile.exists()
 
     if resume and file_exists:
@@ -96,27 +115,21 @@ def main(corpora, csvfile: Path, resume: bool):
                     provenance = corpus.passages[0].metadata.get("provenance")
                 except IndexError:
                     logging.warning(f"Empty corpus: {corpus_name}")
-                    continue
-                rows = [
-                    {
-                        "date": passage.metadata["date"],
-                        "source": corpus_name,
-                        "place_name": ent.text,
-                    }
-                    for passage in tqdm(
-                        corpus.passages, desc=provenance, unit="passage"
+                else:
+                    writer.writerows(
+                        extract_rows(
+                            corpus, corpus_name, nlp, filter_terms, desc=provenance
+                        )
                     )
-                    for ent in nlp(passage.text).ents
-                    if ent.label_ == "GPE"
-                ]
-                writer.writerows(rows)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Perform NER on corpora and extract place names."
     )
-    parser.add_argument("--corpora", nargs="+", help="List of corpora to process")
+    parser.add_argument(
+        "--corpora", nargs="+", required=True, help="List of corpora to process"
+    )
     parser.add_argument(
         "--output",
         "-o",
@@ -129,9 +142,12 @@ if __name__ == "__main__":
         action="store_true",
         help="Resume from the last run by reading the existing output file",
     )
+    parser.add_argument(
+        "--filter-terms", "--terms", nargs="+", help="List of content filter terms"
+    )
     args = parser.parse_args()
 
     if not args.resume and args.output.exists():
         parser.error(f"Output file already exists: {args.output}")
 
-    main(args.corpora, args.output, args.resume)
+    main(args.corpora, args.output, args.resume, args.filter_terms)
