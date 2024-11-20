@@ -568,18 +568,25 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             for collection in collections or self.get_available_collections():
                 centroid = corpus.centroid(use_2d_embeddings=False).tolist()
 
-                for passage, distance in self.query_vector_neighbors(
-                    collection,
-                    centroid,
-                    k + len(exclude_passages),  # account for excluded passages
-                    max_distance=distance,
-                    year_span=year_span,
-                    metadata_not=metadata_not,
-                ):
-                    if passage not in exclude_passages:
-                        passages[passage] = min(
-                            distance, passages.get(passage, float("inf"))
-                        )
+                try:
+                    for passage, distance in self._query_vector_neighbors(
+                        collection,
+                        centroid,
+                        k + len(exclude_passages),  # account for excluded passages
+                        max_distance=distance,
+                        year_span=year_span,
+                        metadata_not=metadata_not,
+                    ):
+                        if passage not in exclude_passages:
+                            passages[passage] = min(
+                                distance, passages.get(passage, float("inf"))
+                            )
+                except WeaviateQueryError as e:
+                    self._logger.error(
+                        "Error while querying collection '%s': %s", collection, e
+                    )
+                else:
+                    passages = dict()
 
         _sorted = sorted(passages.items(), key=lambda x: x[1])
 
@@ -590,7 +597,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
 
         return Corpus(passages, label, umap_model=corpus.umap)
 
-    def query_vector_neighbors(
+    def _query_vector_neighbors(
         self,
         collection: str,
         vector: list[float],
