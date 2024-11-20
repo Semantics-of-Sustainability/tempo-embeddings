@@ -288,7 +288,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                     Property(name=field, data_type=DataType(type_name))
                 )
             except ValueError as e:
-                logging.warning(
+                self._logger.warning(
                     "Could not derive Weaviate data type for field '%s': %s", field, e
                 )
 
@@ -410,28 +410,38 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         Returns:
             Corpus: A corpus object
 
+        Raises:
+            RuntimeError: If an error occurs during the query
         """
 
-        response = self._client.collections.get(collection).query.fetch_objects(
-            limit=limit or None,
-            filters=QueryBuilder.build_filter(
-                filter_words,
-                YearSpan(year_from, year_to),
-                metadata_filters,
-                QueryBuilder.clean_metadata(metadata_not, self.properties(collection)),
-            ),
-            include_vector=include_embeddings,
-        )
-        passages: tuple[Passage] = tuple(
-            [
-                Passage.from_weaviate_record(o, collection=collection)
-                for o in response.objects
-            ]
-        )
-        label = collection
-        if passages and filter_words:
-            label += ": '" + "; ".join(filter_words) + "'"
-        return Corpus(passages, label)
+        try:
+            response = self._client.collections.get(collection).query.fetch_objects(
+                limit=limit or None,
+                filters=QueryBuilder.build_filter(
+                    filter_words,
+                    YearSpan(year_from, year_to),
+                    metadata_filters,
+                    QueryBuilder.clean_metadata(
+                        metadata_not, self.properties(collection)
+                    ),
+                ),
+                include_vector=include_embeddings,
+            )
+        except WeaviateQueryError as e:
+            raise RuntimeError(
+                f"Error while fetching corpus '{collection}'. Try a lower limit (was: {limit})."
+            ) from e
+        else:
+            passages: tuple[Passage] = tuple(
+                [
+                    Passage.from_weaviate_record(o, collection=collection)
+                    for o in response.objects
+                ]
+            )
+            label = collection
+            if passages and filter_words:
+                label += ": '" + "; ".join(filter_words) + "'"
+            return Corpus(passages, label)
 
     def doc_frequencies_per_year(
         self,
@@ -497,7 +507,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
 
         search_terms: list[str] = [term] if term.strip() else []
         if normalize and not search_terms:
-            logging.warning("Did not provide a term to normalize.")
+            self._logger.warning("Did not provide a term to normalize.")
             return 1.0
 
         response = self._client.collections.get(collection).aggregate.over_all(
@@ -551,25 +561,30 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         """
         passages: dict[Passage, float] = dict()
         if len(corpus) == 0:
-            logging.warning("Empty corpus, no neighbors to find.")
+            self._logger.warning("Empty corpus, no neighbors to find.")
         else:
             exclude_passages = exclude_passages or set(corpus.passages)
 
             for collection in collections or self.get_available_collections():
                 centroid = corpus.centroid(use_2d_embeddings=False).tolist()
 
-                for passage, distance in self.query_vector_neighbors(
-                    collection,
-                    centroid,
-                    k + len(exclude_passages),  # account for excluded passages
-                    max_distance=distance,
-                    year_span=year_span,
-                    metadata_not=metadata_not,
-                ):
-                    if passage not in exclude_passages:
-                        passages[passage] = min(
-                            distance, passages.get(passage, float("inf"))
-                        )
+                try:
+                    for passage, distance in self._query_vector_neighbors(
+                        collection,
+                        centroid,
+                        k + len(exclude_passages),  # account for excluded passages
+                        max_distance=distance,
+                        year_span=year_span,
+                        metadata_not=metadata_not,
+                    ):
+                        if passage not in exclude_passages:
+                            passages[passage] = min(
+                                distance, passages.get(passage, float("inf"))
+                            )
+                except WeaviateQueryError as e:
+                    self._logger.error(
+                        "Error while querying collection '%s': %s", collection, e
+                    )
 
         _sorted = sorted(passages.items(), key=lambda x: x[1])
 
@@ -580,7 +595,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
 
         return Corpus(passages, label, umap_model=corpus.umap)
 
-    def query_vector_neighbors(
+    def _query_vector_neighbors(
         self,
         collection: str,
         vector: list[float],
@@ -593,8 +608,10 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         # TODO: use autocut: https://weaviate.io/developers/weaviate/api/graphql/additional-operators#autocut
 
         if max_neighbors > 10000:
-            logging.warning(
-                "Limiting maximum number of neighbors to 10000 (was: %d)", max_neighbors
+            self._logger.warning(
+                "Limiting maximum number of neighbors to 10000 (was: %d) while querying '%s'.",
+                max_neighbors,
+                collection,
             )
             max_neighbors = 10000
         wv_collection = self._client.collections.get(collection)
