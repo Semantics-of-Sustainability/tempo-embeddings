@@ -288,7 +288,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                     Property(name=field, data_type=DataType(type_name))
                 )
             except ValueError as e:
-                logging.warning(
+                self._logger.warning(
                     "Could not derive Weaviate data type for field '%s': %s", field, e
                 )
 
@@ -507,7 +507,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
 
         search_terms: list[str] = [term] if term.strip() else []
         if normalize and not search_terms:
-            logging.warning("Did not provide a term to normalize.")
+            self._logger.warning("Did not provide a term to normalize.")
             return 1.0
 
         response = self._client.collections.get(collection).aggregate.over_all(
@@ -561,7 +561,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         """
         passages: dict[Passage, float] = dict()
         if len(corpus) == 0:
-            logging.warning("Empty corpus, no neighbors to find.")
+            self._logger.warning("Empty corpus, no neighbors to find.")
         else:
             exclude_passages = exclude_passages or set(corpus.passages)
 
@@ -585,8 +585,6 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
                     self._logger.error(
                         "Error while querying collection '%s': %s", collection, e
                     )
-                else:
-                    passages = dict()
 
         _sorted = sorted(passages.items(), key=lambda x: x[1])
 
@@ -610,8 +608,10 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         # TODO: use autocut: https://weaviate.io/developers/weaviate/api/graphql/additional-operators#autocut
 
         if max_neighbors > 10000:
-            logging.warning(
-                "Limiting maximum number of neighbors to 10000 (was: %d)", max_neighbors
+            self._logger.warning(
+                "Limiting maximum number of neighbors to 10000 (was: %d) while querying '%s'.",
+                max_neighbors,
+                collection,
             )
             max_neighbors = 10000
         wv_collection = self._client.collections.get(collection)
