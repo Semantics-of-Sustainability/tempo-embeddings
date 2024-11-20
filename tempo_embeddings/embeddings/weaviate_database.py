@@ -410,28 +410,38 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         Returns:
             Corpus: A corpus object
 
+        Raises:
+            RuntimeError: If an error occurs during the query
         """
 
-        response = self._client.collections.get(collection).query.fetch_objects(
-            limit=limit or None,
-            filters=QueryBuilder.build_filter(
-                filter_words,
-                YearSpan(year_from, year_to),
-                metadata_filters,
-                QueryBuilder.clean_metadata(metadata_not, self.properties(collection)),
-            ),
-            include_vector=include_embeddings,
-        )
-        passages: tuple[Passage] = tuple(
-            [
-                Passage.from_weaviate_record(o, collection=collection)
-                for o in response.objects
-            ]
-        )
-        label = collection
-        if passages and filter_words:
-            label += ": '" + "; ".join(filter_words) + "'"
-        return Corpus(passages, label)
+        try:
+            response = self._client.collections.get(collection).query.fetch_objects(
+                limit=limit or None,
+                filters=QueryBuilder.build_filter(
+                    filter_words,
+                    YearSpan(year_from, year_to),
+                    metadata_filters,
+                    QueryBuilder.clean_metadata(
+                        metadata_not, self.properties(collection)
+                    ),
+                ),
+                include_vector=include_embeddings,
+            )
+        except WeaviateQueryError as e:
+            raise RuntimeError(
+                f"Error while fetching corpus '{collection}'. Try a lower limit (was: {limit})."
+            ) from e
+        else:
+            passages: tuple[Passage] = tuple(
+                [
+                    Passage.from_weaviate_record(o, collection=collection)
+                    for o in response.objects
+                ]
+            )
+            label = collection
+            if passages and filter_words:
+                label += ": '" + "; ".join(filter_words) + "'"
+            return Corpus(passages, label)
 
     def doc_frequencies_per_year(
         self,
