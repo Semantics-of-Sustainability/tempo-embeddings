@@ -11,6 +11,7 @@ from ipywidgets.widgets import (
 
 from tempo_embeddings.text.corpus import Corpus
 from tempo_embeddings.visualization.jscatter import JScatterVisualizer, PlotWidgets
+from tempo_embeddings.visualization.util import DownloadButton
 
 
 @pytest.fixture
@@ -60,7 +61,7 @@ class TestJScatterVisualizer:
         categorical_filters = widgets[1].children
         continous_filters = widgets[2].children
 
-        assert [type(w) for w in widgets] == [HBox, HBox, HBox, Button]
+        assert [type(w) for w in widgets] == [HBox, HBox, HBox, DownloadButton, Button]
         assert [type(w) for w in continous_filters] == cont_widget_types
         assert [type(w) for w in categorical_filters] == cat_widget_types
 

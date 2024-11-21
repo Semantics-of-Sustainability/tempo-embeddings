@@ -1,3 +1,4 @@
+import csv
 import logging
 from typing import Optional
 
@@ -9,6 +10,7 @@ from ipywidgets import widgets
 from ..settings import STOPWORDS
 from ..text.corpus import Corpus
 from ..text.keyword_extractor import KeywordExtractor
+from .util import DownloadButton
 
 
 class JScatterVisualizer:
@@ -185,6 +187,9 @@ class PlotWidgets:
         )
 
         # FIXME: field names should not be hardcoded
+        # FIXME: populate rows from sub-corpora that have not provided 'year'
+
+        self._df["year"]
         if "date" in self._df.columns:
             if "year" not in self._df.columns:
                 self._df["year"] = self._df["date"].dt.year
@@ -207,6 +212,28 @@ class PlotWidgets:
         )
         return self._scatter
 
+    def _export_button(self) -> DownloadButton:
+        def _select():
+            if self._scatter.selection().size > 0:
+                index = self._scatter.selection()
+            else:
+                try:
+                    # filter() raises error if it has not been set yet
+                    filter_indices = self._scatter.filter()
+                except AttributeError:
+                    logging.debug("No filter indices found")
+                    index = self._df.index
+                else:
+                    index = (
+                        filter_indices if len(filter_indices) > 0 else self._df.index
+                    )
+
+            return self._df.iloc[index].to_csv(index=False, quoting=csv.QUOTE_ALL)
+
+        return DownloadButton(
+            filename="scatter_plot.csv", contents=_select, description="Export"
+        )
+
     def _init_widgets(self) -> tuple[jscatter.Scatter, widgets.HBox, widgets.HBox]:
         """Create the widgets for filtering the scatter plot."""
 
@@ -221,10 +248,13 @@ class PlotWidgets:
             for widget in self._continuous_field_filter(field) or []
         ]
 
-        self._widgets: tuple[jscatter.Scatter, widgets.HBox, widgets.HBox] = [
+        self._widgets: tuple[
+            jscatter.Scatter, widgets.HBox, widgets.HBox, DownloadButton
+        ] = [
             self._scatter.show(),
             widgets.HBox(continuous_filters),
             widgets.HBox(category_filters),
+            self._export_button(),
         ]
 
         return self._widgets
@@ -294,7 +324,9 @@ class PlotWidgets:
                 start = int(change.new[0])  # noqa: F841
                 end = int(change.new[1])  # noqa: F841
 
-                self._filter(field, self._df.query("year > @start & year < @end").index)
+                self._filter(
+                    field, self._df.query(f"{field} > @start & {field} < @end").index
+                )
 
             selection.observe(handle_slider_change, names="value")
 
@@ -311,6 +343,7 @@ class PlotWidgets:
             field (str): The field to filter on.
             index (pd.RangeIndex): The index listing the rows to keep for this field
         """
+        # TODO: include NA values for sub-corpora that don't have the field
         self._indices[field] = index
 
         index = self._df.index
