@@ -212,26 +212,32 @@ class PlotWidgets:
         )
         return self._scatter
 
-    def _export_button(self) -> DownloadButton:
-        def _select():
-            if self._scatter.selection().size > 0:
-                index = self._scatter.selection()
+    def _selected(self) -> list[int]:
+        """Return the indices of currently selected/filtered/all rows.
+
+        1. If there are selected points, return their indices, OR
+        2. If there are filtered points, return their indices, OR
+        3. Return all indices.
+
+        Returns:
+            list[int]: The indices of the selected/filtered/all rows.
+        """
+        if self._scatter.selection().size > 0:
+            index = self._scatter.selection()
+        else:
+            try:
+                # filter() raises error if it has not been set yet
+                filter_indices = self._scatter.filter()
+            except AttributeError:
+                logging.debug("No filter indices found")
+                index = self._df.index
             else:
-                try:
-                    # filter() raises error if it has not been set yet
-                    filter_indices = self._scatter.filter()
-                except AttributeError:
-                    logging.debug("No filter indices found")
-                    index = self._df.index
-                else:
-                    index = (
-                        filter_indices if len(filter_indices) > 0 else self._df.index
-                    )
+                index = filter_indices if len(filter_indices) > 0 else self._df.index
+        return self._df.iloc[index].to_csv(index=False, quoting=csv.QUOTE_ALL)
 
-            return self._df.iloc[index].to_csv(index=False, quoting=csv.QUOTE_ALL)
-
+    def _export_button(self) -> DownloadButton:
         return DownloadButton(
-            filename="scatter_plot.csv", contents=_select, description="Export"
+            filename="scatter_plot.csv", contents=self._selected, description="Export"
         )
 
     def _init_widgets(self) -> tuple[jscatter.Scatter, widgets.HBox, widgets.HBox]:
