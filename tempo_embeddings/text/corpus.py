@@ -570,6 +570,30 @@ class Corpus:
             )
         )
 
+    @classmethod
+    def from_dataframe(
+        cls, df: pd.DataFrame, *, label: str = "", text_field: str = "text"
+    ) -> "Corpus":
+        """Create a corpus from a Pandas DataFrame.
+
+        Args:
+            df: The DataFrame to create the corpus from.
+        Returns:
+            Corpus: The corpus created from the DataFrame.
+        """
+
+        passages = [
+            Passage(
+                row[text_field],
+                metadata={
+                    key: value for key, value in row.items() if key != text_field
+                },
+            )
+            for _, row in df.iterrows()
+        ]
+
+        return cls(passages, label=label)
+
     def save(self, filepath: Path):
         """Save the corpus to a file."""
 

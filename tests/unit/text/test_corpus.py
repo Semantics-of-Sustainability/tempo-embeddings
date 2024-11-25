@@ -450,6 +450,23 @@ class TestCorpus:
 
         pd.testing.assert_frame_equal(corpus.to_dataframe(), expected, atol=100.0)
 
+    def test_from_dataframe(self):
+        df = pd.DataFrame(
+            [
+                {"text": f"test text {str(i)}", "ID_DB": i, "year": 1950 + i}
+                for i in range(5)
+            ]
+        )
+
+        expected = Corpus(
+            [
+                Passage(f"test text {str(i)}", metadata={"ID_DB": i, "year": 1950 + i})
+                for i in range(len(df))
+            ],
+            "test label",
+        )
+        assert Corpus.from_dataframe(df, label="test label") == expected
+
     @pytest.mark.parametrize(
         "corpus, expected_exception",
         [
