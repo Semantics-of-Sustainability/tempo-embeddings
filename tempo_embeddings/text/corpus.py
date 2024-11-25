@@ -51,15 +51,20 @@ class Corpus:
 
     def __add__(self, other: "Corpus") -> "Corpus":
         if self.umap is other.umap:
-            logging.info("Merging corpora with identical UMAP models, reusing it.")
+            logging.info("Reusing commong UMAP model.")
             umap = self.umap
-        elif self._is_fitted(self.umap) or self._is_fitted(other.umap):
-            raise RuntimeError(
-                "UMAP model has been fitted on one of the corpora, cannot merge."
-            )
+        elif self._is_fitted(self.umap) and self._is_fitted(other.umap):
+            raise RuntimeError("Corpora have conflicting UMAP models.")
+        elif self._is_fitted(self.umap):
+            logging.info("Using UMAP model from first corpus.")
+            umap = self.umap
+        elif self._is_fitted(other.umap):
+            logging.info("Using UMAP model from second corpus.")
+            umap = other.umap
         else:
-            logging.info("Dropping UMAP model while merging corpora .")
+            logging.info("No UMAP model has been computed.")
             umap = None
+
         if self.top_words or other.top_words:
             logging.warning(
                 "Dropping existing top words: %s, %s", self.top_words, other.top_words

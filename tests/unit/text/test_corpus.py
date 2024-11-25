@@ -14,15 +14,42 @@ from tempo_embeddings.text.passage import Passage
 
 
 class TestCorpus:
+    def assert_umap_fitted(
+        self, corpus1, corpus2, expected_umap, expected_exception, assert_symmetry=True
+    ):
+        with expected_exception:
+            merged = corpus1 + corpus2
+
+            if expected_umap is None:
+                assert merged.umap is not corpus1.umap
+                assert merged.umap is not corpus2.umap
+            else:
+                assert merged.umap is expected_umap
+
+        if assert_symmetry:
+            self.assert_umap_fitted(
+                corpus2, corpus1, expected_umap, expected_exception, False
+            )
+
     def test_add(self, test_passages):
         expected = Corpus(test_passages[:2], None, umap_model=None)
         assert Corpus([test_passages[0]]) + Corpus([test_passages[1]]) == expected
 
-    def test_add_umap_fitted(self, corpus):
-        corpus._fit_umap()
+    def test_add_umap_fitted(self, corpus, caplog):
+        corpus2 = Corpus([Passage("test {i}") for i in range(5)])
 
-        with pytest.raises(RuntimeError):
-            corpus + Corpus([Passage("test")])
+        self.assert_umap_fitted(corpus, corpus2, None, does_not_raise())
+
+        corpus._fit_umap()
+        self.assert_umap_fitted(corpus, corpus2, corpus.umap, does_not_raise())
+
+        corpus2.embeddings = np.random.rand(len(corpus2), 768)
+        corpus2._fit_umap()
+
+        self.assert_umap_fitted(corpus, corpus2, None, pytest.raises(RuntimeError))
+
+        corpus2._umap = corpus.umap
+        self.assert_umap_fitted(corpus, corpus2, corpus.umap, does_not_raise())
 
     @pytest.mark.parametrize(
         "passages, key, default_value, expected",
