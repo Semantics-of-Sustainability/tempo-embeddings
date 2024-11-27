@@ -344,9 +344,21 @@ class TestCorpus:
 
     def test_select_embeddings(self, corpus):
         assert corpus._select_embeddings(use_2d_embeddings=False).shape == (5, 768)
-
         assert corpus._select_embeddings(use_2d_embeddings=True).shape == (5, 2)
         assert corpus._select_embeddings(use_2d_embeddings=False).shape == (5, 768)
+
+    @pytest.mark.parametrize(
+        "use_2d_embeddings, expected", [(True, np.ones((5, 2))), (False, None)]
+    )
+    def test_select_embeddings_compressed(self, corpus, use_2d_embeddings, expected):
+        for passage in corpus.passages:
+            # remove embeddings
+            passage.embedding = None
+            passage.embedding_compressed = [1.0, 1.0]
+
+        embeddings = corpus._select_embeddings(use_2d_embeddings=use_2d_embeddings)
+
+        np.testing.assert_array_equal(embeddings, expected)
 
     @pytest.mark.parametrize(
         "corpus",
@@ -457,14 +469,16 @@ class TestCorpus:
                     "text": f"test text {str(i)}",
                     "ID_DB": i,
                     "year": 1950 + i,
-                    "x": 1.0,
-                    "y": 2.0,
+                    "x": 1.0 + i,
+                    "y": 2.0 + i,
                 }
                 for i in range(5)
             ]
         )
 
-        expected = Corpus(
+        corpus = Corpus.from_dataframe(df, label="test label")
+
+        assert corpus == Corpus(
             [
                 Passage(
                     f"test text {str(i)}",
@@ -475,7 +489,7 @@ class TestCorpus:
             ],
             "test label",
         )
-        assert Corpus.from_dataframe(df, label="test label") == expected
+        np.testing.assert_equal(corpus.centroid(), [3.0, 4.0])
 
     @pytest.mark.parametrize(
         "corpus, expected_exception",

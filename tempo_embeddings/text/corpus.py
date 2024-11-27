@@ -104,7 +104,7 @@ class Corpus:
 
     def _select_embeddings(self, use_2d_embeddings: bool):
         if use_2d_embeddings:
-            if not self._is_fitted(self.umap):
+            if self.embeddings_2d is None and not self._is_fitted(self.umap):
                 self.compress_embeddings()
             embeddings = self.embeddings_2d
         else:
@@ -113,8 +113,12 @@ class Corpus:
         return embeddings
 
     @property
-    def embeddings(self) -> np.ndarray:
-        return np.array([p.embedding for p in self.passages])
+    def embeddings(self) -> Optional[np.ndarray]:
+        if all(p.embedding for p in self.passages):
+            return np.array([p.embedding for p in self.passages])
+        else:
+            logging.warning("No embeddings available.")
+            return None
 
     @embeddings.setter
     def embeddings(self, embeddings: np.ndarray):
@@ -124,6 +128,7 @@ class Corpus:
     @property
     def embeddings_2d(self) -> Optional[np.ndarray]:
         if any(p.embedding_compressed for p in self.passages):
+            # assuming all passages have embeddings_compressed if one has:
             return np.array([p.embedding_compressed for p in self.passages])
         else:
             logging.warning("No 2D embeddings available.")
@@ -183,6 +188,9 @@ class Corpus:
     def centroid(self, use_2d_embeddings: bool = True) -> np.ndarray:
         """The mean for all passage embeddings."""
         embeddings = self._select_embeddings(use_2d_embeddings)
+
+        if embeddings is None:
+            raise RuntimeError("No embeddings available.")
         return embeddings.mean(axis=0)
 
     def coordinates(self) -> pd.DataFrame:
@@ -255,8 +263,10 @@ class Corpus:
     def _fit_umap(self):
         if self._is_fitted(self._umap):
             raise RuntimeError("UMAP model has already been fitted.")
-        else:
-            self._umap.fit(self.embeddings)
+        elif self.embeddings is None:
+            raise RuntimeError("Cannot fit UMAP, no embeddings available.")
+
+        self._umap.fit(self.embeddings)
 
     ##### Clustering and Embedding methods #####
     def _clusters(self, embeddings, max_clusters: int, **hdbscan_args) -> list[int]:

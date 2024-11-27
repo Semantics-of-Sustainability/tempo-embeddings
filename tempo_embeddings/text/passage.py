@@ -70,14 +70,22 @@ class Passage:
         Initializes a Passage object.
 
         Raises:
-            ValidationError: If the metadata is invalid."""
-        # pylint: disable=too-many-arguments
+            ValidationError: If the metadata or the (compressed) embeddings are invalid."""
+
+        if embedding_compressed is not None and any(
+            not isinstance(f, float) for f in embedding_compressed
+        ):
+            raise ValueError(
+                f"Compressed embeddings must two floats: {embedding_compressed}"
+            )
+
         self._text = text.strip()
         self._unique_id = unique_id
         self._metadata = Passage.Metadata(**(metadata or {}))
         self._highlighting = highlighting
         self._embedding = embedding
         self._embedding_compressed = embedding_compressed
+
         self._full_word_spans = full_word_spans
         self._char2tokens = char2tokens
 
@@ -450,6 +458,7 @@ class Passage:
         Returns:
             A Passage object.
         """
+
         metadata = dict()
         compressed_embedding = []
 
@@ -462,6 +471,14 @@ class Passage:
                 compressed_embedding.append(value)
             else:
                 metadata[key] = value
+
+        if compressed_embedding and not [type(f) for f in compressed_embedding] == [
+            float,
+            float,
+        ]:
+            raise ValueError(
+                f"Compressed embeddings must be two floats: {compressed_embedding}"
+            )
 
         return cls(
             text=text, metadata=metadata, embedding_compressed=compressed_embedding

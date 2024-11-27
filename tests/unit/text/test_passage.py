@@ -205,28 +205,26 @@ class TestPassage:
 
     def test_from_df_row(self):
         row = {
-            "passage": "test",
+            "text": "test text",
             "year": 2022,
             "date": "2022-01-01T00:00:00Z",
             "sentence_index": 1,
-            "origin_id": "test",
             "x": 1.0,
             "y": 2.0,
         }
         expected = Passage(
-            "test",
+            "test text",
             metadata={
                 "year": 2022,
                 "date": datetime.datetime(
                     2022, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
                 ),
                 "sentence_index": 1,
-                "origin_id": "test",
             },
             embedding_compressed=[1.0, 2.0],
         )
 
-        assert Passage.from_df_row(row, text_field="passage") == expected
+        assert Passage.from_df_row(row, text_field="text") == expected
 
     @pytest.mark.parametrize(
         "passages,min_length,expected",
