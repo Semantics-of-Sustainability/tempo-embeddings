@@ -453,14 +453,24 @@ class TestCorpus:
     def test_from_dataframe(self):
         df = pd.DataFrame(
             [
-                {"text": f"test text {str(i)}", "ID_DB": i, "year": 1950 + i}
+                {
+                    "text": f"test text {str(i)}",
+                    "ID_DB": i,
+                    "year": 1950 + i,
+                    "x": 1.0,
+                    "y": 2.0,
+                }
                 for i in range(5)
             ]
         )
 
         expected = Corpus(
             [
-                Passage(f"test text {str(i)}", metadata={"ID_DB": i, "year": 1950 + i})
+                Passage(
+                    f"test text {str(i)}",
+                    metadata={"ID_DB": i, "year": 1950 + i},
+                    embedding_compressed=[1.0, 2.0],
+                )
                 for i in range(len(df))
             ],
             "test label",

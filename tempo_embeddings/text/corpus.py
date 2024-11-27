@@ -572,27 +572,32 @@ class Corpus:
 
     @classmethod
     def from_dataframe(
-        cls, df: pd.DataFrame, *, label: str = "", text_field: str = "text"
+        cls,
+        df: pd.DataFrame,
+        *,
+        label: str = "",
+        umap_model: Optional[UMAP] = None,
+        text_field: str = "text",
     ) -> "Corpus":
         """Create a corpus from a Pandas DataFrame.
 
         Args:
             df: The DataFrame to create the corpus from.
+            label: The label of the corpus. Defaults to an empty string.
+            umap_model (optional): The UMAP model to use for compressing embeddings. Defaults to None (new model).
+            text_field: The name of the column containing the text. Defaults to 'text'.
         Returns:
             Corpus: The corpus created from the DataFrame.
         """
 
-        passages = [
-            Passage(
-                row[text_field],
-                metadata={
-                    key: value for key, value in row.items() if key != text_field
-                },
-            )
-            for _, row in df.iterrows()
-        ]
-
-        return cls(passages, label=label)
+        return cls(
+            [
+                Passage.from_df_row(row, text_field=text_field)
+                for _, row in df.iterrows()
+            ],
+            label=label,
+            umap_model=umap_model,
+        )
 
     def save(self, filepath: Path):
         """Save the corpus to a file."""

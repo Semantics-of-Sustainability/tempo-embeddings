@@ -439,6 +439,34 @@ class Passage:
 
         return passage
 
+    @classmethod
+    def from_df_row(cls, row: tuple, *, text_field: str):
+        """Create a Passage from a DataFrame row.
+
+        Used by Corpus.from_dataframe().
+
+        Args:
+            row: A DataFrame row.
+        Returns:
+            A Passage object.
+        """
+        metadata = dict()
+        compressed_embedding = []
+
+        for key, value in row.items():
+            if key == text_field:
+                text = value
+            elif key == "x":
+                compressed_embedding.insert(0, value)
+            elif key == "y":
+                compressed_embedding.append(value)
+            else:
+                metadata[key] = value
+
+        return cls(
+            text=text, metadata=metadata, embedding_compressed=compressed_embedding
+        )
+
     def merge_until(self, passages: list["Passage"], *, length: int) -> "Passage":
         """Merges the passages in the input iterable into passages of (at least) the specified length.
 
