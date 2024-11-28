@@ -1,6 +1,7 @@
 import csv
 import logging
-from typing import Optional
+from collections import Counter
+from typing import Any, Iterable, Optional
 
 import jscatter
 import pandas as pd
@@ -16,16 +17,21 @@ from .util import DownloadButton
 class JScatterVisualizer:
     """A class for creating interactive scatter plots with Jupyter widgets."""
 
-    DEFAULT_CONTINUOUS_FIELDS: set[str] = {"year"}
+    __REQUIRED_FIELDS: dict[str, Any] = {"x": pd.Float64Dtype(), "y": pd.Float64Dtype()}
+    """Required fields and dtype."""
+
+    __DEFAULT_CONTINUOUS_FIELDS: set[str] = {"year"}
+    __EXCLUDE_FILTER_FIELDS: set[str] = {"month", "day"}
+    __EXCLUDE_TOOLTIP_FIELDS: set[str] = {"date"}
 
     def __init__(
         self,
-        corpus,
+        corpora: list[Corpus],
+        *,
         categorical_fields: Optional[list[str]] = None,
-        continuous_filter_fields: list[str] = DEFAULT_CONTINUOUS_FIELDS,
+        continuous_filter_fields: list[str] = __DEFAULT_CONTINUOUS_FIELDS,
         tooltip_fields: list[str] = None,
-        fillna: dict[str, str] = None,
-        color_by: str = "label",
+        color_by: list[str] = ["cluster", "label"],
         keyword_extractor: Optional[KeywordExtractor] = None,
     ):
         """Create a JScatterVisualizer object to visualize a corpus.
@@ -35,182 +41,107 @@ class JScatterVisualizer:
             categorical_fields (list[str], optional): The categorical fields to filter on. Defaults to all metadata fields minus the continus fields.
             continuous_filter_fields (list[str], optional): The continuous fields to filter on. Defaults to DEFAULT_CONTINUOUS_FIELDS.
             tooltip_fields (list[str], optional): The fields to show in the tooltip. Defaults to all metadata fields.
-            fillna (dict[str, str], optional): The values to fill NaN values with.
             color_by (str, optional): The field to color the scatter plot by.
             keyword_extractor (KeywordExtractor, optional): The keyword extractor to use.
 
         """
+        self._validate_corpora(corpora)
+        self._corpora = corpora
+
+        self._umap = corpora[0].umap
+        """Common UMAP model; assuming all corpora have the same model."""
+
+        merged_corpus = sum(corpora, Corpus())
         self._keyword_extractor = keyword_extractor or KeywordExtractor(
-            corpus, exclude_words=STOPWORDS
+            merged_corpus, exclude_words=STOPWORDS
         )
 
-        self._tooltip_fields = tooltip_fields or corpus.metadata_fields()
-        self._continuous_filter_fields = continuous_filter_fields
-        self._categorical_fields = categorical_fields or (
-            corpus.metadata_fields() | {"label"} - set(self._continuous_filter_fields)
+        self._init_df()
+
+        self._tooltip_fields: set[str] = self._valid_tooltip_fields(
+            tooltip_fields, merged_corpus
         )
-        self._fillna = fillna
-        self._color_by = color_by
-
-        self._plot = PlotWidgets(
-            [corpus],
-            self._categorical_fields,
-            self._continuous_filter_fields,
-            self._tooltip_fields,
-            self._fillna,
-            self._color_by,
-        )
-        self._cluster_plot = None
-        """Index of the current plot being visualized."""
-
-    @property
-    def clusters(self):
-        if self._cluster_plot is None:
-            logging.warning("No clusters have been computed yet.")
-            return None
-        else:
-            return self._cluster_plot._corpora
-
-    def _cluster_button(self) -> widgets.Button:
-        """Create a button for clustering the data."""
-
-        # TODO: add selectors for clustering parameters
-
-        def cluster(button):
-            # TODO: add clustering parameters
-
-            if self._cluster_plot is None:
-                # Initialize clustered plot
-                clusters = list(self._plot._corpora[0].cluster())
-
-                if self._keyword_extractor:
-                    for c in clusters:
-                        c.top_words = self._keyword_extractor.top_words(c)
-                self._cluster_plot = PlotWidgets(
-                    clusters,
-                    self._categorical_fields,
-                    self._continuous_filter_fields,
-                    self._tooltip_fields,
-                    self._fillna,
-                    self._color_by,
+        if "date" in self._tooltip_fields:
+            logging.warning("Skipping 'date' field from tooltip fields.")
+            self._tooltip_fields.remove("date")
+        # Catch 'object' type tooltip fields:
+        for column in self._tooltip_fields:
+            if self._df.dtypes[column] == "object" and not (
+                pd.CategoricalDtype.is_dtype(self._df[column])
+                or pd.api.types.is_string_dtype(self._df[column])
+            ):
+                logging.error(
+                    f"Cannot use '{column}' field with dtype 'object' for tooltips."
                 )
 
-            widgets = self._cluster_plot._widgets + [self._return_button()]
-
-            display(*widgets, clear=True)
-
-        button = widgets.Button(
-            description="Cluster",
-            disabled=False,
-            button_style="",  # 'success', 'info', 'warning', 'danger' or ''
-            tooltip="Cluster the data",
-            # icon="check",  # (FontAwesome names without the `fa-` prefix)
-        )
-        button.on_click(cluster)
-
-        return button
-
-    def _return_button(self) -> widgets.Button:
-        def _return(button):
-            clear_output(wait=True)
-            widgets = self._plot._widgets + [self._cluster_button()]
-
-            display(*widgets, clear=True)
-
-        button = widgets.Button(
-            description="Return",
-            disabled=False,
-            button_style="",  # 'success', 'info', 'warning', 'danger' or ''
-            tooltip="Return to initial view",
-        )
-        button.on_click(_return)
-
-        return button
-
-    def visualize(self) -> None:
-        """Display the initial visualization."""
-        widgets = self._plot._widgets + [self._cluster_button()]
-        display(*widgets)
-
-
-class PlotWidgets:
-    """A class for holding the widgets for a plot."""
-
-    def __init__(
-        self,
-        corpora: list[Corpus],
-        categorical_fields: list[str],
-        continuous_filter_fields: list[str],
-        tooltip_fields: list[str],
-        fillna: dict[str, str],
-        color_by: str,
-    ):
-        """Create a PlotWidgets object to create the widgets for a JScatterVisualizer.
-
-        Args:
-            corpus (Corpus): The corpus to visualize.
-            categorical_fields (list[str], optional): The categorical fields to filter on.
-            continuous_filter_fields (list[str], optional): The continuous fields to filter on.
-            tooltip_fields (list[str], optional): The fields to show in the tooltip.
-            fillna (dict[str, str], optional): The values to fill NaN values with.
-            color_by (str, optional): The field to color the scatter plot by.
-        """
-
-        self._indices: dict[str, pd.RangeIndex] = {}
-        """Keeps track of filtered indices per filter field."""
-
-        self._corpora: list[Corpus] = corpora
-        self._fillna = fillna or {}
-        self._tooltip_fields = tooltip_fields
-        self._color_by = color_by
-
-        self._categorical_fields = categorical_fields
         self._continuous_fields = continuous_filter_fields
+        self._categorical_fields = categorical_fields or (
+            merged_corpus.metadata_fields() | {"label"} - set(self._continuous_fields)
+        )
 
-        self._init_scatter()
-        self._init_widgets()
-
-    def __len__(self):
-        return len(self._corpora)
-
-    def _init_dataframe(self) -> pd.DataFrame:
-        """Create a DataFrame from the corpora."""
-
-        self._df = (
-            pd.concat(
-                c.to_dataframe().assign(label=c.label).assign(outlier=c.is_outliers())
-                for c in self._corpora
+        try:
+            self._color_by = next(
+                column for column in color_by if column in self._df.columns
             )
-            .reset_index()
-            .fillna(self._fillna)
+        except StopIteration as e:
+            raise ValueError(
+                f"None of the color_by fields found in corpus: {color_by}"
+            ) from e
+
+        self._plot_widgets = self.PlotWidgets(self)
+        self._scatter = self._plot_widgets._scatter()
+
+    def _validate_corpora(self, corpora):
+        labels = Counter(c.label for c in corpora)
+        if any(count > 1 for count in labels.values()):
+            raise ValueError("Corpora with the same label cannot be merged.")
+
+        for column in self.__REQUIRED_FIELDS:
+            if not all(column in c.to_dataframe().columns for c in corpora):
+                raise ValueError(f"Missing required field '{column}' in corpora.")
+
+    def _valid_tooltip_fields(self, tooltip_fields: set[str], corpus: Corpus):
+        valid_tooltip_fields: Iterable[str] = (
+            tooltip_fields or corpus.metadata_fields()
+        ).difference(self.__EXCLUDE_TOOLTIP_FIELDS)
+
+        # Catch 'object' type tooltip fields:
+        object_fields = set()
+        for column in valid_tooltip_fields:
+            dtype = self._df.dtypes[column]
+            if dtype == "object" and not (
+                pd.CategoricalDtype.is_dtype(self._df[column])
+                or pd.api.types.is_string_dtype(self._df[column])
+            ):
+                logging.warning(
+                    f"Cannot use '{column}' field of dtype '{dtype}' for tooltips."
+                )
+                object_fields.add(column)
+
+        return valid_tooltip_fields.difference(object_fields)
+
+    def _init_df(self):
+        self._df = (
+            pd.concat(c.to_dataframe().assign(label=c.label) for c in self._corpora)
             .convert_dtypes()
+            .reset_index()
         )
 
-        # FIXME: field names should not be hardcoded
-        # FIXME: populate rows from sub-corpora that have not provided 'year'
+        # Fill missing 'year' values from 'date' field:
+        self._df["year"].fillna(self._df["date"].dt.year, inplace=True)
 
-        self._df["year"]
-        if "date" in self._df.columns:
-            if "year" not in self._df.columns:
-                self._df["year"] = self._df["date"].dt.year
-            self._df["date"] = self._df["date"].dt.strftime("%Y-%m-%d")
+        self._df["date"] = self._df["date"].apply(pd.to_datetime)
 
-        for field in self._tooltip_fields:
+        # Validate required fields
+        for field, dtype in self.__REQUIRED_FIELDS.items():
             if field not in self._df.columns:
-                logging.warning(f"Tooltip field '{field}' not found.")
-
-        return self._df
-
-    def _init_scatter(self) -> jscatter.Scatter:
-        """Create the scatter plot."""
-
-        self._scatter = (
-            jscatter.Scatter(data=self._init_dataframe(), x="x", y="y")
-            .color(by=self._color_by)
-            .axes(False)
-            .tooltip(True, properties=self._tooltip_fields)
-        )
-        return self._scatter
+                raise ValueError(f"Required field '{field}' not found.")
+            if self._df[field].dtype != dtype:
+                raise ValueError(
+                    f"Field '{field}' has incorrect dtype: {self._df[field].dtype}"
+                )
+            if self._df[field].isna().any():
+                raise ValueError(f"Field '{field}' contains NaN values.")
 
     def _selected(self) -> list[int]:
         """Return the indices of currently selected/filtered/all rows.
@@ -222,83 +153,196 @@ class PlotWidgets:
             index = self._scatter.selection()
         else:
             try:
-                # filter() raises error if it has not been set yet
+                # this should be identical with the intersection of all _indices values
                 filter_indices = self._scatter.filter()
             except AttributeError:
+                # filter() raises error if it has not been set yet
                 logging.debug("No filter set.")
                 index = self._df.index
             else:
                 index = filter_indices if filter_indices.size > 0 else self._df.index
         return index
 
-    def _export_button(self) -> DownloadButton:
-        def selected_rows():
-            return self._df.iloc[self._selected()].to_csv(
-                index=False, quoting=csv.QUOTE_ALL
-            )
+    def with_corpora(self, corpora: list[Corpus], **kwargs) -> "JScatterVisualizer":
+        """Create a new JScatterVisualizer with the given corpora.
 
-        return DownloadButton(
-            filename="scatter_plot.csv", contents=selected_rows, description="Export"
-        )
+        Args:
+            corpora (list[Corpus]): The corpora to visualize.
+        KwArgs:
+            Arguments to pass to the constructor, overriding the current values.
 
-    def _top_words_button(self) -> widgets.Button:
-        def _show_top_words(b):
-            # TODO: create a link between self._df and the corpora
-            # TODO: keep/unify text column names
-            # Corpus.from_csv_stream(self._df.iloc[self._scatter.selection()].to_csv())
-            corpus = Corpus.from_dataframe(self._df[self._selected()])
-            top_words = self._keyword_extractor.top_words(corpus)
-            print(top_words)
+        Returns:
+            JScatterVisualizer: A new JScatterVisualizer object.
+        """
+        args = {
+            "categorical_fields": self._categorical_fields,
+            "continuous_filter_fields": self._continuous_fields,
+            "tooltip_fields": self._tooltip_fields,
+            "color_by": [self._color_by],
+            "keyword_extractor": self._keyword_extractor,
+        } | kwargs
+        return JScatterVisualizer(corpora, **args)
 
-        button = widgets.Button(
-            description="Top words",
-            disabled=False,
-            button_style="",  # 'success', 'info', 'warning', 'danger' or ''
-            tooltip="Show top words",
-        )
-        button.on_click(_show_top_words)
-        return button
-
-    def _init_widgets(self) -> tuple[jscatter.Scatter, widgets.HBox, widgets.HBox]:
-        """Create the widgets for filtering the scatter plot."""
-
-        category_filters: list[widgets.Widget] = [
-            widget
-            for field in self._categorical_fields
-            for widget in self._category_field_filter(field) or []
-        ]
+    def visualize(self) -> None:
+        """Display the initial visualization."""
         continuous_filters: list[widgets.Widget] = [
             widget
             for field in self._continuous_fields
-            for widget in self._continuous_field_filter(field) or []
+            for widget in self._plot_widgets._continuous_field_filter(field) or []
+        ]
+        category_filters: list[widgets.Widget] = [
+            widget
+            for field in self._categorical_fields
+            if field not in self.__EXCLUDE_FILTER_FIELDS
+            for widget in self._plot_widgets._category_field_filter(field) or []
         ]
 
-        self._widgets: tuple[
-            jscatter.Scatter, widgets.HBox, widgets.HBox, DownloadButton
-        ] = [
-            self._scatter.show(),
+        _widgets: list[widgets.Widget] = [self._scatter.show()] + [
             widgets.HBox(continuous_filters),
             widgets.HBox(category_filters),
-            self._export_button(),
-            self._top_words_button(),
+            self._plot_widgets._cluster_button(),
+            self._plot_widgets._export_button(),
+            # self._top_words_button(),
         ]
+        display(*_widgets)
 
-        return self._widgets
+    class PlotWidgets:
+        """A class for generating the widgets for a plot."""
 
-    def _category_field_filter(
-        self, field: str
-    ) -> Optional[tuple[widgets.SelectMultiple, widgets.Output]]:
-        """Create a selection widget for filtering on a categorical field.
+        def __init__(self, visualizer: "JScatterVisualizer"):
+            self._visualizer = visualizer
+            self._df = self._visualizer._df
 
-        Args:
-            field (str): The field to filter on.
+            self._indices = dict()
+            """The indices of the filtered rows per field."""
 
-        Returns:
-            widgets.VBox: A widget containing the selection widget and the output widget
-        """
-        # FIXME: this does not work for filtering by "top words"
+        def _scatter(self) -> jscatter.Scatter:
+            """Create the scatter plot."""
 
-        if field in self._df.columns:
+            # Catch 'object' type tooltip fields:
+            for column in self._visualizer._tooltip_fields:
+                if not (
+                    pd.CategoricalDtype.is_dtype(self._df[column])
+                    or pd.api.types.is_string_dtype(self._df[column])
+                ):
+                    if self._df.dtypes[column] == "object":
+                        raise RuntimeError(
+                            f"Cannot use '{column}' field with dtype 'object' for tooltips."
+                        )
+                    # try:
+                    #     ~np.isnan(self._df[column])
+                    # except TypeError as e:
+                    #     raise RuntimeError(
+                    #         f"'Cannot use {column}' field with dtype '{self._df.dtypes[column]}' for tooltips."
+                    #     ) from e
+
+            return (
+                jscatter.Scatter(data=self._visualizer._df, x="x", y="y")
+                .color(by=self._visualizer._color_by)
+                .axes(False)
+                .tooltip(True, properties=self._visualizer._tooltip_fields)
+                .legend(True)
+            )
+
+        def _cluster_button(self) -> widgets.Button:
+            """Create a button for clustering the data."""
+
+            # TODO: add selectors for clustering parameters
+
+            def cluster(button):
+                # TODO: add clustering parameters
+
+                clusters = list(
+                    Corpus.from_dataframe(
+                        self._df.iloc[self._visualizer._selected()],
+                        umap_model=self._visualizer._umap,
+                    ).cluster()
+                )
+
+                if self._visualizer._keyword_extractor:
+                    for c in clusters:
+                        c.top_words = self._visualizer._keyword_extractor.top_words(
+                            c, use_2d_embeddings=True
+                        )
+
+                # TODO: visualize in new tab widget
+                self._visualizer.with_corpora(clusters, tooltip_fields=None).visualize()
+
+                # display(*widgets, clear=True)
+
+            button = widgets.Button(
+                description="Cluster",
+                disabled=False,
+                button_style="",  # 'success', 'info', 'warning', 'danger' or ''
+                tooltip="Cluster the data",
+                # icon="check",  # (FontAwesome names without the `fa-` prefix)
+            )
+            button.on_click(cluster)
+
+            return button
+
+        def _return_button(self) -> widgets.Button:
+            def _return(button):
+                clear_output(wait=True)
+                widgets = self._plot._widgets + [self._cluster_button()]
+
+                display(*widgets, clear=True)
+
+            button = widgets.Button(
+                description="Return",
+                disabled=False,
+                button_style="",  # 'success', 'info', 'warning', 'danger' or ''
+                tooltip="Return to initial view",
+            )
+            button.on_click(_return)
+
+            return button
+
+        def _export_button(self) -> DownloadButton:
+            def selected_rows():
+                return self._df.iloc[self._selected()].to_csv(
+                    index=False, quoting=csv.QUOTE_ALL
+                )
+
+            return DownloadButton(
+                filename="scatter_plot.csv",
+                contents=selected_rows,
+                description="Export",
+            )
+
+        def _top_words_button(self) -> widgets.Button:
+            def _show_top_words(b):
+                # TODO: create a link between self._df and the corpora
+                # TODO: keep/unify text column names
+                # Corpus.from_csv_stream(self._df.iloc[self._scatter.selection()].to_csv())
+                corpus = Corpus.from_dataframe(self._df[self._selected()])
+                top_words = self._keyword_extractor.top_words(corpus)
+                print(top_words)
+
+            button = widgets.Button(
+                description="Top words",
+                disabled=False,
+                button_style="",  # 'success', 'info', 'warning', 'danger' or ''
+                tooltip="Show top words",
+            )
+            button.on_click(_show_top_words)
+            return button
+
+        def _category_field_filter(
+            self, field: str
+        ) -> Optional[tuple[widgets.SelectMultiple, widgets.Output]]:
+            """Create a selection widget for filtering on a categorical field.
+
+            Args:
+                field (str): The field to filter on.
+
+            Returns:
+                widgets.VBox: A widget containing the selection widget and the output widget
+            """
+            # FIXME: this does not work for filtering by "top words"
+
+            if field not in self._df.columns:
+                raise ValueError(f"'{field}' does not exist.")
             options = self._df[field].dropna().unique().tolist()
             if field in self._df.columns and 1 < len(options) <= 50:
                 selector = widgets.SelectMultiple(
@@ -318,22 +362,24 @@ class PlotWidgets:
 
                 return selector, selector_output
             else:
-                logging.warning(f"Skipping field {field} with {len(options)} option(s)")
+                logging.info(
+                    f"Skipping field {field} with {len(options)} option(s) for filtering."
+                )
                 return
-        else:
-            logging.warning(f"Skipping missing field: '{field}'.")
 
-    def _continuous_field_filter(
-        self, field: str
-    ) -> Optional[tuple[widgets.SelectionRangeSlider, widgets.Output]]:
-        """Create a selection widget for filtering on a continuous field.
+        def _continuous_field_filter(
+            self, field: str
+        ) -> Optional[tuple[widgets.SelectionRangeSlider, widgets.Output]]:
+            """Create a selection widget for filtering on a continuous field.
 
-        Args:
-            field (str): The field to filter on.
-        Returns:
-            widgets.VBox: A widget containing a RangeSlider widget and the output widget
-        """
-        if field in self._df.columns:
+            Args:
+                field (str): The field to filter on.
+            Returns:
+                widgets.VBox: A widget containing a RangeSlider widget and the output widget
+            """
+            if field not in self._df.columns:
+                raise ValueError(f"Field '{field}' not found.")
+
             min_value = self._df[field].min()
             max_value = self._df[field].max()
 
@@ -351,29 +397,29 @@ class PlotWidgets:
                 end = int(change.new[1])  # noqa: F841
 
                 self._filter(
-                    field, self._df.query(f"{field} > @start & {field} < @end").index
+                    field,
+                    self._df.query(f"{field} > @start & {field} < @end").index,
                 )
 
             selection.observe(handle_slider_change, names="value")
 
             return selection, selection_output
-        else:
-            logging.warning(f"Categorical field '{field}' not found, ignoring")
 
-    def _filter(self, field, index):
-        """Filter the scatter plot based on the given field and index.
+        def _filter(self, field, index):
+            """Filter the scatter plot based on the given field and index.
 
-        Intersect the indices per field to get the final index to filter in the plot.
+            Intersect the indices per field to get the final index to filter in the plot.
 
-        Args:
-            field (str): The field to filter on.
-            index (pd.RangeIndex): The index listing the rows to keep for this field
-        """
-        # TODO: include NA values for sub-corpora that don't have the field
-        self._indices[field] = index
+            Args:
+                field (str): The field to filter on.
+                index (pd.RangeIndex): The index listing the rows to keep for this field
+            """
+            # TODO: include NA values for sub-corpora that don't have the field
 
-        index = self._df.index
-        for _index in self._indices.values():
-            index = index.intersection(_index)
+            self._indices[field] = index
 
-        self._scatter.filter(index)
+            index = self._df.index
+            for _index in self._indices.values():
+                index = index.intersection(_index)
+
+            self._visualizer._scatter.filter(index)
