@@ -44,9 +44,9 @@ _CORPUS_DIRS: list[Path] = [
 try:
     CORPUS_DIR: Path = next(dir for dir in _CORPUS_DIRS if dir.is_dir())
     """The base directory in which corpora are stored."""
-    print(f"Using corpus directory: '{CORPUS_DIR}'")
+    logging.info(f"Using corpus directory: '{CORPUS_DIR}'")
 except StopIteration:
-    logging.error(f"No corpus directory found in {_CORPUS_DIRS}")
+    logging.warning(f"No local corpus directory found in {_CORPUS_DIRS}")
     CORPUS_DIR = Path(".")
 
 DEFAULT_LANGUAGE_MODEL: str = (
