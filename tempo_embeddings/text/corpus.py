@@ -114,7 +114,7 @@ class Corpus:
 
     @property
     def embeddings(self) -> Optional[np.ndarray]:
-        if all(p.embedding for p in self.passages):
+        if not any(p.embedding is None for p in self.passages):
             return np.array([p.embedding for p in self.passages])
         else:
             logging.warning("No embeddings available.")

@@ -35,7 +35,7 @@ class TestCorpus:
         expected = Corpus(test_passages[:2], None, umap_model=None)
         assert Corpus([test_passages[0]]) + Corpus([test_passages[1]]) == expected
 
-    def test_add_umap_fitted(self, corpus, caplog):
+    def test_add_umap_fitted(self, corpus):
         corpus2 = Corpus([Passage("test {i}") for i in range(5)])
 
         self.assert_umap_fitted(corpus, corpus2, None, does_not_raise())
