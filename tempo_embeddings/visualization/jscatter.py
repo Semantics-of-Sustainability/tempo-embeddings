@@ -1,6 +1,5 @@
 import csv
 import logging
-from collections import Counter
 from typing import Any, Optional
 
 import jscatter
@@ -51,7 +50,7 @@ class JScatterVisualizer:
         self._umap = corpora[0].umap
         """Common UMAP model; assuming all corpora have the same model."""
 
-        merged_corpus = sum(corpora, Corpus())
+        merged_corpus = Corpus.sum(*corpora)
         self._keyword_extractor = keyword_extractor or KeywordExtractor(
             merged_corpus, exclude_words=STOPWORDS
         )
@@ -80,10 +79,6 @@ class JScatterVisualizer:
         self._scatter = self._plot_widgets._scatter()
 
     def _validate_corpora(self, corpora):
-        labels = Counter(c.label for c in corpora)
-        if any(count > 1 for count in labels.values()):
-            raise ValueError("Corpora with the same label cannot be merged.")
-
         for column in self.__REQUIRED_FIELDS:
             if not all(column in c.to_dataframe().columns for c in corpora):
                 raise ValueError(f"Missing required field '{column}' in corpora.")

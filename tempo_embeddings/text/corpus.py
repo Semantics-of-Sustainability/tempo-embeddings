@@ -695,3 +695,11 @@ class Corpus:
                 yield Corpus(batch)
         else:
             yield Corpus(tuple(passages))
+
+    @classmethod
+    def sum(cls, *corpora) -> "Corpus":
+        labels = Counter(c.label for c in corpora)
+        if any(count > 1 for count in labels.values()):
+            raise ValueError("Corpora with the same label cannot be merged.")
+
+        return sum(corpora, Corpus())
