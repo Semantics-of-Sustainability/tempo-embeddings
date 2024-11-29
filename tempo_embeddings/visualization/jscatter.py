@@ -1,7 +1,7 @@
 import csv
 import logging
 from collections import Counter
-from typing import Any, Iterable, Optional
+from typing import Any, Optional
 
 import jscatter
 import pandas as pd
@@ -21,7 +21,7 @@ class JScatterVisualizer:
     """Required fields and dtype."""
 
     __DEFAULT_CONTINUOUS_FIELDS: set[str] = {"year"}
-    __EXCLUDE_FILTER_FIELDS: set[str] = {"month", "day"}
+    __EXCLUDE_FILTER_FIELDS: set[str] = {"month", "day", "year"}
     __EXCLUDE_TOOLTIP_FIELDS: set[str] = {"date"}
 
     def __init__(
@@ -59,20 +59,8 @@ class JScatterVisualizer:
         self._init_df()
 
         self._tooltip_fields: set[str] = self._valid_tooltip_fields(
-            tooltip_fields, merged_corpus
+            tooltip_fields or merged_corpus.metadata_fields()
         )
-        if "date" in self._tooltip_fields:
-            logging.warning("Skipping 'date' field from tooltip fields.")
-            self._tooltip_fields.remove("date")
-        # Catch 'object' type tooltip fields:
-        for column in self._tooltip_fields:
-            if self._df.dtypes[column] == "object" and not (
-                pd.CategoricalDtype.is_dtype(self._df[column])
-                or pd.api.types.is_string_dtype(self._df[column])
-            ):
-                logging.error(
-                    f"Cannot use '{column}' field with dtype 'object' for tooltips."
-                )
 
         self._continuous_fields = continuous_filter_fields
         self._categorical_fields = categorical_fields or (
@@ -100,25 +88,19 @@ class JScatterVisualizer:
             if not all(column in c.to_dataframe().columns for c in corpora):
                 raise ValueError(f"Missing required field '{column}' in corpora.")
 
-    def _valid_tooltip_fields(self, tooltip_fields: set[str], corpus: Corpus):
-        valid_tooltip_fields: Iterable[str] = (
-            tooltip_fields or corpus.metadata_fields()
-        ).difference(self.__EXCLUDE_TOOLTIP_FIELDS)
-
-        # Catch 'object' type tooltip fields:
-        object_fields = set()
-        for column in valid_tooltip_fields:
-            dtype = self._df.dtypes[column]
-            if dtype == "object" and not (
-                pd.CategoricalDtype.is_dtype(self._df[column])
-                or pd.api.types.is_string_dtype(self._df[column])
-            ):
-                logging.warning(
-                    f"Cannot use '{column}' field of dtype '{dtype}' for tooltips."
+    def _valid_tooltip_fields(self, tooltip_fields: set[str]) -> set[str]:
+        return (
+            set(tooltip_fields)
+            .intersection(self._df.columns)
+            .difference(self.__EXCLUDE_TOOLTIP_FIELDS)
+            .difference(
+                (
+                    column
+                    for column, dtype in self._df.dtypes.items()
+                    if dtype == "object"
                 )
-                object_fields.add(column)
-
-        return valid_tooltip_fields.difference(object_fields)
+            )
+        )
 
     def _init_df(self):
         self._df = (
@@ -219,23 +201,6 @@ class JScatterVisualizer:
         def _scatter(self) -> jscatter.Scatter:
             """Create the scatter plot."""
 
-            # Catch 'object' type tooltip fields:
-            for column in self._visualizer._tooltip_fields:
-                if not (
-                    pd.CategoricalDtype.is_dtype(self._df[column])
-                    or pd.api.types.is_string_dtype(self._df[column])
-                ):
-                    if self._df.dtypes[column] == "object":
-                        raise RuntimeError(
-                            f"Cannot use '{column}' field with dtype 'object' for tooltips."
-                        )
-                    # try:
-                    #     ~np.isnan(self._df[column])
-                    # except TypeError as e:
-                    #     raise RuntimeError(
-                    #         f"'Cannot use {column}' field with dtype '{self._df.dtypes[column]}' for tooltips."
-                    #     ) from e
-
             return (
                 jscatter.Scatter(data=self._visualizer._df, x="x", y="y")
                 .color(by=self._visualizer._color_by)
@@ -300,7 +265,7 @@ class JScatterVisualizer:
 
         def _export_button(self) -> DownloadButton:
             def selected_rows():
-                return self._df.iloc[self._selected()].to_csv(
+                return self._df.iloc[self._visualizer._selected()].to_csv(
                     index=False, quoting=csv.QUOTE_ALL
                 )
 
@@ -356,7 +321,10 @@ class JScatterVisualizer:
                 selector_output = widgets.Output()
 
                 def handle_change(change):
-                    self._filter(field, self._df.query(f"{field} in @change.new").index)
+                    filtered = self._df.loc[
+                        self._df[field].isin(change.new) | self._df[field].isna()
+                    ]
+                    self._filter(field, filtered.index)
 
                 selector.observe(handle_change, names="value")
 
@@ -393,13 +361,14 @@ class JScatterVisualizer:
             selection_output = widgets.Output()
 
             def handle_slider_change(change):
-                start = int(change.new[0])  # noqa: F841
-                end = int(change.new[1])  # noqa: F841
-
-                self._filter(
-                    field,
-                    self._df.query(f"{field} > @start & {field} < @end").index,
-                )
+                filtered = self._df.loc[
+                    (
+                        (self._df[field] >= int(change.new[0]))
+                        & (self._df[field] < int(change.new[1]))
+                    )
+                    | self._df[field].isna()
+                ]
+                self._filter(field, filtered.index)
 
             selection.observe(handle_slider_change, names="value")
 
@@ -414,8 +383,6 @@ class JScatterVisualizer:
                 field (str): The field to filter on.
                 index (pd.RangeIndex): The index listing the rows to keep for this field
             """
-            # TODO: include NA values for sub-corpora that don't have the field
-
             self._indices[field] = index
 
             index = self._df.index

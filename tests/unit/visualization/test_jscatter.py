@@ -73,6 +73,19 @@ class TestJScatterVisualizer:
             assert [type(w) for w in continous_filters] == expected_cont_widget_types
             assert [type(w) for w in categorical_filters] == expected_cat_widget_types
 
+    @pytest.mark.parametrize(
+        "tooltip_fields,expected",
+        [
+            (["provenance"], {"provenance"}),
+            (["provenance", "date"], {"provenance"}),
+            (["provenance", "unknown"], {"provenance"}),
+        ],
+    )
+    def test_valid_tooltip_fields(self, corpus, tooltip_fields, expected):
+        visualizer = JScatterVisualizer([corpus], tooltip_fields=tooltip_fields)
+
+        assert visualizer._tooltip_fields == expected
+
     @pytest.mark.skip(reason="TODO")
     def test_cluster_button(self, mock_display, corpus):
         visualizer = JScatterVisualizer([corpus])
