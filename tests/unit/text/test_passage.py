@@ -162,6 +162,15 @@ class TestPassage:
         assert Passage(text, metadata) == expected
 
     @pytest.mark.parametrize(
+        "embedding_compressed, exception",
+        [(None, None), ([1.0, 2.0], None), ([1, 2], pytest.raises(ValueError))],
+    )
+    def test_init_embeddings_compressed(self, embedding_compressed, exception):
+        with exception or does_not_raise():
+            passage = Passage("test", embedding_compressed=embedding_compressed)
+            assert passage.embedding_compressed == embedding_compressed
+
+    @pytest.mark.parametrize(
         "passage,expected",
         [
             (Passage("test"), ["test"]),
@@ -202,6 +211,29 @@ class TestPassage:
             assert (
                 Passage.from_weaviate_record(_object, collection=collection) == expected
             )
+
+    def test_from_df_row(self):
+        row = {
+            "text": "test text",
+            "year": 2022,
+            "date": "2022-01-01T00:00:00Z",
+            "sentence_index": 1,
+            "x": 1.0,
+            "y": 2.0,
+        }
+        expected = Passage(
+            "test text",
+            metadata={
+                "year": 2022,
+                "date": datetime.datetime(
+                    2022, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
+                ),
+                "sentence_index": 1,
+            },
+            embedding_compressed=[1.0, 2.0],
+        )
+
+        assert Passage.from_df_row(row, text_field="text") == expected
 
     @pytest.mark.parametrize(
         "passages,min_length,expected",

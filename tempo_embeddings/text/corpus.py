@@ -51,15 +51,20 @@ class Corpus:
 
     def __add__(self, other: "Corpus") -> "Corpus":
         if self.umap is other.umap:
-            logging.info("Merging corpora with identical UMAP models, reusing it.")
+            logging.info("Reusing commong UMAP model.")
             umap = self.umap
-        elif self._is_fitted(self.umap) or self._is_fitted(other.umap):
-            raise RuntimeError(
-                "UMAP model has been fitted on one of the corpora, cannot merge."
-            )
+        elif self._is_fitted(self.umap) and self._is_fitted(other.umap):
+            raise RuntimeError("Corpora have conflicting UMAP models.")
+        elif self._is_fitted(self.umap):
+            logging.info("Using UMAP model from first corpus.")
+            umap = self.umap
+        elif self._is_fitted(other.umap):
+            logging.info("Using UMAP model from second corpus.")
+            umap = other.umap
         else:
-            logging.info("Dropping UMAP model while merging corpora .")
+            logging.info("No UMAP model has been computed.")
             umap = None
+
         if self.top_words or other.top_words:
             logging.warning(
                 "Dropping existing top words: %s, %s", self.top_words, other.top_words
@@ -99,7 +104,7 @@ class Corpus:
 
     def _select_embeddings(self, use_2d_embeddings: bool):
         if use_2d_embeddings:
-            if not self._is_fitted(self.umap):
+            if self.embeddings_2d is None and not self._is_fitted(self.umap):
                 self.compress_embeddings()
             embeddings = self.embeddings_2d
         else:
@@ -108,8 +113,12 @@ class Corpus:
         return embeddings
 
     @property
-    def embeddings(self) -> np.ndarray:
-        return np.array([p.embedding for p in self.passages])
+    def embeddings(self) -> Optional[np.ndarray]:
+        if not any(p.embedding is None for p in self.passages):
+            return np.array([p.embedding for p in self.passages])
+        else:
+            logging.warning("No embeddings available.")
+            return None
 
     @embeddings.setter
     def embeddings(self, embeddings: np.ndarray):
@@ -119,6 +128,7 @@ class Corpus:
     @property
     def embeddings_2d(self) -> Optional[np.ndarray]:
         if any(p.embedding_compressed for p in self.passages):
+            # assuming all passages have embeddings_compressed if one has:
             return np.array([p.embedding_compressed for p in self.passages])
         else:
             logging.warning("No 2D embeddings available.")
@@ -178,6 +188,9 @@ class Corpus:
     def centroid(self, use_2d_embeddings: bool = True) -> np.ndarray:
         """The mean for all passage embeddings."""
         embeddings = self._select_embeddings(use_2d_embeddings)
+
+        assert embeddings is not None, "No embeddings available."
+
         return embeddings.mean(axis=0)
 
     def coordinates(self) -> pd.DataFrame:
@@ -250,8 +263,10 @@ class Corpus:
     def _fit_umap(self):
         if self._is_fitted(self._umap):
             raise RuntimeError("UMAP model has already been fitted.")
-        else:
-            self._umap.fit(self.embeddings)
+        elif self.embeddings is None:
+            raise RuntimeError("Cannot fit UMAP, no embeddings available.")
+
+        self._umap.fit(self.embeddings)
 
     ##### Clustering and Embedding methods #####
     def _clusters(self, embeddings, max_clusters: int, **hdbscan_args) -> list[int]:
@@ -339,10 +354,13 @@ class Corpus:
             cluster_passages[cluster].append(passage)
 
         for cluster, passages in cluster_passages.items():
-            label = OUTLIERS_LABEL if cluster == -1 else f"cluster {cluster}"
-            yield Corpus(
-                tuple(passages), label=f"{self.label}; {label}", umap_model=self._umap
+            label = "; ".join(
+                [
+                    self.label,
+                    OUTLIERS_LABEL if cluster == -1 else f"cluster {cluster}",
+                ]
             )
+            yield Corpus(tuple(passages), label=label, umap_model=self._umap)
 
     def compress_embeddings(self) -> np.ndarray:
         """Compress the embeddings of the corpus using UMAP and stores them in the corpus
@@ -565,6 +583,35 @@ class Corpus:
             )
         )
 
+    @classmethod
+    def from_dataframe(
+        cls,
+        df: pd.DataFrame,
+        *,
+        label: str = "",
+        umap_model: Optional[UMAP] = None,
+        text_field: str = "text",
+    ) -> "Corpus":
+        """Create a corpus from a Pandas DataFrame.
+
+        Args:
+            df: The DataFrame to create the corpus from.
+            label: The label of the corpus. Defaults to an empty string.
+            umap_model (optional): The UMAP model to use for compressing embeddings. Defaults to None (new model).
+            text_field: The name of the column containing the text. Defaults to 'text'.
+        Returns:
+            Corpus: The corpus created from the DataFrame.
+        """
+
+        return cls(
+            [
+                Passage.from_df_row(row, text_field=text_field)
+                for _, row in df.iterrows()
+            ],
+            label=label,
+            umap_model=umap_model,
+        )
+
     def save(self, filepath: Path):
         """Save the corpus to a file."""
 
@@ -648,3 +695,11 @@ class Corpus:
                 yield Corpus(batch)
         else:
             yield Corpus(tuple(passages))
+
+    @classmethod
+    def sum(cls, *corpora) -> "Corpus":
+        labels = Counter(c.label for c in corpora)
+        if any(count > 1 for count in labels.values()):
+            raise ValueError("Corpora with the same label cannot be merged.")
+
+        return sum(corpora, Corpus())

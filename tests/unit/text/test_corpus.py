@@ -14,15 +14,42 @@ from tempo_embeddings.text.passage import Passage
 
 
 class TestCorpus:
+    def assert_umap_fitted(
+        self, corpus1, corpus2, expected_umap, expected_exception, assert_symmetry=True
+    ):
+        with expected_exception:
+            merged = corpus1 + corpus2
+
+            if expected_umap is None:
+                assert merged.umap is not corpus1.umap
+                assert merged.umap is not corpus2.umap
+            else:
+                assert merged.umap is expected_umap
+
+        if assert_symmetry:
+            self.assert_umap_fitted(
+                corpus2, corpus1, expected_umap, expected_exception, False
+            )
+
     def test_add(self, test_passages):
         expected = Corpus(test_passages[:2], None, umap_model=None)
         assert Corpus([test_passages[0]]) + Corpus([test_passages[1]]) == expected
 
     def test_add_umap_fitted(self, corpus):
-        corpus._fit_umap()
+        corpus2 = Corpus([Passage("test {i}") for i in range(5)])
 
-        with pytest.raises(RuntimeError):
-            corpus + Corpus([Passage("test")])
+        self.assert_umap_fitted(corpus, corpus2, None, does_not_raise())
+
+        corpus._fit_umap()
+        self.assert_umap_fitted(corpus, corpus2, corpus.umap, does_not_raise())
+
+        corpus2.embeddings = np.random.rand(len(corpus2), 768)
+        corpus2._fit_umap()
+
+        self.assert_umap_fitted(corpus, corpus2, None, pytest.raises(RuntimeError))
+
+        corpus2._umap = corpus.umap
+        self.assert_umap_fitted(corpus, corpus2, corpus.umap, does_not_raise())
 
     @pytest.mark.parametrize(
         "passages, key, default_value, expected",
@@ -317,9 +344,21 @@ class TestCorpus:
 
     def test_select_embeddings(self, corpus):
         assert corpus._select_embeddings(use_2d_embeddings=False).shape == (5, 768)
-
         assert corpus._select_embeddings(use_2d_embeddings=True).shape == (5, 2)
         assert corpus._select_embeddings(use_2d_embeddings=False).shape == (5, 768)
+
+    @pytest.mark.parametrize(
+        "use_2d_embeddings, expected", [(True, np.ones((5, 2))), (False, None)]
+    )
+    def test_select_embeddings_compressed(self, corpus, use_2d_embeddings, expected):
+        for passage in corpus.passages:
+            # remove embeddings
+            passage.embedding = None
+            passage.embedding_compressed = [1.0, 1.0]
+
+        embeddings = corpus._select_embeddings(use_2d_embeddings=use_2d_embeddings)
+
+        np.testing.assert_array_equal(embeddings, expected)
 
     @pytest.mark.parametrize(
         "corpus",
@@ -423,6 +462,35 @@ class TestCorpus:
 
         pd.testing.assert_frame_equal(corpus.to_dataframe(), expected, atol=100.0)
 
+    def test_from_dataframe(self):
+        df = pd.DataFrame(
+            [
+                {
+                    "text": f"test text {str(i)}",
+                    "ID_DB": i,
+                    "year": 1950 + i,
+                    "x": 1.0 + i,
+                    "y": 2.0 + i,
+                }
+                for i in range(5)
+            ]
+        )
+
+        corpus = Corpus.from_dataframe(df, label="test label")
+
+        assert corpus == Corpus(
+            [
+                Passage(
+                    f"test text {str(i)}",
+                    metadata={"ID_DB": i, "year": 1950 + i},
+                    embedding_compressed=[1.0, 2.0],
+                )
+                for i in range(len(df))
+            ],
+            "test label",
+        )
+        np.testing.assert_equal(corpus.centroid(), [3.0, 4.0])
+
     @pytest.mark.parametrize(
         "corpus, expected_exception",
         [
@@ -479,3 +547,14 @@ class TestCorpus:
 
         with pytest.raises(RuntimeError):
             corpus._fit_umap()
+
+        with pytest.raises(RuntimeError):
+            corpus.passages[0]._embedding = None
+            corpus._fit_umap()
+
+    def test_sum(self, corpus):
+        with pytest.raises(ValueError):
+            Corpus.sum(corpus, corpus)
+
+        corpus2 = Corpus([Passage("test")])
+        assert Corpus.sum(corpus, corpus2) == sum([corpus, corpus2], Corpus())

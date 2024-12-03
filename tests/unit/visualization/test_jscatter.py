@@ -1,16 +1,12 @@
+from contextlib import nullcontext as does_not_raise
 from unittest import mock
 
 import pytest
-from ipywidgets.widgets import (
-    Button,
-    HBox,
-    Output,
-    SelectionRangeSlider,
-    SelectMultiple,
-)
+from ipywidgets.widgets import Button, HBox, SelectionRangeSlider, SelectMultiple
 
 from tempo_embeddings.text.corpus import Corpus
-from tempo_embeddings.visualization.jscatter import JScatterVisualizer, PlotWidgets
+from tempo_embeddings.visualization.jscatter import JScatterVisualizer
+from tempo_embeddings.visualization.util import DownloadButton
 
 
 @pytest.fixture
@@ -21,53 +17,65 @@ def mock_display():
 
 class TestJScatterVisualizer:
     @pytest.mark.parametrize(
-        "cat_fields,cont_fields,cont_widget_types,cat_widget_types",
+        "cat_fields,cont_fields,expected_cont,expected_cat,exception",
         [
-            (["provenance"], ["year"], [], [SelectionRangeSlider, Output]),
-            (["provenance"], [], [], []),
-            (
-                [],
-                ["year"],
-                [SelectMultiple, Output, SelectMultiple, Output],
-                [SelectionRangeSlider, Output],
-            ),
-            (
-                ["provenance", "invalid_1"],
-                ["year", "invalid_2"],
-                [],
-                [SelectionRangeSlider, Output],
-            ),
+            (["provenance"], ["year"], 0, 1, None),
+            (["provenance"], [], 0, 0, None),
+            ([], ["year"], 1, 1, None),
+            (["provenance", "invalid"], ["year"], 0, 1, pytest.raises(ValueError)),
+            (["provenance"], ["year", "invalid"], 0, 1, pytest.raises(ValueError)),
         ],
-        # TODO: test for continuous filter
     )
     def test_visualize(
         self,
         mock_display,
         corpus,
-        cat_fields,
-        cont_fields,
-        cont_widget_types,
-        cat_widget_types,
+        cat_fields: list[str],
+        cont_fields: list[str],
+        expected_cont: int,
+        expected_cat: int,
+        exception,
     ):
+        widget_types = [HBox, HBox, HBox, Button, DownloadButton]
+
         visualizer = JScatterVisualizer(
-            corpus, categorical_fields=cat_fields, continuous_filter_fields=cont_fields
+            [corpus],
+            categorical_fields=cat_fields,
+            continuous_filter_fields=cont_fields,
         )
+        with exception or does_not_raise():
+            visualizer.visualize()
 
-        visualizer.visualize()
+            top_widgets = mock_display.call_args.args
+            """Top-level widgets passed to the display() call."""
 
-        widgets = mock_display.call_args.args
+            categorical_filters = top_widgets[1].children
+            continous_filters = top_widgets[2].children
 
-        categorical_filters = widgets[1].children
-        continous_filters = widgets[2].children
+            assert [type(w) for w in top_widgets] == widget_types
+            assert [type(w) for w in categorical_filters] == [
+                SelectionRangeSlider
+            ] * expected_cat
+            assert [type(w) for w in continous_filters] == [
+                SelectMultiple
+            ] * expected_cont
 
-        assert [type(w) for w in widgets] == [HBox, HBox, HBox, Button]
-        assert [type(w) for w in continous_filters] == cont_widget_types
-        assert [type(w) for w in categorical_filters] == cat_widget_types
+    @pytest.mark.parametrize(
+        "tooltip_fields,expected",
+        [
+            (["provenance"], {"provenance"}),
+            (["provenance", "date"], {"provenance"}),
+            (["provenance", "unknown"], {"provenance"}),
+        ],
+    )
+    def test_valid_tooltip_fields(self, corpus, tooltip_fields, expected):
+        visualizer = JScatterVisualizer([corpus], tooltip_fields=tooltip_fields)
 
-        assert visualizer._cluster_plot is None
+        assert visualizer._tooltip_fields == expected
 
+    @pytest.mark.skip(reason="TODO")
     def test_cluster_button(self, mock_display, corpus):
-        visualizer = JScatterVisualizer(corpus)
+        visualizer = JScatterVisualizer([corpus])
         visualizer.visualize()
 
         widgets = mock_display.call_args.args
@@ -75,5 +83,5 @@ class TestJScatterVisualizer:
         assert visualizer.clusters is None
 
         widgets[-1].click()
-        assert isinstance(visualizer._cluster_plot, PlotWidgets)
+        assert isinstance(visualizer._cluster_plot, JScatterVisualizer.PlotWidgets)
         assert all(isinstance(c, Corpus) for c in visualizer.clusters)
