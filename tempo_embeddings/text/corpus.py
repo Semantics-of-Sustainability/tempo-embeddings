@@ -65,11 +65,6 @@ class Corpus:
             logging.info("No UMAP model has been computed.")
             umap = None
 
-        if self.top_words or other.top_words:
-            logging.warning(
-                "Dropping existing top words: %s, %s", self.top_words, other.top_words
-            )
-
         if self.label == other.label:
             label = self.label
         elif not self.label and not other.label:

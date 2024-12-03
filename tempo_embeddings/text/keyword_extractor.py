@@ -10,7 +10,7 @@ from sklearn.base import check_is_fitted
 from sklearn.exceptions import NotFittedError
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from ..settings import OUTLIERS_LABEL, STOPWORDS
+from ..settings import STOPWORDS
 from .corpus import Corpus
 
 
@@ -140,10 +140,7 @@ class KeywordExtractor:
 
         exclude_words: set[str] = {word.casefold() for word in (exclude_words or [])}
 
-        if corpus.label in (-1, OUTLIERS_LABEL):
-            words = [OUTLIERS_LABEL]
-        else:
-            words = self._tf_idf_words(corpus, use_2d_embeddings=use_2d_embeddings)
+        words = self._tf_idf_words(corpus, use_2d_embeddings=use_2d_embeddings)
 
         for word, score in words:
             if (
