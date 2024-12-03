@@ -356,10 +356,9 @@ class Corpus:
         for passage, cluster in zip(self.passages, passage_clusters, **STRICT):
             cluster_passages[cluster].append(passage)
 
-        label = self.label + "; " if self.label else ""
-        label += OUTLIERS_LABEL if cluster == -1 else f"cluster {cluster}"
-
         for cluster, passages in cluster_passages.items():
+            label = self.label + "; " if self.label else ""
+            label += OUTLIERS_LABEL if cluster == -1 else f"cluster {cluster}"
             yield Corpus(tuple(passages), label=label, umap_model=self._umap)
 
     def compress_embeddings(self) -> np.ndarray:

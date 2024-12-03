@@ -149,10 +149,11 @@ class TestCorpus:
         for cluster in clusters:
             assert all(passage in corpus.passages for passage in cluster.passages)
             assert len(cluster) >= min_cluster_size or cluster.is_outliers()
-            assert (
-                cluster.label.startswith("TestCorpus; cluster ")
-                or cluster.label == "TestCorpus; Outliers"
-            )
+
+        labels = sorted((cluster.label for cluster in clusters))
+        assert labels[0] == "TestCorpus; Outliers"
+        for i, label in enumerate(labels[1:]):
+            assert label == f"TestCorpus; cluster {i}"
 
     def test_is_outliers(self, corpus):
         assert not corpus.is_outliers()
