@@ -35,6 +35,22 @@ class TestCorpus:
         expected = Corpus(test_passages[:2], None, umap_model=None)
         assert Corpus([test_passages[0]]) + Corpus([test_passages[1]]) == expected
 
+    @pytest.mark.parametrize(
+        "label1, label2, expected",
+        [
+            (None, None, "None"),
+            ("label1", None, "label1"),
+            (None, "label2", "label2"),
+            ("label1", "label2", "label1 + label2"),
+            ("label", "label", "label"),
+        ],
+    )
+    def test_add_label(self, label1, label2, expected):
+        corpus1 = Corpus(label=label1)
+        corpus2 = Corpus(label=label2)
+
+        assert (corpus1 + corpus2).label == expected
+
     def test_add_umap_fitted(self, corpus):
         corpus2 = Corpus([Passage("test {i}") for i in range(5)])
 

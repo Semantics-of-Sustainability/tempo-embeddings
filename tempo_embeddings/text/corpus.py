@@ -65,16 +65,18 @@ class Corpus:
             logging.info("No UMAP model has been computed.")
             umap = None
 
-        if self.label == other.label:
+        if self._label == other._label:
             label = self.label
-        elif not self.label and not other.label:
+        elif self._label and other._label:
+            label = " + ".join((self.label, other.label))
+        elif not self._label and not other._label:
             label = None
-        elif self.label:
+        elif self._label:
             label = self.label
-        elif other.label:
+        elif other._label:
             label = other.label
         else:
-            label = " + ".join((self.label, other.label))
+            raise AssertionError("Uncovered label combination; this is a bug.")
 
         return Corpus(
             self._passages + other._passages, label=label or None, umap_model=umap
