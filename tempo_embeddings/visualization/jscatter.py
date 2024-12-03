@@ -50,7 +50,7 @@ class JScatterVisualizer:
         self._umap = corpora[0].umap
         """Common UMAP model; assuming all corpora have the same model."""
 
-        merged_corpus = Corpus.sum(*corpora)
+        merged_corpus = sum(corpora, Corpus())
         self._keyword_extractor = keyword_extractor or KeywordExtractor(
             merged_corpus, exclude_words=STOPWORDS
         )

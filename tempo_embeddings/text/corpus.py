@@ -70,9 +70,17 @@ class Corpus:
                 "Dropping existing top words: %s, %s", self.top_words, other.top_words
             )
 
-        label = " + ".join(
-            (label for label in (self.label, other.label) if label != str(None))
-        )
+        if self.label == other.label:
+            label = self.label
+        elif not self.label and not other.label:
+            label = None
+        elif self.label:
+            label = self.label
+        elif other.label:
+            label = other.label
+        else:
+            label = " + ".join((self.label, other.label))
+
         return Corpus(
             self._passages + other._passages, label=label or None, umap_model=umap
         )
@@ -353,13 +361,10 @@ class Corpus:
         for passage, cluster in zip(self.passages, passage_clusters, **STRICT):
             cluster_passages[cluster].append(passage)
 
+        label = self.label + "; " if self.label else ""
+        label += OUTLIERS_LABEL if cluster == -1 else f"cluster {cluster}"
+
         for cluster, passages in cluster_passages.items():
-            label = "; ".join(
-                [
-                    self.label,
-                    OUTLIERS_LABEL if cluster == -1 else f"cluster {cluster}",
-                ]
-            )
             yield Corpus(tuple(passages), label=label, umap_model=self._umap)
 
     def compress_embeddings(self) -> np.ndarray:
@@ -695,11 +700,3 @@ class Corpus:
                 yield Corpus(batch)
         else:
             yield Corpus(tuple(passages))
-
-    @classmethod
-    def sum(cls, *corpora) -> "Corpus":
-        labels = Counter(c.label for c in corpora)
-        if any(count > 1 for count in labels.values()):
-            raise ValueError("Corpora with the same label cannot be merged.")
-
-        return sum(corpora, Corpus())
