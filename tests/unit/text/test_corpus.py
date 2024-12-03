@@ -548,6 +548,10 @@ class TestCorpus:
         with pytest.raises(RuntimeError):
             corpus._fit_umap()
 
+        with pytest.raises(RuntimeError):
+            corpus.passages[0]._embedding = None
+            corpus._fit_umap()
+
     def test_sum(self, corpus):
         with pytest.raises(ValueError):
             Corpus.sum(corpus, corpus)

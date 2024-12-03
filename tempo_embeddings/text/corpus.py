@@ -189,8 +189,8 @@ class Corpus:
         """The mean for all passage embeddings."""
         embeddings = self._select_embeddings(use_2d_embeddings)
 
-        if embeddings is None:
-            raise RuntimeError("No embeddings available.")
+        assert embeddings is not None, "No embeddings available."
+
         return embeddings.mean(axis=0)
 
     def coordinates(self) -> pd.DataFrame:

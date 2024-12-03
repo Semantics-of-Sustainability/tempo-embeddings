@@ -162,6 +162,15 @@ class TestPassage:
         assert Passage(text, metadata) == expected
 
     @pytest.mark.parametrize(
+        "embedding_compressed, exception",
+        [(None, None), ([1.0, 2.0], None), ([1, 2], pytest.raises(ValueError))],
+    )
+    def test_init_embeddings_compressed(self, embedding_compressed, exception):
+        with exception or does_not_raise():
+            passage = Passage("test", embedding_compressed=embedding_compressed)
+            assert passage.embedding_compressed == embedding_compressed
+
+    @pytest.mark.parametrize(
         "passage,expected",
         [
             (Passage("test"), ["test"]),
