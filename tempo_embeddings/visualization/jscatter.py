@@ -209,7 +209,7 @@ class JScatterVisualizer:
 
             # TODO: add selectors for clustering parameters
 
-            def cluster(button):
+            def cluster(button):  # pragma: no cover
                 # TODO: add clustering parameters
 
                 clusters = list(
