@@ -163,20 +163,18 @@ class JScatterVisualizer:
     def visualize(self) -> None:
         """Display the initial visualization."""
         continuous_filters: list[widgets.Widget] = [
-            widget
+            self._plot_widgets._continuous_field_filter(field)
             for field in self._continuous_fields
-            for widget in self._plot_widgets._continuous_field_filter(field) or []
         ]
         category_filters: list[widgets.Widget] = [
-            widget
+            self._plot_widgets._category_field_filter(field)
             for field in self._categorical_fields
             if field not in self.__EXCLUDE_FILTER_FIELDS
-            for widget in self._plot_widgets._category_field_filter(field) or []
         ]
 
         _widgets: list[widgets.Widget] = [self._scatter.show()] + [
             widgets.HBox(continuous_filters),
-            widgets.HBox(category_filters),
+            widgets.HBox([widget for widget in category_filters if widget is not None]),
             self._plot_widgets._cluster_button(),
             self._plot_widgets._export_button(),
             # self._top_words_button(),
@@ -185,6 +183,8 @@ class JScatterVisualizer:
 
     class PlotWidgets:
         """A class for generating the widgets for a plot."""
+
+        __SHOW_ALL: str = "<SHOW ALL>"
 
         def __init__(self, visualizer: "JScatterVisualizer"):
             self._visualizer = visualizer
@@ -304,26 +304,27 @@ class JScatterVisualizer:
             if field not in self._df.columns:
                 raise ValueError(f"'{field}' does not exist.")
             options = self._df[field].dropna().unique().tolist()
+
             if field in self._df.columns and 1 < len(options) <= 50:
                 selector = widgets.SelectMultiple(
-                    options=options,
-                    value=options,  # TODO: filter out outliers
+                    options=[self.__SHOW_ALL] + options,
+                    value=[self.__SHOW_ALL],  # TODO: filter out outliers
                     description=field,
                     layout={"width": "max-content"},
-                    rows=min(len(options), 10),
+                    rows=min(len(options) + 1, 10),
                 )
 
-                selector_output = widgets.Output()
-
                 def handle_change(change):
-                    filtered = self._df.loc[
-                        self._df[field].isin(change.new) | self._df[field].isna()
-                    ]
+                    if self.__SHOW_ALL in change.new:
+                        filtered = self._df
+                    else:
+                        filtered = self._df.loc[self._df[field].isin(change.new)]
+
                     self._filter(field, filtered.index)
 
                 selector.observe(handle_change, names="value")
 
-                return selector, selector_output
+                return selector
             else:
                 logging.info(
                     f"Skipping field {field} with {len(options)} option(s) for filtering."
@@ -353,8 +354,6 @@ class JScatterVisualizer:
                 continuous_update=True,
             )
 
-            selection_output = widgets.Output()
-
             def handle_slider_change(change):
                 filtered = self._df.loc[
                     (
@@ -367,7 +366,7 @@ class JScatterVisualizer:
 
             selection.observe(handle_slider_change, names="value")
 
-            return selection, selection_output
+            return selection
 
         def _filter(self, field, index):
             """Filter the scatter plot based on the given field and index.

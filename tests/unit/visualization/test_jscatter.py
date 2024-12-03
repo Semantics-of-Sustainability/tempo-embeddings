@@ -2,13 +2,7 @@ from contextlib import nullcontext as does_not_raise
 from unittest import mock
 
 import pytest
-from ipywidgets.widgets import (
-    Button,
-    HBox,
-    Output,
-    SelectionRangeSlider,
-    SelectMultiple,
-)
+from ipywidgets.widgets import Button, HBox, SelectionRangeSlider, SelectMultiple
 
 from tempo_embeddings.text.corpus import Corpus
 from tempo_embeddings.visualization.jscatter import JScatterVisualizer
@@ -43,8 +37,6 @@ class TestJScatterVisualizer:
         exception,
     ):
         widget_types = [HBox, HBox, HBox, Button, DownloadButton]
-        cat_types = [SelectionRangeSlider, Output]
-        cont_types = [SelectMultiple, Output]
 
         visualizer = JScatterVisualizer(
             [corpus],
@@ -54,14 +46,19 @@ class TestJScatterVisualizer:
         with exception or does_not_raise():
             visualizer.visualize()
 
-            widgets = mock_display.call_args.args
+            top_widgets = mock_display.call_args.args
+            """Top-level widgets passed to the display() call."""
 
-            categorical_filters = widgets[1].children
-            continous_filters = widgets[2].children
+            categorical_filters = top_widgets[1].children
+            continous_filters = top_widgets[2].children
 
-            assert [type(w) for w in widgets] == widget_types
-            assert [type(w) for w in categorical_filters] == cat_types * expected_cat
-            assert [type(w) for w in continous_filters] == cont_types * expected_cont
+            assert [type(w) for w in top_widgets] == widget_types
+            assert [type(w) for w in categorical_filters] == [
+                SelectionRangeSlider
+            ] * expected_cat
+            assert [type(w) for w in continous_filters] == [
+                SelectMultiple
+            ] * expected_cont
 
     @pytest.mark.parametrize(
         "tooltip_fields,expected",
