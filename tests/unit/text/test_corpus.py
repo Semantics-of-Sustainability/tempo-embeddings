@@ -35,6 +35,22 @@ class TestCorpus:
         expected = Corpus(test_passages[:2], None, umap_model=None)
         assert Corpus([test_passages[0]]) + Corpus([test_passages[1]]) == expected
 
+    @pytest.mark.parametrize(
+        "label1, label2, expected",
+        [
+            (None, None, "None"),
+            ("label1", None, "label1"),
+            (None, "label2", "label2"),
+            ("label1", "label2", "label1 + label2"),
+            ("label", "label", "label"),
+        ],
+    )
+    def test_add_label(self, label1, label2, expected):
+        corpus1 = Corpus(label=label1)
+        corpus2 = Corpus(label=label2)
+
+        assert (corpus1 + corpus2).label == expected
+
     def test_add_umap_fitted(self, corpus):
         corpus2 = Corpus([Passage("test {i}") for i in range(5)])
 
@@ -149,10 +165,11 @@ class TestCorpus:
         for cluster in clusters:
             assert all(passage in corpus.passages for passage in cluster.passages)
             assert len(cluster) >= min_cluster_size or cluster.is_outliers()
-            assert (
-                cluster.label.startswith("TestCorpus; cluster ")
-                or cluster.label == "TestCorpus; Outliers"
-            )
+
+        labels = sorted((cluster.label for cluster in clusters))
+        assert labels[0] == "TestCorpus; Outliers"
+        for i, label in enumerate(labels[1:]):
+            assert label == f"TestCorpus; cluster {i}"
 
     def test_is_outliers(self, corpus):
         assert not corpus.is_outliers()
@@ -551,10 +568,3 @@ class TestCorpus:
         with pytest.raises(RuntimeError):
             corpus.passages[0]._embedding = None
             corpus._fit_umap()
-
-    def test_sum(self, corpus):
-        with pytest.raises(ValueError):
-            Corpus.sum(corpus, corpus)
-
-        corpus2 = Corpus([Passage("test")])
-        assert Corpus.sum(corpus, corpus2) == sum([corpus, corpus2], Corpus())

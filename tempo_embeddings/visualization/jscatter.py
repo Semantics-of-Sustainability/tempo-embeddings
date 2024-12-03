@@ -50,7 +50,7 @@ class JScatterVisualizer:
         self._umap = corpora[0].umap
         """Common UMAP model; assuming all corpora have the same model."""
 
-        merged_corpus = Corpus.sum(*corpora)
+        merged_corpus = sum(corpora, Corpus())
         self._keyword_extractor = keyword_extractor or KeywordExtractor(
             merged_corpus, exclude_words=STOPWORDS
         )
@@ -290,14 +290,14 @@ class JScatterVisualizer:
 
         def _category_field_filter(
             self, field: str
-        ) -> Optional[tuple[widgets.SelectMultiple, widgets.Output]]:
+        ) -> Optional[widgets.SelectMultiple]:
             """Create a selection widget for filtering on a categorical field.
 
             Args:
                 field (str): The field to filter on.
 
             Returns:
-                widgets.VBox: A widget containing the selection widget and the output widget
+                widgets.SelectMultiple: A widget containing the selection widget or None if the field is not suitable for filtering.
             """
             # FIXME: this does not work for filtering by "top words"
 
@@ -324,22 +324,21 @@ class JScatterVisualizer:
 
                 selector.observe(handle_change, names="value")
 
-                return selector
+                widget = selector
             else:
                 logging.info(
                     f"Skipping field {field} with {len(options)} option(s) for filtering."
                 )
-                return
+                widget = None
+            return widget
 
-        def _continuous_field_filter(
-            self, field: str
-        ) -> Optional[tuple[widgets.SelectionRangeSlider, widgets.Output]]:
+        def _continuous_field_filter(self, field: str) -> widgets.SelectionRangeSlider:
             """Create a selection widget for filtering on a continuous field.
 
             Args:
                 field (str): The field to filter on.
             Returns:
-                widgets.VBox: A widget containing a RangeSlider widget and the output widget
+                widgets.SelectionRangeSlider: A widget containing a RangeSlider
             """
             if field not in self._df.columns:
                 raise ValueError(f"Field '{field}' not found.")
