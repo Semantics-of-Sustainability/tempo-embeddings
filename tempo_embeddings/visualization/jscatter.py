@@ -65,7 +65,7 @@ class JScatterVisualizer:
         *,
         container: Optional[JScatterContainer] = None,
         categorical_fields: Optional[list[str]] = None,
-        continuous_filter_fields: list[str] = _DEFAULT_CONTINUOUS_FIELDS,
+        continuous_fields: list[str] = _DEFAULT_CONTINUOUS_FIELDS,
         tooltip_fields: list[str] = None,
         color_by: list[str] = ["cluster", "label"],
         keyword_extractor: Optional[KeywordExtractor] = None,
@@ -100,7 +100,7 @@ class JScatterVisualizer:
             tooltip_fields or merged_corpus.metadata_fields()
         )
 
-        self._continuous_fields = continuous_filter_fields
+        self._continuous_fields = continuous_fields
         self._categorical_fields = categorical_fields or (
             merged_corpus.metadata_fields() | {"label"} - set(self._continuous_fields)
         )
@@ -186,7 +186,7 @@ class JScatterVisualizer:
         """
         visualizer_args = {
             "categorical_fields": self._categorical_fields,
-            "continuous_filter_fields": self._continuous_fields,
+            "continuous_fields": self._continuous_fields,
             "tooltip_fields": self._tooltip_fields,
             "color_by": [self._color_by],
             "keyword_extractor": self._keyword_extractor,
@@ -196,7 +196,7 @@ class JScatterVisualizer:
     def _cluster_button(self) -> widgets.Button:
         """Create a button for clustering the data.
 
-        This button triggers the creation of a new set of corpora (the clusters) and adds a new visualizer to the JScatterContainer instanceß.
+        This button triggers the creation of a new set of corpora (the clusters) and adds a new visualizer to the JScatterContainer instance.
         That is why this method is part of the JScatterVisualizer class, not the PlotWidgets class.
         """
 

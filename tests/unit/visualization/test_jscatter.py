@@ -78,7 +78,7 @@ class TestJScatterVisualizer:
         visualizer = JScatterVisualizer(
             [corpus],
             categorical_fields=cat_fields,
-            continuous_filter_fields=cont_fields,
+            continuous_fields=cont_fields,
         )
         with exception or does_not_raise():
             top_widgets = visualizer.get_widgets()
@@ -106,6 +106,20 @@ class TestJScatterVisualizer:
         visualizer = JScatterVisualizer([corpus], tooltip_fields=tooltip_fields)
 
         assert visualizer._tooltip_fields == expected
+
+    def test_with_corpora(self, corpus):
+        visualizer = JScatterVisualizer([corpus])
+
+        new_visualizer = visualizer.with_corpora([corpus] * 2)
+
+        for arg in (
+            "_categorical_fields",
+            "_continuous_fields",
+            "_tooltip_fields",
+            "_color_by",
+            "_keyword_extractor",
+        ):
+            assert getattr(new_visualizer, arg) == getattr(visualizer, arg)
 
     @pytest.mark.skip(reason="TODO")
     def test_cluster_button(self, mock_display, corpus):
