@@ -30,7 +30,7 @@ class JScatterContainer:
 
         self.add_tab(self._visualizer)
 
-    def add_tab(self, visualizer: list[Corpus], *, title: Optional[str] = None):
+    def add_tab(self, visualizer: "JScatterVisualizer", *, title: Optional[str] = None):
         if title is None:
             title = (
                 f"Clusters {len(self._tab.children)}"
@@ -38,7 +38,7 @@ class JScatterContainer:
                 else "Full Corpus"
             )
 
-        self._tab.children = list(self._tab.children) + [
+        self._tab.children = (list(self._tab.children) or []) + [
             widgets.VBox(visualizer.get_widgets())
         ]
 
@@ -63,7 +63,7 @@ class JScatterVisualizer:
         self,
         corpora: list[Corpus],
         *,
-        container: JScatterContainer,
+        container: Optional[JScatterContainer] = None,
         categorical_fields: Optional[list[str]] = None,
         continuous_filter_fields: list[str] = _DEFAULT_CONTINUOUS_FIELDS,
         tooltip_fields: list[str] = None,
@@ -162,10 +162,16 @@ class JScatterVisualizer:
 
     def get_widgets(self) -> list[widgets.Widget]:
         """Create all widgets"""
-        return self._plot_widgets.get_widgets(
+        _widgets = self._plot_widgets.get_widgets(
             continuous_fields=self._continuous_fields,
             categorical_fields=self._categorical_fields,
-        ) + [self._cluster_button()]
+        )
+        if self._container is None:
+            logging.warning("No container set, skipping cluster button.")
+        else:
+            _widgets.append(self._cluster_button())
+
+        return _widgets
 
     def with_corpora(self, corpora: list[Corpus], **kwargs) -> "JScatterVisualizer":
         """Create a new JScatterVisualizer with the given corpora.
