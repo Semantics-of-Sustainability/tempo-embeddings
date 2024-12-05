@@ -592,6 +592,7 @@ class Corpus:
         label: str = "",
         umap_model: Optional[UMAP] = None,
         text_field: str = "text",
+        drop_columns: list[str] = ["level_0", "distance_to_centroid"],
     ) -> "Corpus":
         """Create a corpus from a Pandas DataFrame.
 
@@ -607,7 +608,7 @@ class Corpus:
         return cls(
             [
                 Passage.from_df_row(row, text_field=text_field)
-                for _, row in df.iterrows()
+                for _, row in df.drop(columns=drop_columns, errors="ignore").iterrows()
             ],
             label=label,
             umap_model=umap_model,
