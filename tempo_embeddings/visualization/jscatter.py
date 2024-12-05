@@ -301,7 +301,7 @@ class JScatterVisualizer:
 
             if field not in self._df.columns:
                 raise ValueError(f"'{field}' does not exist in the data.")
-            options = self._df[field].dropna().unique().tolist()
+            options = sorted(self._df[field].dropna().unique().tolist())
 
             if field in self._df.columns and 1 < len(options) <= 50:
                 selector = widgets.SelectMultiple(
