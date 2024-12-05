@@ -250,7 +250,7 @@ class JScatterVisualizer:
                 .legend(True)
             )
 
-        def export_button(self) -> DownloadButton:
+        def _export_button(self) -> DownloadButton:
             def selected_rows():
                 return self._df.iloc[self.selected()].to_csv(
                     index=False, quoting=csv.QUOTE_ALL
@@ -424,6 +424,6 @@ class JScatterVisualizer:
                 widgets.HBox(
                     [widget for widget in category_filters if widget is not None]
                 ),
-                self.export_button(),
+                self._export_button(),
                 # self._top_words_button(),
             ]
