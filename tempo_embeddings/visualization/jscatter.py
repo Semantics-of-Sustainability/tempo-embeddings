@@ -173,6 +173,10 @@ class JScatterVisualizer:
             logging.warning("No container set, skipping cluster button.")
         else:
             _widgets.append(self._cluster_button())
+        if self._keyword_extractor is None:
+            logging.warning("No keyword extractor set, skipping top words button.")
+        else:
+            _widgets.append(self._top_words_button())
 
         return _widgets
 
@@ -231,6 +235,28 @@ class JScatterVisualizer:
 
         return button
 
+    def _top_words_button(self) -> widgets.Button:
+        if not self._keyword_extractor:
+            raise RuntimeError("No keyword extractor set.")
+
+        def _show_top_words(b):
+            corpus = Corpus.from_dataframe(
+                self._df.iloc[self._plot_widgets.selected()], umap_model=self._umap
+            )
+            top_words = self._keyword_extractor.top_words(
+                corpus, use_2d_embeddings=True
+            )
+            print(top_words)
+
+        button = widgets.Button(
+            description="Top words",
+            disabled=False,
+            button_style="",  # 'success', 'info', 'warning', 'danger' or ''
+            tooltip="Show top words",
+        )
+        button.on_click(_show_top_words)
+        return button
+
     class PlotWidgets:
         """A class for generating the widgets for a plot."""
 
@@ -270,24 +296,6 @@ class JScatterVisualizer:
                 contents=selected_rows,
                 description="Export",
             )
-
-        def _top_words_button(self) -> widgets.Button:
-            def _show_top_words(b):
-                # TODO: create a link between self._df and the corpora
-                # TODO: keep/unify text column names
-                # Corpus.from_csv_stream(self._df.iloc[self._scatter_plot.selection()].to_csv())
-                corpus = Corpus.from_dataframe(self._df[self.selected()])
-                top_words = self._keyword_extractor.top_words(corpus)
-                print(top_words)
-
-            button = widgets.Button(
-                description="Top words",
-                disabled=False,
-                button_style="",  # 'success', 'info', 'warning', 'danger' or ''
-                tooltip="Show top words",
-            )
-            button.on_click(_show_top_words)
-            return button
 
         def _category_field_filter(
             self, field: str
@@ -434,5 +442,4 @@ class JScatterVisualizer:
                     [widget for widget in category_filters if widget is not None]
                 ),
                 self._export_button(),
-                # self._top_words_button(),
             ]
