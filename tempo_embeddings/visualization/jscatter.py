@@ -145,7 +145,10 @@ class JScatterVisualizer:
         )
 
         # Fill missing 'year' values from 'date' field:
-        self._df.fillna({"year": self._df["date"].dt.year}, inplace=True)
+        if "year" not in self._df.columns:
+            self._df["year"] = self._df["date"].dt.year
+        else:
+            self._df.fillna({"year": self._df["date"].dt.year}, inplace=True)
 
         self._df["date"] = self._df["date"].apply(pd.to_datetime)
 
