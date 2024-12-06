@@ -212,7 +212,7 @@ class JScatterVisualizer:
 
             clusters = list(
                 Corpus.from_dataframe(
-                    self._df.iloc[self._plot_widgets.selected()], umap_model=self._umap
+                    self._df.loc[self._plot_widgets.selected()], umap_model=self._umap
                 ).cluster()
             )
 
@@ -241,7 +241,7 @@ class JScatterVisualizer:
 
         def _show_top_words(b):
             corpus = Corpus.from_dataframe(
-                self._df.iloc[self._plot_widgets.selected()], umap_model=self._umap
+                self._df.loc[self._plot_widgets.selected()], umap_model=self._umap
             )
             top_words = self._keyword_extractor.top_words(
                 corpus, use_2d_embeddings=True
