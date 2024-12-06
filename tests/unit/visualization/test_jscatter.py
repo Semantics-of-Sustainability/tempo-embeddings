@@ -1,10 +1,13 @@
+import datetime
 from contextlib import nullcontext as does_not_raise
 from unittest import mock
 
+import pandas as pd
 import pytest
 from ipywidgets.widgets import Button, HBox, SelectionRangeSlider, SelectMultiple, VBox
 
 from tempo_embeddings.text.corpus import Corpus
+from tempo_embeddings.text.passage import Passage
 from tempo_embeddings.visualization.jscatter import (
     JScatterContainer,
     JScatterVisualizer,
@@ -34,6 +37,7 @@ class TestJScatterContainer:
             HBox,
             DownloadButton,
             Button,
+            Button,
         ]
 
     @pytest.mark.parametrize("title", [None, "Test Title"])
@@ -53,6 +57,50 @@ class TestJScatterContainer:
 
 
 class TestJScatterVisualizer:
+    @pytest.mark.skip(reason="TODO: correct expected values")
+    def test_init_df(self, test_passages):
+        test_passages[0].embedding_compressed = [1.1, 2.2]
+        del test_passages[0].metadata["year"]  # test automatic filling of "year" field
+
+        corpus = Corpus(test_passages[:1], label="TestCorpus")
+
+        expected_df = pd.DataFrame(
+            [
+                {
+                    "index": 0,
+                    "text": "test text 0",
+                    "ID_DB": "0f530c9dc158fa3617bbba2cc4608a1787f5c6d3511c31f63e30b52559ef6984",
+                    "highlight_start": 1,
+                    "highlight_end": 3,
+                    "year": 1950,
+                    "date": datetime.date(1950, 1, 1),
+                    "provenance": "test_file",
+                    "x": 1.1,
+                    "y": 2.2,
+                    "corpus": "TestCorpus",
+                    "distance_to_centroid": None,
+                    "label": "TestCorpus",
+                }
+            ]
+        ).convert_dtypes()
+
+        pd.testing.assert_frame_equal(
+            JScatterVisualizer([corpus])._df.convert_dtypes(), expected_df
+        )
+
+    def test_init_df_year(self):
+        year = 1950
+        corpus = Corpus(
+            passages=[
+                Passage(
+                    text="test text",
+                    metadata={"date": datetime.date(year, 1, 1)},
+                    embedding_compressed=[1.1, 2.2],
+                )
+            ]
+        )
+        assert JScatterVisualizer([corpus])._df["year"][0] == year
+
     @pytest.mark.parametrize(
         "cat_fields,cont_fields,expected_cont,expected_cat,exception",
         [
@@ -73,7 +121,7 @@ class TestJScatterVisualizer:
         exception,
     ):
         # No Cluster button due to a lack of container
-        expected_widget_types = [HBox, HBox, HBox, DownloadButton]
+        expected_widget_types = [HBox, HBox, HBox, DownloadButton, Button]
 
         visualizer = JScatterVisualizer(
             [corpus],
