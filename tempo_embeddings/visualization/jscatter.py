@@ -173,10 +173,8 @@ class JScatterVisualizer:
             logging.warning("No container set, skipping cluster button.")
         else:
             _widgets.append(self._cluster_button())
-        if self._keyword_extractor is None:
-            logging.warning("No keyword extractor set, skipping top words button.")
-        else:
-            _widgets.append(self._top_words_button())
+
+        _widgets.append(self._top_words_button())
 
         return _widgets
 
@@ -216,11 +214,10 @@ class JScatterVisualizer:
                 ).cluster()
             )
 
-            if self._keyword_extractor:
-                for c in clusters:
-                    c.top_words = self._keyword_extractor.top_words(
-                        c, use_2d_embeddings=True
-                    )
+            for c in clusters:
+                c.top_words = self._keyword_extractor.top_words(
+                    c, use_2d_embeddings=True
+                )
 
             self._container.add_tab(self.with_corpora(clusters, tooltip_fields=None))
 
@@ -236,9 +233,6 @@ class JScatterVisualizer:
         return button
 
     def _top_words_button(self) -> widgets.Button:
-        if not self._keyword_extractor:
-            raise RuntimeError("No keyword extractor set.")
-
         def _show_top_words(b):
             corpus = Corpus.from_dataframe(
                 self._df.loc[self._plot_widgets.selected()], umap_model=self._umap
