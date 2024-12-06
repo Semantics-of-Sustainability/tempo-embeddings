@@ -233,7 +233,7 @@ class JScatterVisualizer:
         return button
 
     def _top_words_button(self) -> widgets.Button:
-        def _show_top_words(b):
+        def _show_top_words(b):  # pragma: no cover
             corpus = Corpus.from_dataframe(
                 self._df.loc[self._plot_widgets.selected()], umap_model=self._umap
             )
