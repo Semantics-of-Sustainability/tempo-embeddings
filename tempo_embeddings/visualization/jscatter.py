@@ -233,7 +233,7 @@ class JScatterVisualizer:
 
         return button
 
-    def _plot_by_label_button(self) -> widgets.Button:
+    def _plot_by_label_button(self) -> widgets.Button:  # pragma: no cover
         field = "year"
         window_size = 5
 
