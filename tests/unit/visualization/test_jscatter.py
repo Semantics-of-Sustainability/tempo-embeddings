@@ -7,6 +7,7 @@ import pytest
 from ipywidgets.widgets import (
     BoundedIntText,
     Button,
+    Dropdown,
     HBox,
     SelectionRangeSlider,
     SelectMultiple,
@@ -188,7 +189,8 @@ class TestJScatterVisualizer:
         visualizer = JScatterVisualizer([corpus])
         widgets = visualizer.get_widgets()
 
-        assert [type(w) for w in widgets[-1].children] == [Button, BoundedIntText]
+        expected_widgets = [Button, BoundedIntText, Dropdown]
+        assert [type(w) for w in widgets[-1].children] == expected_widgets
 
         button = widgets[-1].children[0]
 
