@@ -233,25 +233,36 @@ class JScatterVisualizer:
 
         return button
 
-    def _plot_by_label_button(self) -> widgets.Button:  # pragma: no cover
+    def _plot_by_label_button(self) -> widgets.Button:
         field = "year"
-        window_size = 5
+        groups_field = "label"
 
+        window_size_slider = widgets.BoundedIntText(
+            value=5,
+            min=1,
+            step=1,
+            description="Rolling Window over Years:",
+            layout={"width": "max-content"},
+        )
         corpus_per_year = self._df[field].value_counts()
 
         def _plot_labels(b):
             for label, group in self._df.loc[self._plot_widgets.selected()].groupby(
-                "label"
+                groups_field
             ):
+                window = window_size_slider.value
                 if label != OUTLIERS_LABEL:
                     s = (
                         (group[field].value_counts() / corpus_per_year)
                         .sort_index()
-                        .rolling(window_size)
+                        .rolling(window)
                         .mean()
                     )
                     s.name = label
                     ax = s.plot(kind="line", legend=label)
+                    ax.set_title(
+                        f"Relative Frequency of {field} by {groups_field} (Rolling Window over {window} {field}s)"
+                    )
                     ax.set_xlabel(field)
                     ax.set_ylabel("Relative Frequency")
 
@@ -260,7 +271,8 @@ class JScatterVisualizer:
             tooltip="Plot (selected) corpora frequencies over years by Corpus",
         )
         button.on_click(_plot_labels)
-        return button
+
+        return widgets.HBox((button, window_size_slider))
 
     def _top_words_button(self) -> widgets.Button:
         def _show_top_words(b):  # pragma: no cover
