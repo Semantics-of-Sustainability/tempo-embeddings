@@ -37,7 +37,15 @@ git clone git@github.com:Semantics-of-Sustainability/tempo-embeddings.git
 cd tempo-embeddings
 python3 -m pip install .
 ```
+
+## Data Analysis
+
+The [`term_frequency` notebook](notebooks/term_frequency.ipynb) provides a sample case for investigate a set of text corpora.
+
 ## How to use tempo_embeddings on SURF Research Cloud?
+
+(outdated; you can now run the notebook on your local machine, with the processing being done by a remote database server)
+
 SURF Research Cloud offers a ready-to-use environment for running tools without the need to install Python and other required libraries.
 
 [Here](https://www.surf.nl/en/services/surf-research-cloud) you can apply for access.
@@ -45,7 +53,7 @@ SURF Research Cloud offers a ready-to-use environment for running tools without 
 If your Research Cloud account is set up for the Semantics of Sustainability project, you can use the tempo-embeddings tool by following these steps:
 - Log in to [Research cloud](https://portal.live.surfresearchcloud.nl)  environment.
 - Create a new workspace using the "semantics-of-sustainability" catalog item.
-- Log in to the workspace you created in the previous step. 
+- Log in to the workspace you created in the previous step.
 - Open a new terminal and run:
 ```console
 /etc/miniconda/bin/conda init

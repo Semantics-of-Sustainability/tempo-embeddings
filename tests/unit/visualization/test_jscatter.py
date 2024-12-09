@@ -38,6 +38,7 @@ class TestJScatterContainer:
             DownloadButton,
             Button,
             Button,
+            Button,
         ]
 
     @pytest.mark.parametrize("title", [None, "Test Title"])
@@ -121,7 +122,7 @@ class TestJScatterVisualizer:
         exception,
     ):
         # No Cluster button due to a lack of container
-        expected_widget_types = [HBox, HBox, HBox, DownloadButton, Button]
+        expected_widget_types = [HBox, HBox, HBox, DownloadButton, Button, Button]
 
         visualizer = JScatterVisualizer(
             [corpus],
