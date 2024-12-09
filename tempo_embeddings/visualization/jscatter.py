@@ -7,7 +7,7 @@ import pandas as pd
 from IPython.display import display
 from ipywidgets import widgets
 
-from ..settings import STOPWORDS
+from ..settings import OUTLIERS_LABEL, STOPWORDS
 from ..text.corpus import Corpus
 from ..text.keyword_extractor import KeywordExtractor
 from .util import DownloadButton
@@ -175,6 +175,7 @@ class JScatterVisualizer:
             _widgets.append(self._cluster_button())
 
         _widgets.append(self._top_words_button())
+        _widgets.append(self._plot_by_label_button())
 
         return _widgets
 
@@ -230,6 +231,35 @@ class JScatterVisualizer:
         )
         button.on_click(cluster)
 
+        return button
+
+    def _plot_by_label_button(self) -> widgets.Button:
+        field = "year"
+        window_size = 5
+
+        corpus_per_year = self._df[field].value_counts()
+
+        def _plot_labels(b):
+            for label, group in self._df.loc[self._plot_widgets.selected()].groupby(
+                "label"
+            ):
+                if label != OUTLIERS_LABEL:
+                    s = (
+                        (group[field].value_counts() / corpus_per_year)
+                        .sort_index()
+                        .rolling(window_size)
+                        .mean()
+                    )
+                    s.name = label
+                    ax = s.plot(kind="line", legend=label)
+                    ax.set_xlabel(field)
+                    ax.set_ylabel("Relative Frequency")
+
+        button = widgets.Button(
+            description="Plot by Corpus",
+            tooltip="Plot (selected) corpora frequencies over years by Corpus",
+        )
+        button.on_click(_plot_labels)
         return button
 
     def _top_words_button(self) -> widgets.Button:
