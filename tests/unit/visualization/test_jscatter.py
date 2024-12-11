@@ -4,7 +4,15 @@ from unittest import mock
 
 import pandas as pd
 import pytest
-from ipywidgets.widgets import Button, HBox, SelectionRangeSlider, SelectMultiple, VBox
+from ipywidgets.widgets import (
+    BoundedIntText,
+    Button,
+    Dropdown,
+    HBox,
+    SelectionRangeSlider,
+    SelectMultiple,
+    VBox,
+)
 
 from tempo_embeddings.text.corpus import Corpus
 from tempo_embeddings.text.passage import Passage
@@ -27,19 +35,13 @@ class TestJScatterContainer:
         return JScatterContainer([corpus])
 
     def test_init(self, container):
+        expected = [HBox, HBox, HBox, DownloadButton, Button, Button, HBox]
+
         tab = container._tab
+
         assert [type(widget) for widget in tab.children] == [VBox]
         assert tab.titles == ("Full Corpus",)
-
-        assert [type(widget) for widget in tab.children[0].children] == [
-            HBox,
-            HBox,
-            HBox,
-            DownloadButton,
-            Button,
-            Button,
-            Button,
-        ]
+        assert [type(widget) for widget in tab.children[0].children] == expected
 
     @pytest.mark.parametrize("title", [None, "Test Title"])
     def test_add_tab(self, container, corpus, title):
@@ -122,7 +124,7 @@ class TestJScatterVisualizer:
         exception,
     ):
         # No Cluster button due to a lack of container
-        expected_widget_types = [HBox, HBox, HBox, DownloadButton, Button, Button]
+        expected_widget_types = [HBox, HBox, HBox, DownloadButton, Button, HBox]
 
         visualizer = JScatterVisualizer(
             [corpus],
@@ -182,3 +184,16 @@ class TestJScatterVisualizer:
         widgets[-1].click()
         assert isinstance(visualizer._cluster_plot, JScatterVisualizer.PlotWidgets)
         assert all(isinstance(c, Corpus) for c in visualizer.clusters)
+
+    def test_plot_button(self, corpus):
+        visualizer = JScatterVisualizer([corpus])
+        widgets = visualizer.get_widgets()
+
+        expected_widgets = [Button, BoundedIntText, Dropdown]
+        assert [type(w) for w in widgets[-1].children] == expected_widgets
+
+        button = widgets[-1].children[0]
+
+        with mock.patch("pandas.Series.plot") as mock_plot:
+            button.click()
+            mock_plot.assert_called_once_with(kind="line", legend="TestCorpus")

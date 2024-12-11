@@ -175,7 +175,7 @@ class JScatterVisualizer:
             _widgets.append(self._cluster_button())
 
         _widgets.append(self._top_words_button())
-        _widgets.append(self._plot_by_label_button())
+        _widgets.append(self._plot_by_field_button())
 
         return _widgets
 
@@ -233,34 +233,58 @@ class JScatterVisualizer:
 
         return button
 
-    def _plot_by_label_button(self) -> widgets.Button:  # pragma: no cover
+    def _plot_by_field_button(self) -> widgets.Button:
         field = "year"
-        window_size = 5
+
+        window_size_slider = widgets.BoundedIntText(
+            value=5,
+            min=1,
+            step=1,
+            description="Rolling Window over Years:",
+            layout={"width": "max-content"},
+        )
+        # TODO: update option to match selection
+        groups_field_selector = widgets.Dropdown(
+            description="Field to plot",
+            options=self._df.columns,
+            value="label",
+            layout={"width": "max-content"},
+        )
 
         corpus_per_year = self._df[field].value_counts()
 
-        def _plot_labels(b):
-            for label, group in self._df.loc[self._plot_widgets.selected()].groupby(
-                "label"
-            ):
-                if label != OUTLIERS_LABEL:
-                    s = (
-                        (group[field].value_counts() / corpus_per_year)
-                        .sort_index()
-                        .rolling(window_size)
-                        .mean()
-                    )
-                    s.name = label
-                    ax = s.plot(kind="line", legend=label)
-                    ax.set_xlabel(field)
-                    ax.set_ylabel("Relative Frequency")
+        def _plot_by_field(b):
+            _selection = self._df.loc[self._plot_widgets.selected()]
+            groups_field = groups_field_selector.value
+
+            if groups_field in _selection.columns:
+                for label, group in _selection.groupby(groups_field):
+                    window = window_size_slider.value
+                    if label != OUTLIERS_LABEL:
+                        _series = (
+                            (group[field].value_counts() / corpus_per_year)
+                            .sort_index()
+                            .rolling(window)
+                            .mean()
+                        )
+                        _series.name = label
+                        ax = _series.plot(kind="line", legend=label)
+                        ax.set_title(
+                            f"Relative Frequency by '{groups_field}' (Rolling Window over {window} {field}s)"
+                        )
+                        ax.set_xlabel(field)
+                        ax.set_ylabel("Relative Frequency")
+            else:
+                # TODO: this should never happen if the dropdown is updated
+                raise ValueError(f"Field '{groups_field}' not found in selection.")
 
         button = widgets.Button(
-            description="Plot by Corpus",
-            tooltip="Plot (selected) corpora frequencies over years by Corpus",
+            description="Plot by Field",
+            tooltip="Plot (selected) frequencies over years by selected field",
         )
-        button.on_click(_plot_labels)
-        return button
+        button.on_click(_plot_by_field)
+
+        return widgets.HBox((button, window_size_slider, groups_field_selector))
 
     def _top_words_button(self) -> widgets.Button:
         def _show_top_words(b):  # pragma: no cover
