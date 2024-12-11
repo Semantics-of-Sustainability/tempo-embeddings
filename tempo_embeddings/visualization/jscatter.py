@@ -287,23 +287,33 @@ class JScatterVisualizer:
         return widgets.HBox((button, window_size_slider, groups_field_selector))
 
     def _top_words_button(self) -> widgets.Button:
+        text = widgets.Text(
+            description="Top Words:",
+            disabled=True,
+            placeholder="Top words for current selection will appear here.",
+            layout=widgets.Layout(width="100%", height="100%"),
+        )
+
         def _show_top_words(b):  # pragma: no cover
+            text.value = "Calculating..."
+
             corpus = Corpus.from_dataframe(
                 self._df.loc[self._plot_widgets.selected()], umap_model=self._umap
             )
             top_words = self._keyword_extractor.top_words(
                 corpus, use_2d_embeddings=True
             )
-            print(top_words)
+            text.value = "; ".join(top_words)
 
         button = widgets.Button(
             description="Top words",
             disabled=False,
             button_style="",  # 'success', 'info', 'warning', 'danger' or ''
-            tooltip="Show top words",
+            tooltip="Compute top words for current selection",
         )
         button.on_click(_show_top_words)
-        return button
+
+        return widgets.HBox((button, text))
 
     class PlotWidgets:
         """A class for generating the widgets for a plot."""
