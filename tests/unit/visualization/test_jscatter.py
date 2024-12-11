@@ -201,7 +201,21 @@ class TestJScatterVisualizer:
 
 
 class TestPlotWidgets:
-    def test_export_button(self, corpus):
+    def test_export_button(self, corpus, tmp_path):
+        expected_columns = [
+            "text",
+            "ID_DB",
+            "highlight_start",
+            "highlight_end",
+            "year",
+            "date",
+            "provenance",
+            "x",
+            "y",
+            "corpus",
+            "distance_to_centroid",
+        ]
+
         pw = JScatterVisualizer.PlotWidgets(
             df=corpus.to_dataframe(), color_by="corpus", tooltip_fields=set()
         )
@@ -209,3 +223,13 @@ class TestPlotWidgets:
         assert isinstance(export_button, HBox)
 
         assert [type(w) for w in export_button.children] == [Button, Text, Checkbox]
+
+        button, textbox, checkbox = export_button.children
+
+        target_file = tmp_path / "export.csv"
+        textbox.value = str(target_file)
+        button.click()
+
+        df = pd.read_csv(target_file)
+        assert df.columns.to_list() == expected_columns
+        assert len(df) == len(corpus)
