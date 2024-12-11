@@ -355,7 +355,7 @@ class JScatterVisualizer:
                 description="Filename", value="export.csv", disabled=False
             )
 
-            def selected_rows(change):
+            def export(change):
                 try:
                     selected: pd.DataFrame = self._df.iloc[self.selected()]
                     selected.to_csv(
@@ -375,7 +375,7 @@ class JScatterVisualizer:
             button = widgets.Button(
                 description="Export", tooltip="Export selected data points"
             )
-            button.on_click(selected_rows)
+            button.on_click(export)
 
             return widgets.HBox((button, csv_file, overwrite))
 
@@ -481,7 +481,7 @@ class JScatterVisualizer:
             Returns:
                 The indices of the selected/filtered/all rows.
             """
-            if self._scatter_plot.selection().size > 0:
+            if len(self._scatter_plot.selection()) > 0:
                 index = self._scatter_plot.selection()
             else:
                 try:
@@ -492,7 +492,9 @@ class JScatterVisualizer:
                     index = self._df.index
                 else:
                     index = (
-                        filter_indices if filter_indices.size > 0 else self._df.index
+                        filter_indices
+                        if filter_indices is not None and filter_indices.size > 0
+                        else self._df.index
                     )
             return index
 
