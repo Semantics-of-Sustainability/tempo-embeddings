@@ -352,8 +352,12 @@ class JScatterVisualizer:
 
             def selected_rows(change):
                 try:
-                    self._df.iloc[self.selected()].to_csv(
+                    selected: pd.DataFrame = self._df.iloc[self.selected()]
+                    selected.to_csv(
                         csv_file.value,
+                        columns=[
+                            c for c in selected.columns if selected[c].notna().any()
+                        ],
                         index=False,
                         quoting=csv.QUOTE_ALL,
                         mode="w" if overwrite.value else "x",
