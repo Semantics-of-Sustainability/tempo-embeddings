@@ -279,8 +279,8 @@ class JScatterVisualizer:
                 raise ValueError(f"Field '{groups_field}' not found in selection.")
 
         button = widgets.Button(
-            description="Plot by Corpus",
-            tooltip="Plot (selected) corpora frequencies over years by Corpus",
+            description="Plot by Field",
+            tooltip="Plot (selected) frequencies over years by selected field",
         )
         button.on_click(_plot_by_field)
 
