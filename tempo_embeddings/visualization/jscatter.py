@@ -10,7 +10,6 @@ from ipywidgets import widgets
 from ..settings import OUTLIERS_LABEL, STOPWORDS
 from ..text.corpus import Corpus
 from ..text.keyword_extractor import KeywordExtractor
-from .util import DownloadButton
 
 
 class JScatterContainer:
@@ -343,17 +342,33 @@ class JScatterVisualizer:
                 .legend(True)
             )
 
-        def _export_button(self) -> DownloadButton:
-            def selected_rows():
-                return self._df.iloc[self.selected()].to_csv(
-                    index=False, quoting=csv.QUOTE_ALL
-                )
-
-            return DownloadButton(
-                filename="scatter_plot.csv",
-                contents=selected_rows,
-                description="Export",
+        def _export_button(self) -> widgets.HBox:
+            overwrite = widgets.Checkbox(
+                description="Overwrite if file exists", value=False
             )
+            csv_file = widgets.Text(
+                description="Filename", value="export.csv", disabled=False
+            )
+
+            def selected_rows(change):
+                try:
+                    self._df.iloc[self.selected()].to_csv(
+                        csv_file.value,
+                        index=False,
+                        quoting=csv.QUOTE_ALL,
+                        mode="w" if overwrite.value else "x",
+                    )
+                except FileExistsError as e:
+                    logging.error(e)
+                else:
+                    overwrite.value = False
+
+            button = widgets.Button(
+                description="Export", tooltip="Export selected data points"
+            )
+            button.on_click(selected_rows)
+
+            return widgets.HBox((button, csv_file, overwrite))
 
         def _category_field_filter(
             self, field: str
