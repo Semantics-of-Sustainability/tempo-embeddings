@@ -206,6 +206,8 @@ class JScatterVisualizer:
         """
 
         def cluster(button):  # pragma: no cover
+            button.disabled = True
+            button.description = "Clustering..."
             # TODO: add clustering parameters
 
             clusters = list(
@@ -221,11 +223,14 @@ class JScatterVisualizer:
 
             self._container.add_tab(self.with_corpora(clusters, tooltip_fields=None))
 
+            button.disabled = False
+            button.description = "Cluster"
+
         button = widgets.Button(
             description="Cluster",
             disabled=False,
             button_style="",  # 'success', 'info', 'warning', 'danger' or ''
-            tooltip="Cluster the data",
+            tooltip="Cluster the data, create new tab",
             # icon="check",  # (FontAwesome names without the `fa-` prefix)
         )
         button.on_click(cluster)
