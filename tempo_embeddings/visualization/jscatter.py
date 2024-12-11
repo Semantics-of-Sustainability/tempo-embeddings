@@ -10,7 +10,6 @@ from ipywidgets import widgets
 from ..settings import OUTLIERS_LABEL, STOPWORDS
 from ..text.corpus import Corpus
 from ..text.keyword_extractor import KeywordExtractor
-from .util import DownloadButton
 
 
 class JScatterContainer:
@@ -207,6 +206,8 @@ class JScatterVisualizer:
         """
 
         def cluster(button):  # pragma: no cover
+            button.disabled = True
+            button.description = "Clustering..."
             # TODO: add clustering parameters
 
             clusters = list(
@@ -222,11 +223,14 @@ class JScatterVisualizer:
 
             self._container.add_tab(self.with_corpora(clusters, tooltip_fields=None))
 
+            button.disabled = False
+            button.description = "Cluster"
+
         button = widgets.Button(
             description="Cluster",
             disabled=False,
             button_style="",  # 'success', 'info', 'warning', 'danger' or ''
-            tooltip="Cluster the data",
+            tooltip="Cluster the data, create new tab",
             # icon="check",  # (FontAwesome names without the `fa-` prefix)
         )
         button.on_click(cluster)
@@ -287,23 +291,33 @@ class JScatterVisualizer:
         return widgets.HBox((button, window_size_slider, groups_field_selector))
 
     def _top_words_button(self) -> widgets.Button:
+        text = widgets.Text(
+            description="Top Words:",
+            disabled=True,
+            placeholder="Top words for current selection will appear here.",
+            layout=widgets.Layout(width="100%", height="100%"),
+        )
+
         def _show_top_words(b):  # pragma: no cover
+            text.value = "Calculating..."
+
             corpus = Corpus.from_dataframe(
                 self._df.loc[self._plot_widgets.selected()], umap_model=self._umap
             )
             top_words = self._keyword_extractor.top_words(
                 corpus, use_2d_embeddings=True
             )
-            print(top_words)
+            text.value = "; ".join(top_words)
 
         button = widgets.Button(
             description="Top words",
             disabled=False,
             button_style="",  # 'success', 'info', 'warning', 'danger' or ''
-            tooltip="Show top words",
+            tooltip="Compute top words for current selection",
         )
         button.on_click(_show_top_words)
-        return button
+
+        return widgets.HBox((button, text))
 
     class PlotWidgets:
         """A class for generating the widgets for a plot."""
@@ -333,17 +347,37 @@ class JScatterVisualizer:
                 .legend(True)
             )
 
-        def _export_button(self) -> DownloadButton:
-            def selected_rows():
-                return self._df.iloc[self.selected()].to_csv(
-                    index=False, quoting=csv.QUOTE_ALL
-                )
-
-            return DownloadButton(
-                filename="scatter_plot.csv",
-                contents=selected_rows,
-                description="Export",
+        def _export_button(self) -> widgets.HBox:
+            overwrite = widgets.Checkbox(
+                description="Overwrite if file exists", value=False
             )
+            csv_file = widgets.Text(
+                description="Filename", value="export.csv", disabled=False
+            )
+
+            def export(change):
+                try:
+                    selected: pd.DataFrame = self._df.iloc[self.selected()]
+                    selected.to_csv(
+                        csv_file.value,
+                        columns=[
+                            c for c in selected.columns if selected[c].notna().any()
+                        ],
+                        index=False,
+                        quoting=csv.QUOTE_ALL,
+                        mode="w" if overwrite.value else "x",
+                    )
+                except FileExistsError as e:
+                    logging.error(e)
+                else:
+                    overwrite.value = False
+
+            button = widgets.Button(
+                description="Export", tooltip="Export selected data points"
+            )
+            button.on_click(export)
+
+            return widgets.HBox((button, csv_file, overwrite))
 
         def _category_field_filter(
             self, field: str
@@ -447,7 +481,7 @@ class JScatterVisualizer:
             Returns:
                 The indices of the selected/filtered/all rows.
             """
-            if self._scatter_plot.selection().size > 0:
+            if len(self._scatter_plot.selection()) > 0:
                 index = self._scatter_plot.selection()
             else:
                 try:
@@ -458,7 +492,9 @@ class JScatterVisualizer:
                     index = self._df.index
                 else:
                     index = (
-                        filter_indices if filter_indices.size > 0 else self._df.index
+                        filter_indices
+                        if filter_indices is not None and filter_indices.size > 0
+                        else self._df.index
                     )
             return index
 

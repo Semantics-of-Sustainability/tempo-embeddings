@@ -7,10 +7,12 @@ import pytest
 from ipywidgets.widgets import (
     BoundedIntText,
     Button,
+    Checkbox,
     Dropdown,
     HBox,
     SelectionRangeSlider,
     SelectMultiple,
+    Text,
     VBox,
 )
 
@@ -20,7 +22,6 @@ from tempo_embeddings.visualization.jscatter import (
     JScatterContainer,
     JScatterVisualizer,
 )
-from tempo_embeddings.visualization.util import DownloadButton
 
 
 @pytest.fixture
@@ -35,7 +36,7 @@ class TestJScatterContainer:
         return JScatterContainer([corpus])
 
     def test_init(self, container):
-        expected = [HBox, HBox, HBox, DownloadButton, Button, Button, HBox]
+        expected = [HBox, HBox, HBox, HBox, Button, HBox, HBox]
 
         tab = container._tab
 
@@ -124,7 +125,7 @@ class TestJScatterVisualizer:
         exception,
     ):
         # No Cluster button due to a lack of container
-        expected_widget_types = [HBox, HBox, HBox, DownloadButton, Button, HBox]
+        expected_widget_types = [HBox, HBox, HBox, HBox, HBox, HBox]
 
         visualizer = JScatterVisualizer(
             [corpus],
@@ -197,3 +198,38 @@ class TestJScatterVisualizer:
         with mock.patch("pandas.Series.plot") as mock_plot:
             button.click()
             mock_plot.assert_called_once_with(kind="line", legend="TestCorpus")
+
+
+class TestPlotWidgets:
+    def test_export_button(self, corpus, tmp_path):
+        expected_columns = [
+            "text",
+            "ID_DB",
+            "highlight_start",
+            "highlight_end",
+            "year",
+            "date",
+            "provenance",
+            "x",
+            "y",
+            "corpus",
+            "distance_to_centroid",
+        ]
+
+        pw = JScatterVisualizer.PlotWidgets(
+            df=corpus.to_dataframe(), color_by="corpus", tooltip_fields=set()
+        )
+        export_button = pw._export_button()
+        assert isinstance(export_button, HBox)
+
+        assert [type(w) for w in export_button.children] == [Button, Text, Checkbox]
+
+        button, textbox, checkbox = export_button.children
+
+        target_file = tmp_path / "export.csv"
+        textbox.value = str(target_file)
+        button.click()
+
+        df = pd.read_csv(target_file)
+        assert df.columns.to_list() == expected_columns
+        assert len(df) == len(corpus)
