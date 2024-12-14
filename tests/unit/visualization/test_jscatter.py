@@ -36,7 +36,7 @@ class TestJScatterContainer:
         return JScatterContainer([corpus])
 
     def test_init(self, container):
-        expected = [HBox, HBox, HBox, HBox, Button, HBox, HBox]
+        expected = [HBox, HBox, HBox, Dropdown, HBox, Button, HBox, HBox]
 
         tab = container._tab
 
@@ -125,7 +125,7 @@ class TestJScatterVisualizer:
         exception,
     ):
         # No Cluster button due to a lack of container
-        expected_widget_types = [HBox, HBox, HBox, HBox, HBox, HBox]
+        expected_widget_types = [HBox, HBox, HBox, Dropdown, HBox, HBox, HBox]
 
         visualizer = JScatterVisualizer(
             [corpus],
