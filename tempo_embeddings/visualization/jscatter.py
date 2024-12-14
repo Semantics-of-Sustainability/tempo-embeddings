@@ -379,6 +379,28 @@ class JScatterVisualizer:
 
             return widgets.HBox((button, csv_file, overwrite))
 
+        def _color_by_dropdown(self):
+            current = self._scatter_plot.color()["by"]
+            columns = [
+                c
+                for c in self._df.columns
+                if not self._df[c].hasnans and 1 < self._df[c].unique().size <= 50
+            ]
+            if current not in columns:
+                columns.append(current)
+            # TODO: update columns by selection
+
+            def handle_change(change):
+                self._scatter_plot.color(by=change["new"], map="auto")
+
+            color_by_dropdown = widgets.Dropdown(
+                options=columns, value=current, description="Color by:", disabled=False
+            )
+
+            color_by_dropdown.observe(handle_change, names="value")
+
+            return color_by_dropdown
+
         def _category_field_filter(
             self, field: str
         ) -> Optional[widgets.SelectMultiple]:
@@ -525,5 +547,6 @@ class JScatterVisualizer:
                 widgets.HBox(
                     [widget for widget in category_filters if widget is not None]
                 ),
+                self._color_by_dropdown(),
                 self._export_button(),
             ]

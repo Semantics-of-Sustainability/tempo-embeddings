@@ -36,7 +36,7 @@ class TestJScatterContainer:
         return JScatterContainer([corpus])
 
     def test_init(self, container):
-        expected = [HBox, HBox, HBox, HBox, Button, HBox, HBox]
+        expected = [HBox, HBox, HBox, Dropdown, HBox, Button, HBox, HBox]
 
         tab = container._tab
 
@@ -125,7 +125,7 @@ class TestJScatterVisualizer:
         exception,
     ):
         # No Cluster button due to a lack of container
-        expected_widget_types = [HBox, HBox, HBox, HBox, HBox, HBox]
+        expected_widget_types = [HBox, HBox, HBox, Dropdown, HBox, HBox, HBox]
 
         visualizer = JScatterVisualizer(
             [corpus],
@@ -233,3 +233,15 @@ class TestPlotWidgets:
         df = pd.read_csv(target_file)
         assert df.columns.to_list() == expected_columns
         assert len(df) == len(corpus)
+
+    def test_color_by(self, corpus):
+        pw = JScatterVisualizer.PlotWidgets(
+            df=corpus.to_dataframe(), color_by="corpus", tooltip_fields=set()
+        )
+
+        color_box = pw._color_by_dropdown()
+        assert isinstance(color_box, Dropdown)
+        assert color_box.value == "corpus"
+
+        color_box.value = "year"
+        assert pw._scatter_plot.color()["by"] == "year"
