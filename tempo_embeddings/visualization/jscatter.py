@@ -401,6 +401,30 @@ class JScatterVisualizer:
 
             return color_by_dropdown
 
+        def _select_tooltips(self):
+            def handle_change(change):
+                self._scatter_plot.tooltip(enable=True, properties=change["new"])
+
+            current: list[str] = self._scatter_plot.tooltip()["properties"]
+            options = sorted(self._df.columns)
+
+            try:
+                # TODO: make generic blacklist for columns
+                options.remove("ID_DB")
+            except ValueError as e:
+                logging.debug(e)
+
+            select_tooltips = widgets.SelectMultiple(
+                options=options,
+                value=current,
+                # rows=10,
+                description="Tooltip fields",
+                disabled=False,
+            )
+            select_tooltips.observe(handle_change, names="value")
+
+            return select_tooltips
+
         def _category_field_filter(
             self, field: str
         ) -> Optional[widgets.SelectMultiple]:
@@ -548,5 +572,6 @@ class JScatterVisualizer:
                     [widget for widget in category_filters if widget is not None]
                 ),
                 self._color_by_dropdown(),
+                self._select_tooltips(),
                 self._export_button(),
             ]

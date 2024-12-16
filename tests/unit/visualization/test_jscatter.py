@@ -36,7 +36,17 @@ class TestJScatterContainer:
         return JScatterContainer([corpus])
 
     def test_init(self, container):
-        expected = [HBox, HBox, HBox, Dropdown, HBox, Button, HBox, HBox]
+        expected = [
+            HBox,
+            HBox,
+            HBox,
+            Dropdown,
+            SelectMultiple,
+            HBox,
+            Button,
+            HBox,
+            HBox,
+        ]
 
         tab = container._tab
 
@@ -125,7 +135,16 @@ class TestJScatterVisualizer:
         exception,
     ):
         # No Cluster button due to a lack of container
-        expected_widget_types = [HBox, HBox, HBox, Dropdown, HBox, HBox, HBox]
+        expected_widget_types = [
+            HBox,
+            HBox,
+            HBox,
+            Dropdown,
+            SelectMultiple,
+            HBox,
+            HBox,
+            HBox,
+        ]
 
         visualizer = JScatterVisualizer(
             [corpus],
@@ -245,3 +264,14 @@ class TestPlotWidgets:
 
         color_box.value = "year"
         assert pw._scatter_plot.color()["by"] == "year"
+
+    def test_select_tooltips(self, corpus):
+        pw = JScatterVisualizer.PlotWidgets(
+            df=corpus.to_dataframe(), color_by="corpus", tooltip_fields=set()
+        )
+
+        select_tooltips = pw._select_tooltips()
+        assert isinstance(select_tooltips, SelectMultiple)
+
+        select_tooltips.value = ["provenance"]
+        assert pw._scatter_plot.tooltip()["properties"] == ["provenance"]
