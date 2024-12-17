@@ -52,7 +52,17 @@ class JScatterVisualizer:
     """A class for creating interactive scatter plots with Jupyter widgets."""
 
     _DEFAULT_CONTINUOUS_FIELDS: set[str] = {"year"}
-    _EXCLUDE_FILTER_FIELDS: set[str] = {"month", "day", "year"}
+    _EXCLUDE_FILTER_FIELDS: set[str] = {
+        "date",
+        "day",
+        "month",
+        "origin_id",
+        "page",
+        "sentence_index",
+        "sequence",
+        "url",
+        "year",
+    }
     _EXCLUDE_TOOLTIP_FIELDS: set[str] = {"date"}
 
     _REQUIRED_FIELDS: dict[str, Any] = {"x": pd.Float64Dtype(), "y": pd.Float64Dtype()}
@@ -440,14 +450,16 @@ class JScatterVisualizer:
 
             if field not in self._df.columns:
                 raise ValueError(f"'{field}' does not exist in the data.")
-            options = sorted(self._df[field].dropna().unique().tolist())
 
-            if field in self._df.columns and 1 < len(options) <= 50:
+            values = self._df[field].value_counts()
+            options = values.where(values > 1).index.tolist()
+
+            if field in self._df.columns and 1 < len(options):
                 selector = widgets.SelectMultiple(
                     options=[self.__SHOW_ALL] + options,
                     value=[self.__SHOW_ALL],  # TODO: filter out outliers
                     description=field,
-                    layout={"width": "max-content"},
+                    # layout=widgets.Layout(width=50),
                     rows=min(len(options) + 1, 10),
                 )
 
