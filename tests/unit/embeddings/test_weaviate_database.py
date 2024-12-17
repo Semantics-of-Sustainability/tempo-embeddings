@@ -102,14 +102,6 @@ class TestWeaviateDatabase:
                 "collection": "TestCorpus",
             }
 
-    def test_get_corpus_exception(self, weaviate_db_manager_with_data, mocker):
-        mocker.patch(
-            "weaviate.collections.queries.fetch_objects._FetchObjectsQuery.fetch_objects",
-            side_effect=weaviate.exceptions.WeaviateQueryError("Mock error", "gRPC"),
-        )
-        with pytest.raises(RuntimeError):
-            weaviate_db_manager_with_data.get_corpus("TestCorpus")
-
     @pytest.mark.parametrize(
         "term, metadata, normalize, expected",
         [

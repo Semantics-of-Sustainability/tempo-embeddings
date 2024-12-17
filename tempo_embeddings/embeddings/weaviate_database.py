@@ -1,4 +1,5 @@
 import gzip
+import itertools
 import json
 import logging
 import uuid
@@ -382,6 +383,51 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             num_records += len(corpus.passages)
         return num_records
 
+    def _fetch_objects(
+        self,
+        collection,
+        *,
+        filters=None,
+        batch_size=1000,
+        offset=0,
+        include_embeddings=True,
+    ) -> Iterable[Passage]:
+        """Fetch all objects from a collection.
+
+        This uses the collection.fetch_objects() method to fetch objects using pagination,
+        because the iterator() method does not support filtering.
+
+        Args:
+            collection: A Collection object
+            filters: A Filter object
+            batch_size: The number of objects to fetch per batch
+            offset: The offset to start from
+            include_embeddings: Whether to include the embeddings in the output
+        Yields:
+            Iterable[Passage]: The passages in the collection
+        """
+        batch = collection.query.fetch_objects(
+            filters=filters,
+            limit=batch_size,
+            offset=offset,
+            include_vector=include_embeddings,
+        )
+
+        if batch.objects:
+            for obj in batch.objects:
+                yield Passage.from_weaviate_record(obj, collection=collection.name)
+
+            # recursively fetch more objects
+            yield from self._fetch_objects(
+                collection,
+                filters=filters,
+                batch_size=batch_size,
+                offset=offset + len(batch.objects),
+                include_embeddings=include_embeddings,
+            )
+        else:
+            logging.debug("No more objects to fetch.")
+
     def get_corpus(
         self,
         collection: str,
@@ -391,7 +437,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         metadata_filters: Optional[dict[str, Any]] = None,
         metadata_not: Optional[dict[str, Any]] = None,
         include_embeddings: bool = False,
-        limit: int = 10000,
+        limit: Optional[int] = None,
     ) -> Corpus:
         # TODO: replace year_from, year_to with YearSpan object
 
@@ -405,7 +451,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             metadata_filters (dict[str, Any], optional): Additional filter criteria for exact matching in the form <field, term>.
             metadata_not (dict[str, Any], optional): Additional filter criteria to _exclude_ exact matching in the form <field, term>.
             include_embeddings (bool, optional): If true, include the embeddings to the output. Defaults to False.
-            limit (int, optional): The maximum number of passages in the initial corpus. Defaults to 10000.
+            limit (int, optional): The maximum number of passages in the initial corpus. Defaults to None (all passages).
 
         Returns:
             Corpus: A corpus object
@@ -413,35 +459,24 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         Raises:
             RuntimeError: If an error occurs during the query
         """
+        _passages = self._fetch_objects(
+            self._client.collections.get(collection),
+            filters=QueryBuilder.build_filter(
+                filter_words,
+                YearSpan(year_from, year_to),
+                metadata_filters,
+                QueryBuilder.clean_metadata(metadata_not, self.properties(collection)),
+            ),
+            include_embeddings=include_embeddings,
+        )
 
-        try:
-            response = self._client.collections.get(collection).query.fetch_objects(
-                limit=limit or None,
-                filters=QueryBuilder.build_filter(
-                    filter_words,
-                    YearSpan(year_from, year_to),
-                    metadata_filters,
-                    QueryBuilder.clean_metadata(
-                        metadata_not, self.properties(collection)
-                    ),
-                ),
-                include_vector=include_embeddings,
-            )
-        except WeaviateQueryError as e:
-            raise RuntimeError(
-                f"Error while fetching corpus '{collection}'. Try a lower limit (was: {limit})."
-            ) from e
-        else:
-            passages: tuple[Passage] = tuple(
-                [
-                    Passage.from_weaviate_record(o, collection=collection)
-                    for o in response.objects
-                ]
-            )
-            label = collection
-            if passages and filter_words:
-                label += ": '" + "; ".join(filter_words) + "'"
-            return Corpus(passages, label)
+        passages = tuple(itertools.islice(_passages, limit or None))
+
+        label = collection
+        if passages and filter_words:
+            label += ": '" + "; ".join(filter_words) + "'"
+
+        return Corpus(passages, label)
 
     def doc_frequencies_per_year(
         self,
