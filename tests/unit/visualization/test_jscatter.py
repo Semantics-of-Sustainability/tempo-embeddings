@@ -116,22 +116,22 @@ class TestJScatterVisualizer:
         assert JScatterVisualizer([corpus])._df["year"][0] == year
 
     @pytest.mark.parametrize(
-        "cat_fields,cont_fields,expected_cont,expected_cat,exception",
+        "continuous_fields,categorical_fields,expected_continuous_filters,expected_categorical_filters,exception",
         [
-            (["provenance"], ["year"], 0, 1, None),
-            (["provenance"], [], 0, 0, None),
-            ([], ["year"], 1, 1, None),
-            (["provenance", "invalid"], ["year"], 0, 1, pytest.raises(ValueError)),
-            (["provenance"], ["year", "invalid"], 0, 1, pytest.raises(ValueError)),
+            (["year"], ["provenance"], 1, 0, None),
+            ([], ["provenance"], 0, 0, None),
+            (["year"], [], 1, 0, None),
+            (["year"], ["provenance", "invalid"], 1, 0, pytest.raises(ValueError)),
+            (["year", "invalid"], ["provenance"], 1, 0, pytest.raises(ValueError)),
         ],
     )
     def test_get_widgets(
         self,
         corpus,
-        cat_fields: list[str],
-        cont_fields: list[str],
-        expected_cont: int,
-        expected_cat: int,
+        continuous_fields: list[str],
+        categorical_fields: list[str],
+        expected_continuous_filters: int,
+        expected_categorical_filters: int,
         exception,
     ):
         # No Cluster button due to a lack of container
@@ -148,22 +148,22 @@ class TestJScatterVisualizer:
 
         visualizer = JScatterVisualizer(
             [corpus],
-            categorical_fields=cat_fields,
-            continuous_fields=cont_fields,
+            continuous_fields=continuous_fields,
+            categorical_fields=categorical_fields,
         )
         with exception or does_not_raise():
             top_widgets = visualizer.get_widgets()
 
-            categorical_filters = top_widgets[1].children
-            continous_filters = top_widgets[2].children
+            continous_filters = top_widgets[1].children
+            categorical_filters = top_widgets[2].children
 
             assert [type(w) for w in top_widgets] == expected_widget_types
-            assert [type(w) for w in categorical_filters] == [
-                SelectionRangeSlider
-            ] * expected_cat
             assert [type(w) for w in continous_filters] == [
+                SelectionRangeSlider
+            ] * expected_continuous_filters
+            assert [type(w) for w in categorical_filters] == [
                 SelectMultiple
-            ] * expected_cont
+            ] * expected_categorical_filters
 
     @pytest.mark.parametrize(
         "tooltip_fields,expected",
