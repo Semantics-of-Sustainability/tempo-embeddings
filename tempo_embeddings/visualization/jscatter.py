@@ -323,7 +323,9 @@ class JScatterVisualizer:
         )
 
         def _show_top_words(b):  # pragma: no cover
-            text.value = "Calculating..."
+            button.disabled = True
+            button.description = "Calculating..."
+            text.value = ""
 
             corpus = Corpus.from_dataframe(
                 self._df.loc[self._plot_widgets.selected()], umap_model=self._umap
@@ -332,6 +334,8 @@ class JScatterVisualizer:
                 corpus, use_2d_embeddings=True
             )
             text.value = "; ".join(top_words)
+            button.disabled = False
+            button.description = "Top words:"
 
         button = widgets.Button(
             description="Top words",
