@@ -464,7 +464,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         """
         frequencies: dict[int, float] = {}
         collection = self._client.collections.get(collection)
-        for year in range(start_year, end_year + 1):
+        for year in range(start_year, end_year):
             year_span = YearSpan(year, year)
             filters = QueryBuilder.build_filter(
                 filter_words=[term],
