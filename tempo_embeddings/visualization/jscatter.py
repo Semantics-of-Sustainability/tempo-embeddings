@@ -264,6 +264,11 @@ class JScatterVisualizer:
             value="label",
             layout={"width": "max-content"},
         )
+        button = widgets.Button(
+            description="Plot by Field",
+            tooltip="Plot (selected) frequencies over years by selected field",
+        )
+        box_widgets = (button, window_size_slider, groups_field_selector)
 
         corpus_per_year = self._df[field].value_counts()
 
@@ -271,7 +276,16 @@ class JScatterVisualizer:
             _selection = self._df.loc[self._plot_widgets.selected()]
             groups_field = groups_field_selector.value
 
-            if groups_field in _selection.columns:
+            n_values = _selection[groups_field].unique().size
+            if n_values > 20:
+                logging.warning(
+                    f"Too many groups to plot for field '{groups_field}' ({n_values})."
+                )
+            elif groups_field in _selection.columns:
+                for widget in box_widgets:
+                    widget.disabled = True
+                button.description = "Plotting..."
+
                 for label, group in _selection.groupby(groups_field):
                     window = window_size_slider.value
                     if label != OUTLIERS_LABEL:
@@ -288,17 +302,17 @@ class JScatterVisualizer:
                         )
                         ax.set_xlabel(field)
                         ax.set_ylabel("Relative Frequency")
+
+                for widget in box_widgets:
+                    widget.disabled = False
+                button.description = "Plot by Field"
             else:
                 # TODO: this should never happen if the dropdown is updated
                 raise ValueError(f"Field '{groups_field}' not found in selection.")
 
-        button = widgets.Button(
-            description="Plot by Field",
-            tooltip="Plot (selected) frequencies over years by selected field",
-        )
         button.on_click(_plot_by_field)
 
-        return widgets.HBox((button, window_size_slider, groups_field_selector))
+        return widgets.HBox(box_widgets)
 
     def _top_words_button(self) -> widgets.Button:
         text = widgets.Text(
