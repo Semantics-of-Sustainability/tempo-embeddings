@@ -406,27 +406,30 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         Yields:
             Iterable[Passage]: The passages in the collection
         """
-        batch = collection.query.fetch_objects(
-            filters=filters,
-            limit=batch_size,
-            offset=offset,
-            include_vector=include_embeddings,
-        )
-
-        if batch.objects:
-            for obj in batch.objects:
-                yield Passage.from_weaviate_record(obj, collection=collection.name)
-
-            # recursively fetch more objects
-            yield from self._fetch_objects(
-                collection,
+        try:
+            batch = collection.query.fetch_objects(
                 filters=filters,
-                batch_size=batch_size,
-                offset=offset + len(batch.objects),
-                include_embeddings=include_embeddings,
+                limit=batch_size,
+                offset=offset,
+                include_vector=include_embeddings,
+            )
+        except WeaviateQueryError as e:
+            logging.error(
+                f"Failed to retrieve more documents for collection '{collection.name}' at offset {offset}: {str(e)}"
             )
         else:
-            logging.debug("No more objects to fetch.")
+            if batch.objects:
+                for obj in batch.objects:
+                    yield Passage.from_weaviate_record(obj, collection=collection.name)
+
+                # recursively fetch more objects
+                yield from self._fetch_objects(
+                    collection,
+                    filters=filters,
+                    batch_size=batch_size,
+                    offset=offset + len(batch.objects),
+                    include_embeddings=include_embeddings,
+                )
 
     def get_corpus(
         self,
