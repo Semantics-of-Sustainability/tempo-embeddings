@@ -2,6 +2,7 @@ import datetime
 from contextlib import nullcontext as does_not_raise
 from unittest import mock
 
+import numpy as np
 import pandas as pd
 import pytest
 from ipywidgets.widgets import (
@@ -277,3 +278,30 @@ class TestPlotWidgets:
 
         select_tooltips.value = ["provenance"]
         assert pw._scatter_plot.tooltip()["properties"] == ["provenance"]
+
+    @pytest.mark.parametrize(
+        "search_term,field,expected",
+        [
+            ("test", "text", np.arange(5)),
+            ("test", "provenance", np.arange(5)),
+            ("invalid", "text", []),
+        ],
+    )
+    def test_search_filter(self, corpus, search_term, field, expected):
+        pw = JScatterVisualizer.PlotWidgets(
+            df=corpus.to_dataframe().convert_dtypes(),
+            color_by="corpus",
+            tooltip_fields=set(),
+        )
+
+        search_box = pw._search_filter()
+        assert isinstance(search_box, HBox)
+        assert [type(w) for w in search_box.children] == [Text, Dropdown]
+
+        search_box.children[0].value = search_term
+        search_box.children[1].value = field
+
+        np.testing.assert_equal(pw._scatter_plot.filter(), expected)
+
+        search_box.children[0].value = ""
+        np.testing.assert_equal(pw._scatter_plot.filter(), np.arange(5))
