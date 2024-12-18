@@ -534,6 +534,50 @@ class JScatterVisualizer:
 
             return selection
 
+        def _search_filter(self) -> widgets.HBox:
+            """Create a search widget for filtering on a field.
+
+            Returns:
+                widgets.HBox: A widget containing a search box
+            """
+
+            search = widgets.Text(
+                description="Search:",
+                placeholder="Enter search term",
+                continuous_update=True,
+            )
+            field_selector = widgets.Dropdown(
+                options=sorted(
+                    [c for c in self._df.columns if self._df[c].dtype == "string"]
+                ),
+                value="text",
+                description="In field",
+                layout={"width": "max-content"},
+            )
+            _widgets = [search, field_selector]
+
+            def handle_search_change(change):
+                for w in _widgets:
+                    w.disabled = True
+
+                search_term = search.value.strip()
+                if search_term:
+                    filtered = self._df.loc[
+                        self._df[field_selector.value].str.contains(search_term)
+                    ]
+                else:
+                    filtered = self._df
+
+                self._filter(field_selector, filtered.index)
+
+                for w in _widgets:
+                    w.disabled = False
+
+            search.observe(handle_search_change, names="value")
+            field_selector.observe(handle_search_change, names="value")
+
+            return widgets.HBox(_widgets)
+
         def _filter(self, field, index):
             """Filter the scatter plot based on the given field and index.
 
@@ -601,6 +645,7 @@ class JScatterVisualizer:
                 widgets.HBox(
                     [widget for widget in category_filters if widget is not None]
                 ),
+                self._search_filter(),
                 self._color_by_dropdown(),
                 self._select_tooltips(),
                 self._export_button(),

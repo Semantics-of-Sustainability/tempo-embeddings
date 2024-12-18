@@ -2,6 +2,7 @@ import datetime
 from contextlib import nullcontext as does_not_raise
 from unittest import mock
 
+import numpy as np
 import pandas as pd
 import pytest
 from ipywidgets.widgets import (
@@ -37,6 +38,7 @@ class TestJScatterContainer:
 
     def test_init(self, container):
         expected = [
+            HBox,
             HBox,
             HBox,
             HBox,
@@ -139,6 +141,7 @@ class TestJScatterVisualizer:
             HBox,
             HBox,
             HBox,
+            HBox,
             Dropdown,
             SelectMultiple,
             HBox,
@@ -220,7 +223,15 @@ class TestJScatterVisualizer:
 
 
 class TestPlotWidgets:
-    def test_export_button(self, corpus, tmp_path):
+    @pytest.fixture
+    def plot_widgets(self, corpus):
+        return JScatterVisualizer.PlotWidgets(
+            df=corpus.to_dataframe().convert_dtypes(),
+            color_by="corpus",
+            tooltip_fields=set(),
+        )
+
+    def test_export_button(self, plot_widgets, tmp_path):
         expected_columns = [
             "text",
             "ID_DB",
@@ -235,10 +246,7 @@ class TestPlotWidgets:
             "distance_to_centroid",
         ]
 
-        pw = JScatterVisualizer.PlotWidgets(
-            df=corpus.to_dataframe(), color_by="corpus", tooltip_fields=set()
-        )
-        export_button = pw._export_button()
+        export_button = plot_widgets._export_button()
         assert isinstance(export_button, HBox)
 
         assert [type(w) for w in export_button.children] == [Button, Text, Checkbox]
@@ -251,27 +259,40 @@ class TestPlotWidgets:
 
         df = pd.read_csv(target_file)
         assert df.columns.to_list() == expected_columns
-        assert len(df) == len(corpus)
+        assert len(df) == 5
 
-    def test_color_by(self, corpus):
-        pw = JScatterVisualizer.PlotWidgets(
-            df=corpus.to_dataframe(), color_by="corpus", tooltip_fields=set()
-        )
-
-        color_box = pw._color_by_dropdown()
+    def test_color_by(self, plot_widgets):
+        color_box = plot_widgets._color_by_dropdown()
         assert isinstance(color_box, Dropdown)
         assert color_box.value == "corpus"
 
         color_box.value = "year"
-        assert pw._scatter_plot.color()["by"] == "year"
+        assert plot_widgets._scatter_plot.color()["by"] == "year"
 
-    def test_select_tooltips(self, corpus):
-        pw = JScatterVisualizer.PlotWidgets(
-            df=corpus.to_dataframe(), color_by="corpus", tooltip_fields=set()
-        )
-
-        select_tooltips = pw._select_tooltips()
+    def test_select_tooltips(self, plot_widgets):
+        select_tooltips = plot_widgets._select_tooltips()
         assert isinstance(select_tooltips, SelectMultiple)
 
         select_tooltips.value = ["provenance"]
-        assert pw._scatter_plot.tooltip()["properties"] == ["provenance"]
+        assert plot_widgets._scatter_plot.tooltip()["properties"] == ["provenance"]
+
+    @pytest.mark.parametrize(
+        "search_term,field,expected",
+        [
+            ("test", "text", np.arange(5)),
+            ("test", "provenance", np.arange(5)),
+            ("invalid", "text", []),
+        ],
+    )
+    def test_search_filter(self, plot_widgets, search_term, field, expected):
+        search_box = plot_widgets._search_filter()
+        assert isinstance(search_box, HBox)
+        assert [type(w) for w in search_box.children] == [Text, Dropdown]
+
+        search_box.children[0].value = search_term
+        search_box.children[1].value = field
+
+        np.testing.assert_equal(plot_widgets._scatter_plot.filter(), expected)
+
+        search_box.children[0].value = ""
+        np.testing.assert_equal(plot_widgets._scatter_plot.filter(), np.arange(5))
