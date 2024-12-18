@@ -40,6 +40,7 @@ class TestJScatterContainer:
             HBox,
             HBox,
             HBox,
+            HBox,
             Dropdown,
             SelectMultiple,
             HBox,
@@ -136,6 +137,7 @@ class TestJScatterVisualizer:
     ):
         # No Cluster button due to a lack of container
         expected_widget_types = [
+            HBox,
             HBox,
             HBox,
             HBox,
