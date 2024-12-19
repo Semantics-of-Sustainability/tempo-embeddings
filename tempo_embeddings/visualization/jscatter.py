@@ -544,7 +544,7 @@ class JScatterVisualizer:
             search = widgets.Text(
                 description="Search:",
                 placeholder="Enter search term",
-                continuous_update=True,
+                continuous_update=False,
             )
             field_selector = widgets.Dropdown(
                 options=sorted(
