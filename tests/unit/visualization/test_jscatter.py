@@ -296,3 +296,17 @@ class TestPlotWidgets:
         with mock.patch("pandas.Series.plot") as mock_plot:
             button.click()
             mock_plot.assert_called_once_with(kind="line", legend=mock.ANY)
+
+    def test_top_words_button(self, plot_widgets):
+        keyword_extractor = mock.Mock()
+        keyword_extractor.top_words.return_value = ["word1", "word2"]
+
+        button = plot_widgets._top_words_button(keyword_extractor, umap_model=None)
+        assert isinstance(button, HBox)
+
+        button, text = button.children
+        assert isinstance(button, Button)
+        assert isinstance(text, Text)
+
+        button.click()
+        assert text.value == "word1; word2"
