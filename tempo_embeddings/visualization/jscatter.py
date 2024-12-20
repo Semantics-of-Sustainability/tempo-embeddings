@@ -345,16 +345,14 @@ class JScatterVisualizer:
             except ValueError as e:
                 logging.debug(e)
 
-            select_tooltips = widgets.SelectMultiple(
-                options=options,
-                value=current,
-                # rows=10,
-                description="Tooltip fields",
-                disabled=False,
+            select_tooltips = widgets.TagsInput(
+                allowed_tags=options, value=current, allow_duplicates=False
             )
             select_tooltips.observe(handle_change, names="value")
 
-            return select_tooltips
+            return widgets.HBox(
+                [widgets.Label("Select Tooltip fields:"), select_tooltips]
+            )
 
         def _category_field_filter(
             self, field: str

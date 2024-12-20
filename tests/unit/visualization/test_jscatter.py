@@ -11,8 +11,10 @@ from ipywidgets.widgets import (
     Checkbox,
     Dropdown,
     HBox,
+    Label,
     SelectionRangeSlider,
     SelectMultiple,
+    TagsInput,
     Text,
     VBox,
 )
@@ -143,7 +145,7 @@ class TestJScatterVisualizer:
             HBox,
             HBox,
             Dropdown,
-            SelectMultiple,
+            HBox,
             HBox,
             HBox,
             HBox,
@@ -258,9 +260,13 @@ class TestPlotWidgets:
 
     def test_select_tooltips(self, plot_widgets):
         select_tooltips = plot_widgets._select_tooltips()
-        assert isinstance(select_tooltips, SelectMultiple)
+        assert isinstance(select_tooltips, HBox)
 
-        select_tooltips.value = ["provenance"]
+        label, tags_input = select_tooltips.children
+        assert isinstance(label, Label)
+        assert isinstance(tags_input, TagsInput)
+
+        tags_input.value = ["provenance"]
         assert plot_widgets._scatter_plot.tooltip()["properties"] == ["provenance"]
 
     @pytest.mark.parametrize(
