@@ -41,11 +41,11 @@ class TestJScatterContainer:
             HBox,
             HBox,
             HBox,
+            Button,
             HBox,
             Dropdown,
             SelectMultiple,
             HBox,
-            Button,
             HBox,
             HBox,
         ]
@@ -208,19 +208,6 @@ class TestJScatterVisualizer:
         assert isinstance(visualizer._cluster_plot, JScatterVisualizer.PlotWidgets)
         assert all(isinstance(c, Corpus) for c in visualizer.clusters)
 
-    def test_plot_button(self, corpus):
-        visualizer = JScatterVisualizer([corpus])
-        widgets = visualizer.get_widgets()
-
-        expected_widgets = [Button, BoundedIntText, Dropdown]
-        assert [type(w) for w in widgets[-1].children] == expected_widgets
-
-        button = widgets[-1].children[0]
-
-        with mock.patch("pandas.Series.plot") as mock_plot:
-            button.click()
-            mock_plot.assert_called_once_with(kind="line", legend="TestCorpus")
-
 
 class TestPlotWidgets:
     @pytest.fixture
@@ -296,3 +283,16 @@ class TestPlotWidgets:
 
         search_box.children[0].value = ""
         np.testing.assert_equal(plot_widgets._scatter_plot.filter(), np.arange(5))
+
+    def test_plot_by_field_button(self, plot_widgets):
+        button = plot_widgets._plot_by_field_button()
+        assert isinstance(button, HBox)
+
+        button, window_size_slider, groups_field_selector = button.children
+        assert isinstance(button, Button)
+        assert isinstance(window_size_slider, BoundedIntText)
+        assert isinstance(groups_field_selector, Dropdown)
+
+        with mock.patch("pandas.Series.plot") as mock_plot:
+            button.click()
+            mock_plot.assert_called_once_with(kind="line", legend=mock.ANY)
