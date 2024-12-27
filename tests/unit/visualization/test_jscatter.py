@@ -11,8 +11,10 @@ from ipywidgets.widgets import (
     Checkbox,
     Dropdown,
     HBox,
+    Label,
     SelectionRangeSlider,
     SelectMultiple,
+    TagsInput,
     Text,
     VBox,
 )
@@ -31,30 +33,33 @@ def mock_display():
         yield mock_display
 
 
+@pytest.fixture
+def expected_main_widgets_no_cluster_button():
+    """The main widgets *without the Cluster button*"""
+    return [HBox, HBox, HBox, HBox, Dropdown, HBox, HBox, HBox, HBox]
+
+
+@pytest.fixture
+def expected_main_widgets(expected_main_widgets_no_cluster_button):
+    """The main widgets *including the Cluster button*"""
+
+    expected_main_widgets_no_cluster_button.insert(3, Button)
+    return expected_main_widgets_no_cluster_button
+
+
 class TestJScatterContainer:
     @pytest.fixture
     def container(self, corpus):
         return JScatterContainer([corpus])
 
-    def test_init(self, container):
-        expected = [
-            HBox,
-            HBox,
-            HBox,
-            HBox,
-            Dropdown,
-            SelectMultiple,
-            HBox,
-            Button,
-            HBox,
-            HBox,
-        ]
-
+    def test_init(self, expected_main_widgets, container):
         tab = container._tab
 
         assert [type(widget) for widget in tab.children] == [VBox]
         assert tab.titles == ("Full Corpus",)
-        assert [type(widget) for widget in tab.children[0].children] == expected
+        assert [
+            type(widget) for widget in tab.children[0].children
+        ] == expected_main_widgets
 
     @pytest.mark.parametrize("title", [None, "Test Title"])
     def test_add_tab(self, container, corpus, title):
@@ -130,25 +135,13 @@ class TestJScatterVisualizer:
     def test_get_widgets(
         self,
         corpus,
+        expected_main_widgets_no_cluster_button,
         continuous_fields: list[str],
         categorical_fields: list[str],
         expected_continuous_filters: int,
         expected_categorical_filters: int,
         exception,
     ):
-        # No Cluster button due to a lack of container
-        expected_widget_types = [
-            HBox,
-            HBox,
-            HBox,
-            HBox,
-            Dropdown,
-            SelectMultiple,
-            HBox,
-            HBox,
-            HBox,
-        ]
-
         visualizer = JScatterVisualizer(
             [corpus],
             continuous_fields=continuous_fields,
@@ -160,7 +153,9 @@ class TestJScatterVisualizer:
             continous_filters = top_widgets[1].children
             categorical_filters = top_widgets[2].children
 
-            assert [type(w) for w in top_widgets] == expected_widget_types
+            assert [
+                type(w) for w in top_widgets
+            ] == expected_main_widgets_no_cluster_button
             assert [type(w) for w in continous_filters] == [
                 SelectionRangeSlider
             ] * expected_continuous_filters
@@ -207,19 +202,6 @@ class TestJScatterVisualizer:
         widgets[-1].click()
         assert isinstance(visualizer._cluster_plot, JScatterVisualizer.PlotWidgets)
         assert all(isinstance(c, Corpus) for c in visualizer.clusters)
-
-    def test_plot_button(self, corpus):
-        visualizer = JScatterVisualizer([corpus])
-        widgets = visualizer.get_widgets()
-
-        expected_widgets = [Button, BoundedIntText, Dropdown]
-        assert [type(w) for w in widgets[-1].children] == expected_widgets
-
-        button = widgets[-1].children[0]
-
-        with mock.patch("pandas.Series.plot") as mock_plot:
-            button.click()
-            mock_plot.assert_called_once_with(kind="line", legend="TestCorpus")
 
 
 class TestPlotWidgets:
@@ -271,9 +253,13 @@ class TestPlotWidgets:
 
     def test_select_tooltips(self, plot_widgets):
         select_tooltips = plot_widgets._select_tooltips()
-        assert isinstance(select_tooltips, SelectMultiple)
+        assert isinstance(select_tooltips, HBox)
 
-        select_tooltips.value = ["provenance"]
+        label, tags_input = select_tooltips.children
+        assert isinstance(label, Label)
+        assert isinstance(tags_input, TagsInput)
+
+        tags_input.value = ["provenance"]
         assert plot_widgets._scatter_plot.tooltip()["properties"] == ["provenance"]
 
     @pytest.mark.parametrize(
@@ -296,3 +282,30 @@ class TestPlotWidgets:
 
         search_box.children[0].value = ""
         np.testing.assert_equal(plot_widgets._scatter_plot.filter(), np.arange(5))
+
+    def test_plot_by_field_button(self, plot_widgets):
+        button = plot_widgets._plot_by_field_button()
+        assert isinstance(button, HBox)
+
+        button, window_size_slider, groups_field_selector = button.children
+        assert isinstance(button, Button)
+        assert isinstance(window_size_slider, BoundedIntText)
+        assert isinstance(groups_field_selector, Dropdown)
+
+        with mock.patch("pandas.Series.plot") as mock_plot:
+            button.click()
+            mock_plot.assert_called_once_with(kind="line", legend=mock.ANY)
+
+    def test_top_words_button(self, plot_widgets):
+        keyword_extractor = mock.Mock()
+        keyword_extractor.top_words.return_value = ["word1", "word2"]
+
+        button = plot_widgets._top_words_button(keyword_extractor, umap_model=None)
+        assert isinstance(button, HBox)
+
+        button, text = button.children
+        assert isinstance(button, Button)
+        assert isinstance(text, Text)
+
+        button.click()
+        assert text.value == "word1; word2"

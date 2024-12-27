@@ -174,17 +174,19 @@ class JScatterVisualizer:
 
     def get_widgets(self) -> list[widgets.Widget]:
         """Create all widgets"""
-        _widgets = self._plot_widgets.get_widgets(
+
+        _widgets: list[widgets.Widget] = self._plot_widgets.get_widgets(
             continuous_fields=self._continuous_fields,
             categorical_fields=self._categorical_fields,
+            keyword_extractor=self._keyword_extractor,
+            umap_model=self._umap,
         )
+
         if self._container is None:
             logging.warning("No container set, skipping cluster button.")
         else:
-            _widgets.append(self._cluster_button())
-
-        _widgets.append(self._top_words_button())
-        _widgets.append(self._plot_by_field_button())
+            # insert Cluster button below filter widgets
+            _widgets.insert(3, self._cluster_button())
 
         return _widgets
 
@@ -212,7 +214,8 @@ class JScatterVisualizer:
         """Create a button for clustering the data.
 
         This button triggers the creation of a new set of corpora (the clusters) and adds a new visualizer to the JScatterContainer instance.
-        That is why this method is part of the JScatterVisualizer class, not the PlotWidgets class.
+
+        Dev note: that is why this method is part of the JScatterVisualizer class, not the PlotWidgets class.
         """
 
         def cluster(button):  # pragma: no cover
@@ -246,106 +249,6 @@ class JScatterVisualizer:
         button.on_click(cluster)
 
         return button
-
-    def _plot_by_field_button(self) -> widgets.Button:
-        field = "year"
-
-        window_size_slider = widgets.BoundedIntText(
-            value=5,
-            min=1,
-            step=1,
-            description="Rolling Window over Years:",
-            layout={"width": "max-content"},
-        )
-        # TODO: update option to match selection
-        groups_field_selector = widgets.Dropdown(
-            description="Field to plot",
-            options=self._df.columns,
-            value="label",
-            layout={"width": "max-content"},
-        )
-        button = widgets.Button(
-            description="Plot by Field",
-            tooltip="Plot (selected) frequencies over years by selected field",
-        )
-        box_widgets = (button, window_size_slider, groups_field_selector)
-
-        corpus_per_year = self._df[field].value_counts()
-
-        def _plot_by_field(b):
-            _selection = self._df.loc[self._plot_widgets.selected()]
-            groups_field = groups_field_selector.value
-
-            n_values = _selection[groups_field].unique().size
-            if n_values > 20:
-                logging.warning(
-                    f"Too many groups to plot for field '{groups_field}' ({n_values})."
-                )
-            elif groups_field in _selection.columns:
-                for widget in box_widgets:
-                    widget.disabled = True
-                button.description = "Plotting..."
-
-                for label, group in _selection.groupby(groups_field):
-                    window = window_size_slider.value
-                    if label != OUTLIERS_LABEL:
-                        _series = (
-                            (group[field].value_counts() / corpus_per_year)
-                            .sort_index()
-                            .rolling(window)
-                            .mean()
-                        )
-                        _series.name = label
-                        ax = _series.plot(kind="line", legend=label)
-                        ax.set_title(
-                            f"Relative Frequency by '{groups_field}' (Rolling Window over {window} {field}s)"
-                        )
-                        ax.set_xlabel(field)
-                        ax.set_ylabel("Relative Frequency")
-
-                for widget in box_widgets:
-                    widget.disabled = False
-                button.description = "Plot by Field"
-            else:
-                # TODO: this should never happen if the dropdown is updated
-                raise ValueError(f"Field '{groups_field}' not found in selection.")
-
-        button.on_click(_plot_by_field)
-
-        return widgets.HBox(box_widgets)
-
-    def _top_words_button(self) -> widgets.Button:
-        text = widgets.Text(
-            description="Top Words:",
-            disabled=True,
-            placeholder="Top words for current selection will appear here.",
-            layout=widgets.Layout(width="100%", height="100%"),
-        )
-
-        def _show_top_words(b):  # pragma: no cover
-            button.disabled = True
-            button.description = "Calculating..."
-            text.value = ""
-
-            corpus = Corpus.from_dataframe(
-                self._df.loc[self._plot_widgets.selected()], umap_model=self._umap
-            )
-            top_words = self._keyword_extractor.top_words(
-                corpus, use_2d_embeddings=True
-            )
-            text.value = "; ".join(top_words)
-            button.disabled = False
-            button.description = "Top words:"
-
-        button = widgets.Button(
-            description="Top words",
-            disabled=False,
-            button_style="",  # 'success', 'info', 'warning', 'danger' or ''
-            tooltip="Compute top words for current selection",
-        )
-        button.on_click(_show_top_words)
-
-        return widgets.HBox((button, text))
 
     class PlotWidgets:
         """A class for generating the widgets for a plot."""
@@ -442,16 +345,14 @@ class JScatterVisualizer:
             except ValueError as e:
                 logging.debug(e)
 
-            select_tooltips = widgets.SelectMultiple(
-                options=options,
-                value=current,
-                # rows=10,
-                description="Tooltip fields",
-                disabled=False,
+            select_tooltips = widgets.TagsInput(
+                allowed_tags=options, value=current, allow_duplicates=False
             )
             select_tooltips.observe(handle_change, names="value")
 
-            return select_tooltips
+            return widgets.HBox(
+                [widgets.Label("Select Tooltip fields:"), select_tooltips]
+            )
 
         def _category_field_filter(
             self, field: str
@@ -618,18 +519,132 @@ class JScatterVisualizer:
                     )
             return index
 
+        def _plot_by_field_button(self) -> widgets.Button:
+            field = "year"
+
+            window_size_slider = widgets.BoundedIntText(
+                value=5,
+                min=1,
+                step=1,
+                description="Rolling Window over Years:",
+                layout={"width": "max-content"},
+            )
+
+            options = [c for c in self._df.columns if c not in {field, "text"}]
+            value = next(
+                (c for c in ["label", "cluster", "corpus"] if c in options), options[0]
+            )
+
+            # TODO: update option to match selection
+            groups_field_selector = widgets.Dropdown(
+                description="Field to plot",
+                options=options,
+                value=value,
+                layout={"width": "max-content"},
+            )
+            button = widgets.Button(
+                description="Plot by Field",
+                tooltip="Plot (selected) frequencies over years by selected field",
+            )
+            box_widgets = (button, window_size_slider, groups_field_selector)
+
+            corpus_per_year = self._df[field].value_counts()
+
+            def _plot_by_field(b):
+                _selection = self._df.loc[self.selected()]
+                groups_field = groups_field_selector.value
+
+                n_values = _selection[groups_field].unique().size
+                if n_values > 20:
+                    logging.warning(
+                        f"Too many groups to plot for field '{groups_field}' ({n_values})."
+                    )
+                elif groups_field in _selection.columns:
+                    for widget in box_widgets:
+                        widget.disabled = True
+                    button.description = "Plotting..."
+
+                    for label, group in _selection.groupby(groups_field):
+                        window = window_size_slider.value
+                        if label != OUTLIERS_LABEL:
+                            _series = (
+                                (group[field].value_counts() / corpus_per_year)
+                                .sort_index()
+                                .rolling(window)
+                                .mean()
+                            )
+                            _series.name = label
+                            ax = _series.plot(kind="line", legend=label)
+                            ax.set_title(
+                                f"Relative Frequency by '{groups_field}' (Rolling Window over {window} {field}s)"
+                            )
+                            ax.set_xlabel(field)
+                            ax.set_ylabel("Relative Frequency")
+
+                    for widget in box_widgets:
+                        widget.disabled = False
+                    button.description = "Plot by Field"
+                else:
+                    # TODO: this should never happen if the dropdown is updated
+                    raise ValueError(f"Field '{groups_field}' not found in selection.")
+
+            button.on_click(_plot_by_field)
+
+            return widgets.HBox(box_widgets)
+
+        def _top_words_button(
+            self, keyword_extractor: KeywordExtractor, umap_model
+        ) -> widgets.Button:
+            text = widgets.Text(
+                description="Top Words:",
+                disabled=True,
+                placeholder="Top words for current selection will appear here.",
+                layout=widgets.Layout(width="100%", height="100%"),
+            )
+
+            def _show_top_words(b):  # pragma: no cover
+                button.disabled = True
+                button.description = "Calculating..."
+                text.value = ""
+
+                corpus = Corpus.from_dataframe(
+                    self._df.loc[self.selected()], umap_model=umap_model
+                )
+                top_words = keyword_extractor.top_words(corpus, use_2d_embeddings=True)
+                text.value = "; ".join(top_words)
+                button.disabled = False
+                button.description = "Top words:"
+
+            button = widgets.Button(
+                description="Top words",
+                disabled=False,
+                button_style="",  # 'success', 'info', 'warning', 'danger' or ''
+                tooltip="Compute top words for current selection",
+            )
+            button.on_click(_show_top_words)
+
+            return widgets.HBox((button, text))
+
         def get_widgets(
-            self, *, continuous_fields: Iterable[str], categorical_fields: Iterable[str]
+            self,
+            *,
+            continuous_fields: Iterable[str],
+            categorical_fields: Iterable[str],
+            keyword_extractor: KeywordExtractor,
+            umap_model,
         ) -> list[widgets.Widget]:
             """Create all widgets
 
             Args:
                 continuous_fields (Iterable[str]): The continuous fields to filter on.
                 categorical_fields (Iterable[str]): The categorical fields to filter on.
+                keyword_extractor (KeywordExtractor): The keyword extractor to use for generating top words.
+                umap_model: The UMAP model to use for generating top words.
 
             Returns:
                 list[widgets.Widget]: The widgets to display.
             """
+            # TODO: move the arguments to the class level
 
             continuous_filters: list[widgets.Widget] = [
                 self._continuous_field_filter(field) for field in continuous_fields
@@ -649,4 +664,6 @@ class JScatterVisualizer:
                 self._color_by_dropdown(),
                 self._select_tooltips(),
                 self._export_button(),
+                self._top_words_button(keyword_extractor, umap_model),
+                self._plot_by_field_button(),
             ]
