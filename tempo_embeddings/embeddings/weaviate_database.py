@@ -19,7 +19,7 @@ from ..settings import STRICT, WEAVIATE_CONFIG_COLLECTION
 from ..text.corpus import Corpus
 from ..text.passage import Passage
 from ..text.year_span import YearSpan
-from .model import SentenceTransformerModelWrapper, TransformerModelWrapper
+from .model import TransformerModelWrapper
 from .vector_database import VectorDatabaseManagerWrapper
 
 Collection = TypeVar("Collection")
@@ -882,9 +882,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             auth_credentials=Auth.api_key(api_key) if api_key else None,
         )
         model = (
-            SentenceTransformerModelWrapper.from_pretrained(model_name)
-            if model_name
-            else None
+            TransformerModelWrapper.from_model_name(model_name) if model_name else None
         )
         return cls(model, client=weaviate_client, batch_size=batch_size)
 

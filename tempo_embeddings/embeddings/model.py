@@ -5,6 +5,7 @@ from typing import Iterable, Optional
 
 import torch
 from accelerate import Accelerator
+from huggingface_hub import HfApi, ModelInfo
 from tokenizers import Encoding
 from transformers import (
     AutoModel,
@@ -194,6 +195,28 @@ class TransformerModelWrapper(abc.ABC):
             layer=layer,
             **kwargs,
         )
+
+    @classmethod
+    def from_model_name(cls, model_name_or_path: str, **kwargs):
+        """Look up model class on Hugging Face model hub and return a model wrapper.
+
+        Args:
+            model_name_or_path: The name or path of the model to load
+            **kwargs: Additional keyword arguments to pass to the model wrapper
+        Returns:
+            A TransformerModelWrapper or subclass instance
+        """
+
+        lib_mapping: dict[str, TransformerModelWrapper] = {
+            "roberta": RobertaModelWrapper,
+            "sentence-transformers": SentenceTransformerModelWrapper,
+            "xmod": XModModelWrapper,
+        }
+
+        model_info: ModelInfo = HfApi().model_info(model_name_or_path)
+
+        cls = lib_mapping.get(model_info.library_name, TransformerModelWrapper)
+        return cls.from_pretrained(model_name_or_path, **kwargs)
 
 
 class RobertaModelWrapper(TransformerModelWrapper):
