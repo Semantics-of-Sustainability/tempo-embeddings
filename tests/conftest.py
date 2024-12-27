@@ -1,4 +1,5 @@
 import datetime
+import os
 import shutil
 from pathlib import Path
 
@@ -75,3 +76,5 @@ def weaviate_db_manager_with_data(weaviate_db_manager, corpus):
 
 
 CORPUS_DIR: Path = CWD / "data"
+
+IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
