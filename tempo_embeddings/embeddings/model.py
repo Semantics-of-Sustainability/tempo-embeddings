@@ -7,13 +7,7 @@ import torch
 from accelerate import Accelerator
 from huggingface_hub import HfApi, ModelInfo
 from tokenizers import Encoding
-from transformers import (
-    AutoModel,
-    AutoModelForMaskedLM,
-    AutoTokenizer,
-    RobertaModel,
-    XmodModel,
-)
+from transformers import AutoModel, AutoModelForMaskedLM, AutoTokenizer
 
 from ..text.corpus import Corpus
 from ..text.passage import Passage
@@ -207,62 +201,15 @@ class TransformerModelWrapper(abc.ABC):
             A TransformerModelWrapper or subclass instance
         """
 
-        lib_mapping: dict[str, TransformerModelWrapper] = {
-            "roberta": RobertaModelWrapper,
-            "sentence-transformers": SentenceTransformerModelWrapper,
-            "xmod": XModModelWrapper,
-        }
-
         model_info: ModelInfo = HfApi().model_info(model_name_or_path)
 
-        cls = lib_mapping.get(model_info.library_name, TransformerModelWrapper)
-        return cls.from_pretrained(model_name_or_path, **kwargs)
-
-
-class RobertaModelWrapper(TransformerModelWrapper):
-    # TODO: Is this subclass necessary, or can I use AutoModelForMaskedLM?
-    @classmethod
-    def from_pretrained(
-        cls,
-        model_name_or_path: str,
-        tokenizer_name_or_path: str = None,
-        model_class=RobertaModel,
-        layer: int = -1,
-        **kwargs,
-    ):
-        # TODO: this should return a RobertaModelWrapper object
-        return TransformerModelWrapper.from_pretrained(
-            model_name_or_path, tokenizer_name_or_path, model_class, layer, **kwargs
-        )
-
-
-class XModModelWrapper(TransformerModelWrapper):
-    @classmethod
-    def from_pretrained(
-        cls,
-        model_name_or_path: str,
-        tokenizer_name_or_path: str = "xlm-roberta-base",
-        model_class=XmodModel,
-        layer: int = -1,
-        *,
-        default_language: str = "en_XX",
-        **kwargs,
-    ):
-        # TODO: this should return a XModModelWrapper object
-        model = TransformerModelWrapper.from_pretrained(
-            model_name_or_path, tokenizer_name_or_path, model_class, layer, **kwargs
-        )
-
-        _model = model._model  # pylint: disable=protected-access
-        if default_language in _model.config.languages:
-            _model.set_default_language(default_language)
+        if model_info.library_name == "sentence-transformers":
+            logging.info("Using SentenceTransformerModelWrapper")
+            cls = SentenceTransformerModelWrapper
         else:
-            raise ValueError(
-                f"Default language '{default_language}' not in model languages. "
-                f"Valid languages are: {str(_model.config.languages)}"
-            )
+            logging.info("Using default TransformerModelWrapper")
 
-        return model
+        return cls.from_pretrained(model_name_or_path, **kwargs)
 
 
 class SentenceTransformerModelWrapper(TransformerModelWrapper):

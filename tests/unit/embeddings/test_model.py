@@ -3,10 +3,8 @@ import platform
 import pytest
 
 from tempo_embeddings.embeddings.model import (
-    RobertaModelWrapper,
     SentenceTransformerModelWrapper,
     TransformerModelWrapper,
-    XModModelWrapper,
 )
 from tempo_embeddings.settings import DEFAULT_LANGUAGE_MODEL
 
@@ -17,6 +15,7 @@ from ...conftest import IN_GITHUB_ACTIONS
     platform.platform().startswith("macOS") and IN_GITHUB_ACTIONS,
     reason="MacOS Github Runners don't have enough memory.",
 )
+# TODO: mock the model loading
 class TestSentenceTransformerModelWrapper:
     def test_embed_corpus(self, corpus):
         model = SentenceTransformerModelWrapper.from_pretrained(DEFAULT_LANGUAGE_MODEL)
@@ -31,12 +30,10 @@ class TestSentenceTransformerModelWrapper:
         "model_name, expected_model_class",
         [
             ("GroNLP/bert-base-dutch-cased", TransformerModelWrapper),
-            ("FacebookAI/roberta-base", RobertaModelWrapper),
             (
                 "NetherlandsForensicInstitute/robbert-2022-dutch-sentence-transformers",
                 SentenceTransformerModelWrapper,
             ),
-            ("facebook/xmod-base", XModModelWrapper),
         ],
     )
     def test_from_model_name(self, model_name, expected_model_class):
