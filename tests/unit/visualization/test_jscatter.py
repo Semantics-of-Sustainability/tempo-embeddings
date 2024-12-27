@@ -33,30 +33,33 @@ def mock_display():
         yield mock_display
 
 
+@pytest.fixture
+def expected_main_widgets_no_cluster_button():
+    """The main widgets *without the Cluster button*"""
+    return [HBox, HBox, HBox, HBox, Dropdown, HBox, HBox, HBox, HBox]
+
+
+@pytest.fixture
+def expected_main_widgets(expected_main_widgets_no_cluster_button):
+    """The main widgets *including the Cluster button*"""
+
+    expected_main_widgets_no_cluster_button.insert(3, Button)
+    return expected_main_widgets_no_cluster_button
+
+
 class TestJScatterContainer:
     @pytest.fixture
     def container(self, corpus):
         return JScatterContainer([corpus])
 
-    def test_init(self, container):
-        expected = [
-            HBox,
-            HBox,
-            HBox,
-            Button,
-            HBox,
-            Dropdown,
-            SelectMultiple,
-            HBox,
-            HBox,
-            HBox,
-        ]
-
+    def test_init(self, expected_main_widgets, container):
         tab = container._tab
 
         assert [type(widget) for widget in tab.children] == [VBox]
         assert tab.titles == ("Full Corpus",)
-        assert [type(widget) for widget in tab.children[0].children] == expected
+        assert [
+            type(widget) for widget in tab.children[0].children
+        ] == expected_main_widgets
 
     @pytest.mark.parametrize("title", [None, "Test Title"])
     def test_add_tab(self, container, corpus, title):
@@ -132,25 +135,13 @@ class TestJScatterVisualizer:
     def test_get_widgets(
         self,
         corpus,
+        expected_main_widgets_no_cluster_button,
         continuous_fields: list[str],
         categorical_fields: list[str],
         expected_continuous_filters: int,
         expected_categorical_filters: int,
         exception,
     ):
-        # No Cluster button due to a lack of container
-        expected_widget_types = [
-            HBox,
-            HBox,
-            HBox,
-            HBox,
-            Dropdown,
-            HBox,
-            HBox,
-            HBox,
-            HBox,
-        ]
-
         visualizer = JScatterVisualizer(
             [corpus],
             continuous_fields=continuous_fields,
@@ -162,7 +153,9 @@ class TestJScatterVisualizer:
             continous_filters = top_widgets[1].children
             categorical_filters = top_widgets[2].children
 
-            assert [type(w) for w in top_widgets] == expected_widget_types
+            assert [
+                type(w) for w in top_widgets
+            ] == expected_main_widgets_no_cluster_button
             assert [type(w) for w in continous_filters] == [
                 SelectionRangeSlider
             ] * expected_continuous_filters
