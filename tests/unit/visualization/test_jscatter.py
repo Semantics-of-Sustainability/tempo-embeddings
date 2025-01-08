@@ -166,9 +166,9 @@ class TestJScatterVisualizer:
     @pytest.mark.parametrize(
         "tooltip_fields,expected",
         [
-            (["provenance"], {"provenance"}),
-            (["provenance", "date"], {"provenance"}),
-            (["provenance", "unknown"], {"provenance"}),
+            (["provenance"], ["provenance"]),
+            (["provenance", "date"], ["provenance"]),
+            (["provenance", "unknown"], ["provenance"]),
         ],
     )
     def test_valid_tooltip_fields(self, corpus, tooltip_fields, expected):
