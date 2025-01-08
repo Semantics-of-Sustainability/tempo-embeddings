@@ -234,7 +234,15 @@ class JScatterVisualizer:
                     c, use_2d_embeddings=True
                 )
 
-            self._container.add_tab(self.with_corpora(clusters, tooltip_fields=None))
+            categorical_fields = self._categorical_fields
+            if "label" not in categorical_fields:
+                categorical_fields.insert(0, "label")
+
+            self._container.add_tab(
+                self.with_corpora(
+                    clusters, categorical_fields=categorical_fields, tooltip_fields=None
+                )
+            )
 
             button.disabled = False
             button.description = "Cluster"
@@ -373,7 +381,7 @@ class JScatterVisualizer:
             values = self._df[field].value_counts()
             options = values.where(values > 1).index.tolist()
 
-            if field in self._df.columns and 1 < len(options):
+            if field in self._df.columns and len(options) > 1:
                 selector = widgets.SelectMultiple(
                     options=[self.__SHOW_ALL] + options,
                     value=[self.__SHOW_ALL],  # TODO: filter out outliers
