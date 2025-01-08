@@ -166,9 +166,9 @@ class TestJScatterVisualizer:
     @pytest.mark.parametrize(
         "tooltip_fields,expected",
         [
-            (["provenance"], {"provenance"}),
-            (["provenance", "date"], {"provenance"}),
-            (["provenance", "unknown"], {"provenance"}),
+            (["provenance"], ["provenance"]),
+            (["provenance", "date"], ["provenance"]),
+            (["provenance", "unknown"], ["provenance"]),
         ],
     )
     def test_valid_tooltip_fields(self, corpus, tooltip_fields, expected):
@@ -177,17 +177,23 @@ class TestJScatterVisualizer:
         assert visualizer._tooltip_fields == expected
 
     def test_with_corpora(self, corpus):
-        visualizer = JScatterVisualizer([corpus])
-
-        new_visualizer = visualizer.with_corpora([corpus] * 2)
-
-        for arg in (
+        iterable_args = {
             "_categorical_fields",
             "_continuous_fields",
             "_tooltip_fields",
             "_color_by",
-            "_keyword_extractor",
-        ):
+        }
+        non_iterable_args = {"_keyword_extractor"}
+
+        visualizer = JScatterVisualizer([corpus])
+
+        new_visualizer = visualizer.with_corpora([corpus] * 2)
+
+        for arg in iterable_args:
+            assert sorted(getattr(new_visualizer, arg)) == sorted(
+                getattr(visualizer, arg)
+            )
+        for arg in non_iterable_args:
             assert getattr(new_visualizer, arg) == getattr(visualizer, arg)
 
     @pytest.mark.skip(reason="TODO")

@@ -52,6 +52,19 @@ class JScatterVisualizer:
     """A class for creating interactive scatter plots with Jupyter widgets."""
 
     _DEFAULT_CONTINUOUS_FIELDS: set[str] = {"year"}
+    _PREFERRED_TOOLTIP_FIELDS: list[str] = [
+        "title",
+        "debate_title",
+        "text",
+        "url",
+        "speaker",
+        "party",
+        "label",
+        "Origin ID",
+        "collection",
+    ]
+    """Fields to be shown on top of the list in tooltips, if available. Ordered by priority."""
+
     _EXCLUDE_FILTER_FIELDS: set[str] = {
         "date",
         "day",
@@ -105,8 +118,9 @@ class JScatterVisualizer:
 
         self._init_df()
 
-        self._tooltip_fields: set[str] = self._valid_tooltip_fields(
-            tooltip_fields or merged_corpus.metadata_fields()
+        self._tooltip_fields: list[str] = self._valid_tooltip_fields(
+            tooltip_fields
+            or merged_corpus.metadata_fields() | set(self._PREFERRED_TOOLTIP_FIELDS)
         )
 
         self._continuous_fields = continuous_fields
@@ -132,18 +146,26 @@ class JScatterVisualizer:
             if not all(column in c.to_dataframe().columns for c in corpora):
                 raise ValueError(f"Missing required field '{column}' in corpora.")
 
-    def _valid_tooltip_fields(self, tooltip_fields: set[str]) -> set[str]:
-        return (
-            set(tooltip_fields)
+    def _valid_tooltip_fields(self, tooltip_fields: set[str]) -> list[str]:
+        tooltip_fields: set[str] = (
+            set(tooltip_fields)  # prevent duplicates
             .intersection(self._df.columns)
             .difference(self._EXCLUDE_TOOLTIP_FIELDS)
             .difference(
+                # Exclude complex (object) field types:
                 (
                     column
                     for column, dtype in self._df.dtypes.items()
                     if dtype == "object"
                 )
             )
+        )
+
+        return sorted(
+            tooltip_fields,
+            key=lambda f: self._PREFERRED_TOOLTIP_FIELDS.index(f)
+            if f in self._PREFERRED_TOOLTIP_FIELDS
+            else len(self._PREFERRED_TOOLTIP_FIELDS),
         )
 
     def _init_df(self):
@@ -234,7 +256,13 @@ class JScatterVisualizer:
                     c, use_2d_embeddings=True
                 )
 
-            self._container.add_tab(self.with_corpora(clusters, tooltip_fields=None))
+            categorical_fields = self._categorical_fields
+            if "label" not in categorical_fields:
+                categorical_fields.insert(0, "label")
+
+            self._container.add_tab(
+                self.with_corpora(clusters, categorical_fields=categorical_fields)
+            )
 
             button.disabled = False
             button.description = "Cluster"
@@ -373,7 +401,7 @@ class JScatterVisualizer:
             values = self._df[field].value_counts()
             options = values.where(values > 1).index.tolist()
 
-            if field in self._df.columns and 1 < len(options):
+            if field in self._df.columns and len(options) > 1:
                 selector = widgets.SelectMultiple(
                     options=[self.__SHOW_ALL] + options,
                     value=[self.__SHOW_ALL],  # TODO: filter out outliers
