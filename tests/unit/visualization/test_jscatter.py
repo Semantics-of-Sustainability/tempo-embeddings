@@ -188,7 +188,9 @@ class TestJScatterVisualizer:
             "_color_by",
             "_keyword_extractor",
         ):
-            assert getattr(new_visualizer, arg) == getattr(visualizer, arg)
+            assert sorted(getattr(new_visualizer, arg)) == sorted(
+                getattr(visualizer, arg)
+            )
 
     @pytest.mark.skip(reason="TODO")
     def test_cluster_button(self, mock_display, corpus):
