@@ -118,7 +118,7 @@ class JScatterVisualizer:
 
         self._init_df()
 
-        self._tooltip_fields: set[str] = self._valid_tooltip_fields(
+        self._tooltip_fields: list[str] = self._valid_tooltip_fields(
             tooltip_fields
             or merged_corpus.metadata_fields() | set(self._PREFERRED_TOOLTIP_FIELDS)
         )
