@@ -108,8 +108,9 @@ if __name__ == "__main__":
         if corpus not in corpora:
             parser.error(f"Corpus '{corpus}' not found in the configuration file.")
 
+    # TODO: ignore comment lines (startwith('#'))?
     filter_terms = args.filter_terms or [
-        line.strip() for line in args.filter_terms_file
+        line.strip() for line in args.filter_terms_file if line.strip()
     ]
 
     # TODO: model requires a different wrapper class for non-SentenceBert models
