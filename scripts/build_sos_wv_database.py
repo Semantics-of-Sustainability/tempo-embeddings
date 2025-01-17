@@ -1,6 +1,5 @@
 import argparse
 import csv
-import logging
 from pathlib import Path
 
 from tqdm import tqdm
@@ -31,6 +30,11 @@ def arguments_parser():
         type=int,
         required=False,
         help="Maximum number of files to process per corpus. All files if not specified.",
+    )
+    parser.add_argument(
+        "--skip-existing",
+        action="store_true",
+        help="Skip existing files, based on the 'provenance' metadata field.",
     )
 
     overwrite_args = parser.add_mutually_exclusive_group(required=False)
@@ -132,12 +136,11 @@ if __name__ == "__main__":
         if args.overwrite:
             db.delete_collection(corpus_name)
 
-        try:
-            ingested_files = set(db.get_metadata_values(corpus_name, "provenance"))
-        except ValueError as e:
-            logging.debug(e)
-            ingested_files = set()
-        logging.info(f"Skipping {len(ingested_files)} files for '{corpus_name}'.")
+        ingested_files = (
+            set(db.get_metadata_values(corpus_name, "provenance"))
+            if args.skip_existing
+            else set()
+        )
 
         corpus_config = corpus_reader[corpus_name]
         for corpus in corpus_config.build_corpora(
