@@ -65,7 +65,7 @@ DEVICE: Optional[str] = os.environ.get("DEVICE")
 WEAVIATE_CONFIG_COLLECTION: str = "TempoEmbeddings"
 WEAVIATE_SERVERS = [
     ("UU", ("semantics-of-sustainability.hum.uu.nl", 443, True)),
-    ("Research Cloud", ("145.38.187.187", 8087, False)),
+    ("Research Cloud", ("145.38.192.173", 8087, False)),
     ("local", ("localhost", 8087, False)),
 ]
 """Values provide a tuple (host,port,use SSL)"""
