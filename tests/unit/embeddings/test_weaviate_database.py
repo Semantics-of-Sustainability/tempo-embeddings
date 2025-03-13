@@ -12,6 +12,8 @@ import weaviate
 from tempo_embeddings.embeddings.weaviate_database import QueryBuilder, WeaviateConfigDb
 from tempo_embeddings.settings import STRICT
 from tempo_embeddings.text.corpus import Corpus
+from tempo_embeddings.text.highlighting import Highlighting
+from tempo_embeddings.text.passage import Passage
 from tempo_embeddings.text.year_span import YearSpan
 from weaviate.classes.query import Filter
 from weaviate.exceptions import WeaviateStartUpError
@@ -101,6 +103,33 @@ class TestWeaviateDatabase:
                 "date": datetime.datetime(year, 1, 1, tzinfo=datetime.timezone.utc),
                 "collection": "TestCorpus",
             }
+
+    @pytest.mark.parametrize(
+        "passages_text,filter_duplicates,expected_results",
+        [
+            ("test text ", True, 5),
+            ("test text ", False, 10),
+            ("new text ", True, 10),
+            ("new text ", False, 10),
+        ],
+    )
+    def test_get_corpus_duplicates(
+        self,
+        weaviate_db_manager_with_data,
+        passages_text,
+        filter_duplicates,
+        expected_results,
+    ):
+        passages = [
+            Passage(passages_text + str(i), highlighting=Highlighting(1, 3))
+            for i in range(TEST_CORPUS_SIZE)
+        ]
+        weaviate_db_manager_with_data.ingest(Corpus(passages, label="TestCorpus"))
+
+        corpus = weaviate_db_manager_with_data.get_corpus(
+            "TestCorpus", filter_duplicates=filter_duplicates
+        )
+        assert len(corpus.passages) == expected_results
 
     def test_get_corpus_exception(self, weaviate_db_manager_with_data, mocker):
         mocker.patch(

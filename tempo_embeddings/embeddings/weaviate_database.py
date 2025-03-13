@@ -392,6 +392,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         metadata_not: Optional[dict[str, Any]] = None,
         include_embeddings: bool = False,
         limit: int = 10000,
+        filter_duplicates: bool = True,
     ) -> Corpus:
         # TODO: replace year_from, year_to with YearSpan object
 
@@ -406,7 +407,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             metadata_not (dict[str, Any], optional): Additional filter criteria to _exclude_ exact matching in the form <field, term>.
             include_embeddings (bool, optional): If true, include the embeddings to the output. Defaults to False.
             limit (int, optional): The maximum number of passages in the initial corpus. Defaults to 10000.
-
+            filter_duplicates (bool, optional): If True, filter out duplicate passages. Defaults to True.
         Returns:
             Corpus: A corpus object
 
@@ -441,7 +442,38 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             label = collection
             if passages and filter_words:
                 label += ": '" + "; ".join(filter_words) + "'"
-            return Corpus(passages, label)
+
+            return self._response_to_corpus(
+                response.objects, collection, label, filter_duplicates
+            )
+
+    @staticmethod
+    def _response_to_corpus(
+        objects, collection_name: str, label: str, filter_duplicates: bool
+    ) -> Corpus:
+        passages = []
+
+        if filter_duplicates:
+            seen_texts = set()
+
+            for object in objects:
+                text = object.properties["passage"]
+                if text not in seen_texts:
+                    passages.append(
+                        Passage.from_weaviate_record(object, collection=collection_name)
+                    )
+                    seen_texts.add(text)
+
+            logging.info(
+                f"Found {len(passages)} unique passages in {len(objects)} objects for collection '{collection_name}'."
+            )
+        else:
+            passages = [
+                Passage.from_weaviate_record(o, collection=collection_name)
+                for o in objects
+            ]
+
+        return Corpus(passages, label)
 
     def doc_frequencies_per_year(
         self,
@@ -606,6 +638,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         metadata_not: Optional[dict[str, Any]] = None,
     ) -> Iterable[tuple[Passage, float]]:
         # TODO: use autocut: https://weaviate.io/developers/weaviate/api/graphql/additional-operators#autocut
+        # TODO: add excluded passages parameter and account for them in max_neighbours
 
         if max_neighbors > 10000:
             self._logger.warning(
