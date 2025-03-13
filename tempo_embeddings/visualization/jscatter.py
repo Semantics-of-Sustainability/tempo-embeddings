@@ -608,6 +608,7 @@ class JScatterVisualizer:
                             )
                             ax.set_xlabel(field)
                             ax.set_ylabel("Relative Frequency")
+                            ax.legend(bbox_to_anchor=(0, -0.1), loc="upper center")
 
                     for widget in box_widgets:
                         widget.disabled = False
