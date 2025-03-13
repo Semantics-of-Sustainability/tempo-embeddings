@@ -119,16 +119,24 @@ class TestWeaviateDatabase:
         passages_text,
         filter_duplicates,
         expected_results,
+        caplog,
     ):
         passages = [
-            Passage(passages_text + str(i), highlighting=Highlighting(1, 3))
+            Passage(passages_text + str(i), highlighting=Highlighting(2, 4))
             for i in range(TEST_CORPUS_SIZE)
         ]
         weaviate_db_manager_with_data.ingest(Corpus(passages, label="TestCorpus"))
 
-        corpus = weaviate_db_manager_with_data.get_corpus(
-            "TestCorpus", filter_duplicates=filter_duplicates
-        )
+        with caplog.at_level(logging.INFO):
+            corpus = weaviate_db_manager_with_data.get_corpus(
+                "TestCorpus", filter_duplicates=filter_duplicates
+            )
+            assert (
+                not filter_duplicates
+                or f"Found {expected_results} unique passages in 10 objects for collection 'TestCorpus'."
+                in caplog.messages
+            )
+
         assert len(corpus.passages) == expected_results
 
     def test_get_corpus_exception(self, weaviate_db_manager_with_data, mocker):
