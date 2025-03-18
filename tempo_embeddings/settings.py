@@ -74,3 +74,7 @@ WEAVIATE_API_KEY: str = os.environ.get("WEAVIATE_API_KEY", None)
 
 STRICT = {"strict": True} if int(platform.python_version_tuple()[1]) >= 10 else {}
 """Optional argument for zip() to enforce strict mode in Python 3.10+."""
+
+DOC_FREQUENCY_CACHE_FILE = os.getenv(
+    "DOC_FREQUENCY_CACHE", str(DATA_DIR / "doc_frequency_cache")
+)
