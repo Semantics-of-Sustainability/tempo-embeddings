@@ -483,6 +483,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         end_year: int,
         metadata: Optional[dict[str, Any]] = None,
         metadata_not: Optional[dict[str, Any]] = None,
+        normalize: bool = False,
     ) -> dict[int, float]:
         """Get the number of documents that contain a term in the collection per year.
 
@@ -493,22 +494,22 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             end_year (int): The end year
             metadata (dict[str, Any]): Additional metadata filters
             metadata_not (dict[str, Any]): Additional metadata filters to exclude
+            normalize: If True, normalize the number of matching documents
+        Returns:
+            dict[int, float]: The (relative) number of occurrences of the term per year
         """
-        frequencies: dict[int, float] = {}
-        collection = self._client.collections.get(collection)
-        for year in range(start_year, end_year):
-            year_span = YearSpan(year, year)
-            filters = QueryBuilder.build_filter(
-                filter_words=[term],
-                year_span=year_span,
+
+        return {
+            year: self.doc_frequency(
+                term,
+                collection,
                 metadata=metadata,
                 metadata_not=metadata_not,
-                year_field="date",
+                normalize=normalize,
+                year_span=YearSpan(year, year),
             )
-            response = collection.aggregate.over_all(filters=filters, total_count=True)
-            frequencies[year] = response.total_count
-
-        return frequencies
+            for year in range(start_year, end_year)
+        }
 
     def doc_frequency(
         self,
@@ -517,6 +518,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         metadata: Optional[dict[str, Any]] = None,
         metadata_not: Optional[dict[str, Any]] = None,
         normalize: bool = False,
+        year_span: Optional[YearSpan] = None,
     ) -> float:
         """Get the number of documents that contain a term in the collection.
 
@@ -531,6 +533,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             metadata (dict[str, Any]): Additional metadata filters
             metadata_not (dict[str, Any]): Additional metadata filters to exclude
             normalize: If True, normalize the number of matching documents
+            year_span (Optional[YearSpan], optional): The year range to consider. Defaults to None.
 
         Returns:
             float: The (relative) number of occurrences of the term
@@ -544,7 +547,8 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
 
         response = self._client.collections.get(collection).aggregate.over_all(
             filters=QueryBuilder.build_filter(
-                filter_words=search_terms,
+                search_terms,
+                year_span,
                 metadata=metadata,
                 metadata_not=QueryBuilder.clean_metadata(
                     metadata_not, self.properties(collection)
@@ -556,13 +560,16 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
 
         if freq and normalize:
             total: int = self.doc_frequency(
-                "", collection, metadata, metadata_not, normalize=False
+                "",
+                collection,
+                metadata,
+                metadata_not,
+                normalize=False,
+                year_span=year_span,
             )
-            result = freq / total
-        else:
-            result = freq
+            freq /= total
 
-        return result
+        return freq
 
     def neighbours(
         self,

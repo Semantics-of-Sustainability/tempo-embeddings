@@ -171,6 +171,38 @@ class TestWeaviateDatabase:
         assert doc_freq == expected
         assert not caplog.record_tuples
 
+    @pytest.mark.parametrize(
+        "term, metadata, normalize, start_year, end_year,expected",
+        [
+            ("test", None, False, 1950, 1955, {year: 1 for year in range(1950, 1955)}),
+            ("test", None, True, 1950, 1955, {year: 1 for year in range(1950, 1955)}),
+            ("unk", None, True, 1950, 1955, {year: 0 for year in range(1950, 1955)}),
+            ("unk", None, False, 1950, 1955, {year: 0 for year in range(1950, 1955)}),
+        ],
+    )
+    def test_doc_frequencies_per_year(
+        self,
+        weaviate_db_manager_with_data,
+        term,
+        metadata,
+        normalize,
+        start_year,
+        end_year,
+        expected,
+    ):
+        # FIXME: the test data only has one passage per year, so the result is always 0 or 1
+        assert (
+            weaviate_db_manager_with_data.doc_frequencies_per_year(
+                term,
+                "TestCorpus",
+                start_year,
+                end_year,
+                metadata=metadata,
+                normalize=normalize,
+            )
+            == expected
+        )
+
     @pytest.mark.parametrize("k", [0, 1, 2, 3, 4, 5, 10])
     def test_neighbours(self, weaviate_db_manager_with_data, corpus, k):
         # TODO: test excluded_passages parameter
