@@ -18,7 +18,12 @@ from weaviate.classes.query import Filter, MetadataQuery
 from weaviate.exceptions import UnexpectedStatusCodeError, WeaviateQueryError
 from weaviate.util import generate_uuid5
 
-from ..settings import DOC_FREQUENCY_CACHE_FILE, STRICT, WEAVIATE_CONFIG_COLLECTION
+from ..settings import (
+    DOC_FREQUENCY_CACHE_FILE,
+    STRICT,
+    TTL_CACHE,
+    WEAVIATE_CONFIG_COLLECTION,
+)
 from ..text.corpus import Corpus
 from ..text.passage import Passage
 from ..text.year_span import YearSpan
@@ -537,7 +542,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             cachetools.TTLCache,
             filename=DOC_FREQUENCY_CACHE_FILE,
             maxsize=1024,
-            ttl=2628000,  # 1 month
+            ttl=TTL_CACHE,
         ),
         key=__doc_frequency_hashkey,
     )
