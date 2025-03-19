@@ -33,6 +33,24 @@ from .vector_database import VectorDatabaseManagerWrapper
 Collection = TypeVar("Collection")
 
 
+def doc_frequency_hashkey(term, collection, metadata, metadata_not, year_span):
+    """Create a hashkey for the doc_frequency() method."""
+
+    def dict_to_tuple(d):
+        return tuple(sorted(d.items())) if d else None
+
+    (start, end) = (year_span.start, year_span.end) if year_span else (None, None)
+
+    return hashkey(
+        tuple(term),
+        collection.name,
+        dict_to_tuple(metadata),
+        dict_to_tuple(metadata_not),
+        start,
+        end,
+    )
+
+
 class WeaviateConfigDb:
     # TODO: When this is implemented for other database backends, move common parts to an abstract class
 
@@ -522,22 +540,6 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         }
 
     @staticmethod
-    def __doc_frequency_hashkey(term, collection, metadata, metadata_not, year_span):
-        def dict_to_tuple(d):
-            return tuple(sorted(d.items())) if d else None
-
-        (start, end) = (year_span.start, year_span.end) if year_span else (None, None)
-
-        return hashkey(
-            tuple(term),
-            collection.name,
-            dict_to_tuple(metadata),
-            dict_to_tuple(metadata_not),
-            start,
-            end,
-        )
-
-    @staticmethod
     @cachetools.cached(
         PersistentCache(
             cachetools.TTLCache,
@@ -545,7 +547,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             maxsize=1024,
             ttl=TTL_CACHE,
         ),
-        key=__doc_frequency_hashkey,
+        key=doc_frequency_hashkey,
     )
     def _doc_frequency(
         terms: list[str],
