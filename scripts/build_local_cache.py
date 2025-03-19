@@ -23,6 +23,13 @@ if __name__ == "__main__":
     parser.add_argument("--start", type=int, default=1850, help="Start year")
     parser.add_argument("--end", type=int, default=2025, help="End year (exclusive)")
 
+    parser.add_argument(
+        "--terms",
+        type=str,
+        nargs="*",
+        help="If given, cache frequencies for documents containing those terms.",
+    )
+
     weaviate_args = parser.add_argument_group("Weaviate arguments")
     weaviate_args.add_argument(
         "--weaviate-host",
@@ -58,4 +65,10 @@ if __name__ == "__main__":
 
     for collection in args.collections:
         for year in tqdm(range(args.start, args.end), desc=collection, unit="year"):
-            db.doc_frequency("", collection, year_span=YearSpan(year, year + 1))
+            if args.terms:
+                for term in args.terms:
+                    db.doc_frequency(
+                        term, collection, year_span=YearSpan(year, year + 1)
+                    )
+            else:
+                db.doc_frequency("", collection, year_span=YearSpan(year, year + 1))
