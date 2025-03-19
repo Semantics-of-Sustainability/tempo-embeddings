@@ -78,3 +78,5 @@ STRICT = {"strict": True} if int(platform.python_version_tuple()[1]) >= 10 else 
 DOC_FREQUENCY_CACHE_FILE = os.getenv(
     "DOC_FREQUENCY_CACHE", str(DATA_DIR / "doc_frequency_cache")
 )
+TTL_CACHE = 60 * 60 * 24 * 7 * 30  # 1 month
+"""Time-to-live for the doc frequency cache in seconds."""
