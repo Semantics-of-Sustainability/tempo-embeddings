@@ -537,6 +537,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             end,
         )
 
+    @staticmethod
     @cachetools.cached(
         PersistentCache(
             cachetools.TTLCache,
@@ -546,7 +547,6 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         ),
         key=__doc_frequency_hashkey,
     )
-    @staticmethod
     def _doc_frequency(
         terms: list[str],
         collection: Collection,
