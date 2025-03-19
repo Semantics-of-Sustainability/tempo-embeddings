@@ -5,6 +5,9 @@ import uuid
 from functools import lru_cache
 from typing import Any, Iterable, Optional, TypeVar
 
+import cachetools
+from cachetools.keys import hashkey
+from shelved_cache import PersistentCache
 from tqdm import tqdm
 
 import weaviate
@@ -15,7 +18,12 @@ from weaviate.classes.query import Filter, MetadataQuery
 from weaviate.exceptions import UnexpectedStatusCodeError, WeaviateQueryError
 from weaviate.util import generate_uuid5
 
-from ..settings import STRICT, WEAVIATE_CONFIG_COLLECTION
+from ..settings import (
+    DOC_FREQUENCY_CACHE_FILE,
+    STRICT,
+    TTL_CACHE,
+    WEAVIATE_CONFIG_COLLECTION,
+)
 from ..text.corpus import Corpus
 from ..text.passage import Passage
 from ..text.year_span import YearSpan
@@ -23,6 +31,24 @@ from .model import TransformerModelWrapper
 from .vector_database import VectorDatabaseManagerWrapper
 
 Collection = TypeVar("Collection")
+
+
+def doc_frequency_hashkey(term, collection, metadata, metadata_not, year_span):
+    """Create a hashkey for the doc_frequency() method."""
+
+    def dict_to_tuple(d):
+        return tuple(sorted(d.items())) if d else None
+
+    (start, end) = (year_span.start, year_span.end) if year_span else (None, None)
+
+    return hashkey(
+        tuple(term),
+        collection.name,
+        dict_to_tuple(metadata),
+        dict_to_tuple(metadata_not),
+        start,
+        end,
+    )
 
 
 class WeaviateConfigDb:
@@ -36,6 +62,7 @@ class WeaviateConfigDb:
         *,
         collection_name: str = WEAVIATE_CONFIG_COLLECTION,
         logger: Optional[logging.Logger] = None,
+        doc_frequency_cache_file: str = DOC_FREQUENCY_CACHE_FILE,
     ) -> None:
         self._client: weaviate.Client = client
         self._collection_name = collection_name
@@ -45,6 +72,7 @@ class WeaviateConfigDb:
             if self._exists()
             else self._create()
         )
+
         self._logger = logger or logging.getLogger(self.__class__.__name__)
 
     def __contains__(self, corpus: str):
@@ -483,6 +511,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         end_year: int,
         metadata: Optional[dict[str, Any]] = None,
         metadata_not: Optional[dict[str, Any]] = None,
+        normalize: bool = False,
     ) -> dict[int, float]:
         """Get the number of documents that contain a term in the collection per year.
 
@@ -493,22 +522,47 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             end_year (int): The end year
             metadata (dict[str, Any]): Additional metadata filters
             metadata_not (dict[str, Any]): Additional metadata filters to exclude
+            normalize: If True, normalize the number of matching documents
+        Returns:
+            dict[int, float]: The (relative) number of occurrences of the term per year
         """
-        frequencies: dict[int, float] = {}
-        collection = self._client.collections.get(collection)
-        for year in range(start_year, end_year):
-            year_span = YearSpan(year, year)
-            filters = QueryBuilder.build_filter(
-                filter_words=[term],
-                year_span=year_span,
+
+        return {
+            year: self.doc_frequency(
+                term,
+                collection,
                 metadata=metadata,
                 metadata_not=metadata_not,
-                year_field="date",
+                normalize=normalize,
+                year_span=YearSpan(year, year),
             )
-            response = collection.aggregate.over_all(filters=filters, total_count=True)
-            frequencies[year] = response.total_count
+            for year in range(start_year, end_year)
+        }
 
-        return frequencies
+    @staticmethod
+    @cachetools.cached(
+        PersistentCache(
+            cachetools.TTLCache,
+            filename=DOC_FREQUENCY_CACHE_FILE,
+            maxsize=1024,
+            ttl=TTL_CACHE,
+        ),
+        key=doc_frequency_hashkey,
+    )
+    def _doc_frequency(
+        terms: list[str],
+        collection: Collection,
+        metadata: Optional[dict[str, Any]] = None,
+        metadata_not: Optional[dict[str, Any]] = None,
+        year_span: Optional[YearSpan] = None,
+    ):
+        response = collection.aggregate.over_all(
+            filters=QueryBuilder.build_filter(
+                terms, year_span, metadata=metadata, metadata_not=metadata_not
+            ),
+            total_count=True,
+        )
+        return response.total_count
 
     def doc_frequency(
         self,
@@ -517,6 +571,7 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
         metadata: Optional[dict[str, Any]] = None,
         metadata_not: Optional[dict[str, Any]] = None,
         normalize: bool = False,
+        year_span: Optional[YearSpan] = None,
     ) -> float:
         """Get the number of documents that contain a term in the collection.
 
@@ -531,38 +586,36 @@ class WeaviateDatabaseManager(VectorDatabaseManagerWrapper):
             metadata (dict[str, Any]): Additional metadata filters
             metadata_not (dict[str, Any]): Additional metadata filters to exclude
             normalize: If True, normalize the number of matching documents
+            year_span (Optional[YearSpan], optional): The year range to consider. Defaults to None.
 
         Returns:
             float: The (relative) number of occurrences of the term
         """
-        # TODO: cache locally? use frozendicts for metadata filters
-
         search_terms: list[str] = [term] if term.strip() else []
         if normalize and not search_terms:
             self._logger.warning("Did not provide a term to normalize.")
             return 1.0
 
-        response = self._client.collections.get(collection).aggregate.over_all(
-            filters=QueryBuilder.build_filter(
-                filter_words=search_terms,
-                metadata=metadata,
-                metadata_not=QueryBuilder.clean_metadata(
-                    metadata_not, self.properties(collection)
-                ),
-            ),
-            total_count=True,
+        _metadata_not = QueryBuilder.clean_metadata(
+            metadata_not, self.properties(collection)
         )
-        freq: int = response.total_count
+        _collection = self._client.collections.get(collection)
+        freq: int = WeaviateDatabaseManager._doc_frequency(
+            search_terms, _collection, metadata, _metadata_not, year_span
+        )
 
         if freq and normalize:
             total: int = self.doc_frequency(
-                "", collection, metadata, metadata_not, normalize=False
+                "",
+                collection,
+                metadata,
+                metadata_not,
+                normalize=False,
+                year_span=year_span,
             )
-            result = freq / total
-        else:
-            result = freq
+            freq /= total
 
-        return result
+        return freq
 
     def neighbours(
         self,
